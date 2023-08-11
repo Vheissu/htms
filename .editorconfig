@@ -1,0 +1,16 @@
+# top-most EditorConfig file
+root = true
+
+# TypeScript and JavaScript files
+[{*.ts,*.js}]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+quote_type = single
+
+# Markdown, HTML, and CSS files
+[{*.md,*.html,*.css}]
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+quote_type = single
