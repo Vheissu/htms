@@ -31,11 +31,13 @@ const handlers_mapping: HandlersMapping = {
     INJECT: handleInjectTag,
 };
 
-export function handleElement(element: Element, hostElementId?: string): string | null {
-    if (isStandardHtmlElement(element) && hostElementId) {
-        console.log(`Handling standard element: ${element.tagName}`);
+export function handleElement(
+    element: Element,
+    hostElementId?: string
+): string | null {
+    if (isStandardHtmlElement(element)) {
         return handleHtmlElement(element, hostElementId);
-      }
+    }
 
     const handlerFunction = handlers_mapping[element.tagName];
     return handlerFunction ? handlerFunction(element) : null;
@@ -80,8 +82,6 @@ export function isStandardHtmlElement(element: Element): boolean {
         'audio',
         'video',
     ];
-
-    console.log(`Element: ${element.tagName}`);
 
     return standardHtmlElements.includes(element.tagName.toLowerCase());
 }

@@ -1,10 +1,33 @@
+const element_counter: { [key: string]: number } = {};
+
+export function get_unique_var_name(tag_name: string, depth: number): string {
+    const key = `${tag_name}_${depth}`;
+    element_counter[key] = (element_counter[key] || 0) + 1;
+    return `${tag_name}_${element_counter[key]}`;
+}
+
 export function handleHtmlElement(
     element: Element,
-    hostElementTarget: string = 'body',
+    hostElementTarget: string = 'document.body',
     depth: number = 0
 ): string {
-    const varName = `element${depth}`;
-    const parentVarName = depth > 0 ? `element${depth - 1}` : '';
+    const hostElement =
+        depth === 0
+            ? `const hostElement = document.querySelector('${hostElementTarget}') || document.body;`
+            : '';
+    const varName = get_unique_var_name(element.tagName, depth);
+    let parentVarName = '';
+    if (depth > 0) {
+        const parent_key = `${element.parentElement?.tagName}_${depth - 1}`;
+        const parent_counter = element_counter[parent_key];
+        if (parent_counter !== undefined) {
+            parentVarName = `${element.parentElement?.tagName}_${parent_counter}`;
+        } else {
+            parentVarName = hostElementTarget;
+        }
+    } else {
+        parentVarName = hostElementTarget;
+    }
 
     // Get tag name
     const tagName = element.tagName.toLowerCase();
@@ -15,7 +38,7 @@ export function handleHtmlElement(
             (attr) =>
                 `${varName}.setAttribute('${attr.name}', '${attr.value}');`
         )
-        .join('\n');
+        .join('\\n');
 
     // Handle child elements (recursive)
     const childrenJS = Array.from(element.childNodes)
@@ -35,19 +58,15 @@ export function handleHtmlElement(
             }
             return '';
         })
-        .join('\n');
+        .join('\\n');
 
-    // Create JavaScript code for the element
     const jsCode = `
-      const ${varName} = document.createElement('${tagName}');
-      ${attributes}
-      ${childrenJS}
-      ${
-          parentVarName
-              ? `${parentVarName}.appendChild(${varName});`
-              : `const hostElement = document.querySelector('${hostElementTarget}') || document.body; hostElement.appendChild(${varName});`
-      }
-    `;
+    ${hostElement} // Include the hostElement declaration
+    const ${varName} = document.createElement('${tagName}');
+    ${attributes}
+    ${childrenJS}
+    ${parentVarName}.appendChild(${varName});
+`;
 
     return jsCode;
 }
