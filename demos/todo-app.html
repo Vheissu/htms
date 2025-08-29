@@ -19,23 +19,20 @@
 </function>
 
 <function name="render">
-  <setprop selector="#list" prop="textContent" value="''"></setprop>
-  <append target="#list">
-    <repeat variable="state.todos" index="i">
-      <li>
-        <span>Todo: {item}</span>
-        <button class="rm" aria-label="Remove">✕</button>
-        <event target=".rm" type="click">
-          <splice array="state.todos" index="i" delete="1"></splice>
-          <call function="render"></call>
-        </event>
-      </li>
-    </repeat>
-  </append>
+  <keyedlist target="#list" of="state.todos" item="t" index="i" key="t">
+    <li>
+      <span>Todo: {t}</span>
+      <button class="rm" aria-label="Remove">✕</button>
+      <event target=".rm" type="click">
+        <splice array="state.todos" index="i" delete="1"></splice>
+        <call function="render"></call>
+      </event>
+    </li>
+  </keyedlist>
 </function>
 
 <function name="addTodo">
-  <push array="state.todos" value="document.getElementById('newTodo').value"></push>
+  <push array="state.todos" expr="document.getElementById('newTodo').value"></push>
   <setprop selector="#newTodo" prop="value" value="''"></setprop>
   render();
 </function>

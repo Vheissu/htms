@@ -14,6 +14,7 @@ const CURATED = new Set([
   'nested-loop.index.html', 'nested-loop.js',
   'events.index.html', 'events.js',
   'live-list.index.html', 'live-list.js'
+  , 'form-validation.index.html', 'form-validation.js'
 ]);
 
 function getArg(flag: string): string | undefined {

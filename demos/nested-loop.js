@@ -9,10 +9,10 @@ const outerLoop = [
 const ul3 = document.createElement('ul');
 ul3.setAttribute('id', 'nested');
 for (const item of outerLoop) {
-  const li2 = document.createElement('li');
-  const span2 = document.createElement('span');
-  span2.textContent = `Outer loop item: ${ item }`;
-  li2.appendChild(span2);
+  const li3 = document.createElement('li');
+  const span3 = document.createElement('span');
+  span3.textContent = `Outer loop item: ${ item }`;
+  li3.appendChild(span3);
   const innerLoop = [
     'a',
     'b',
@@ -20,11 +20,11 @@ for (const item of outerLoop) {
   ];
   const ul4 = document.createElement('ul');
   for (const item of innerLoop) {
-    const li3 = document.createElement('li');
-    li3.textContent = `Inner loop item: ${ item }`;
-    ul4.appendChild(li3);
+    const li4 = document.createElement('li');
+    li4.textContent = `Inner loop item: ${ item }`;
+    ul4.appendChild(li4);
   }
-  li2.appendChild(ul4);
-  ul3.appendChild(li2);
+  li3.appendChild(ul4);
+  ul3.appendChild(li3);
 }
 document.body.appendChild(ul3);

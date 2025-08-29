@@ -26,6 +26,7 @@ export const handleSetPropTag: TagHandler = (
     const selector = element.getAttribute('selector');
     const prop = element.getAttribute('prop');
     const value = element.getAttribute('value') || '';
+    const exprAttr = element.getAttribute('expr');
     if (!selector || !prop) {
       errors.push({ type: 'validation', message: 'SETPROP requires selector and prop', tag: 'SETPROP' });
       return { code: '', errors, warnings };
@@ -38,7 +39,7 @@ export const handleSetPropTag: TagHandler = (
       errors.push({ type: 'validation', message: 'Invalid property path', tag: 'SETPROP' });
       return { code: '', errors, warnings };
     }
-    const valExpr = buildValueExpr(value);
+    const valExpr = exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
     if (valExpr == null) {
       errors.push({ type: 'validation', message: 'Invalid value', tag: 'SETPROP' });
       return { code: '', errors, warnings };
@@ -68,4 +69,3 @@ export const handleSetPropTag: TagHandler = (
     return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'SETPROP' }], warnings };
   }
 };
-

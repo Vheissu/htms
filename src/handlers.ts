@@ -20,6 +20,8 @@ import { handleSpliceTag } from './tags/splice';
 import { handleShowTag } from './tags/show';
 import { handleSetAttrTag } from './tags/setattr';
 import { handleAppendTag } from './tags/append';
+import { handleKeyedListTag } from './tags/keyed-list';
+import { handleSubmitTag } from './tags/submit';
 import { TagHandler, TagHandlerOptions, HandlerResult, CompilerError } from './types';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
@@ -57,6 +59,8 @@ const HANDLERS_MAPPING: HandlersMapping = {
   BIND: handleBindTag,
   SETATTR: handleSetAttrTag,
   APPEND: handleAppendTag,
+  KEYEDLIST: handleKeyedListTag,
+  SUBMIT: handleSubmitTag,
 };
 
 export function handleElement(

@@ -2,26 +2,29 @@
 'use strict';
 
 let state = { 'items': [] };
-const div2 = document.createElement('div');
-div2.setAttribute('id', 'live');
-const input1 = document.createElement('input');
-input1.setAttribute('id', 'txt');
-input1.setAttribute('type', 'text');
-input1.setAttribute('placeholder', 'Add item');
-div2.appendChild(input1);
-const button4 = document.createElement('button');
-button4.setAttribute('id', 'add');
-button4.textContent = `Add`;
-div2.appendChild(button4);
-const p4 = document.createElement('p');
+const div3 = document.createElement('div');
+div3.setAttribute('id', 'live');
+const form2 = document.createElement('form');
+form2.setAttribute('id', 'f');
+const input2 = document.createElement('input');
+input2.setAttribute('id', 'txt');
+input2.setAttribute('type', 'text');
+input2.setAttribute('placeholder', 'Add item');
+form2.appendChild(input2);
+const button5 = document.createElement('button');
+button5.setAttribute('type', 'submit');
+button5.textContent = `Add`;
+form2.appendChild(button5);
+div3.appendChild(form2);
+const p6 = document.createElement('p');
 const span1 = document.createElement('span');
 span1.setAttribute('id', 'cnt');
-p4.appendChild(span1);
-div2.appendChild(p4);
+p6.appendChild(span1);
+div3.appendChild(p6);
 const ul2 = document.createElement('ul');
 ul2.setAttribute('id', 'ul');
-div2.appendChild(ul2);
-document.body.appendChild(div2);
+div3.appendChild(ul2);
+document.body.appendChild(div3);
 (function () {
   if (typeof window === 'undefined')
     return;
@@ -71,16 +74,17 @@ document.body.appendChild(div2);
   }
 }());
 try {
-  const eventTargets = document.querySelectorAll(`#add`);
-  if (eventTargets.length === 0) {
-    console.warn('No elements found for event target: #add');
+  const forms = document.querySelectorAll(`#f`);
+  if (forms.length === 0) {
+    console.warn('No elements found for submit target: #f');
   }
-  eventTargets.forEach(element => {
-    element.addEventListener('click', function (event) {
+  forms.forEach(function (element) {
+    element.addEventListener('submit', function (event) {
       try {
+        event.preventDefault && event.preventDefault();
         (function () {
           try {
-            state.items.push('document.getElementById(\'txt\').value');
+            state.items.push(document.getElementById('txt').value);
           } catch (error) {
             console.error('PUSH failed:', error);
           }
@@ -106,32 +110,122 @@ try {
           console.error('Function call failed: render', error);
         }
       } catch (error) {
-        console.error('Event handler error:', error);
+        console.error('Submit handler error:', error);
       }
     });
   });
 } catch (error) {
-  console.error('Event setup failed:', error);
+  console.error('Submit setup failed:', error);
 }
 function render() {
   try {
     (function () {
-      try {
-        const el = document.querySelector(`#ul`);
-        if (!el) {
-          console.warn('SETPROP target not found: #ul');
-          return;
-        }
-        el['textContent'] = '';
-      } catch (error) {
-        console.error('SETPROP failed:', error);
+      if (typeof window === 'undefined')
+        return;
+      if (!window.__htms) {
+        window.__htms = {
+          watchers: [],
+          bind: function () {
+          },
+          notify: function () {
+            this.watchers.forEach(function (w) {
+              try {
+                const el = document.querySelector(w.sel);
+                if (el)
+                  el[w.prop] = w.fn();
+              } catch (e) {
+              }
+            });
+          }
+        };
+      }
+      if (!window.__htms.keyedList) {
+        window.__htms.keyedList = function (sel, arr, render, keyFn) {
+          const container = document.querySelector(sel);
+          if (!container) {
+            console.warn('KEYEDLIST target not found:', sel);
+            return;
+          }
+          const existing = new Map();
+          Array.from(container.children).forEach(function (node) {
+            const k = node.getAttribute && node.getAttribute('data-key');
+            if (k != null)
+              existing.set(k, node);
+          });
+          const used = new Set();
+          for (let i = 0; i < arr.length; i++) {
+            const item = arr[i];
+            const key = String(keyFn(item, i));
+            let node = existing.get(key);
+            if (!node) {
+              node = render(item, i);
+              if (node && node.setAttribute)
+                node.setAttribute('data-key', key);
+            }
+            if (node) {
+              container.appendChild(node);
+              used.add(key);
+            }
+          }
+          existing.forEach(function (node, key) {
+            if (!used.has(key)) {
+              if (node && node.parentNode === container)
+                container.removeChild(node);
+            }
+          });
+        };
       }
     }());
-    const __appendTarget1 = document.querySelector(`#ul`);
-    if (!__appendTarget1) {
-      console.warn('APPEND target not found: #ul');
-    } else {
-    }
+    (function () {
+      var __render_item_1 = function (it, i) {
+        const li2 = document.createElement('li');
+        const span2 = document.createElement('span');
+        span2.textContent = `{it}`;
+        li2.appendChild(span2);
+        const button6 = document.createElement('button');
+        button6.setAttribute('class', 'rm');
+        button6.textContent = `✕`;
+        li2.appendChild(button6);
+        try {
+          const eventTargets = document.querySelectorAll(`.rm`);
+          if (eventTargets.length === 0) {
+            console.warn('No elements found for event target: .rm');
+          }
+          eventTargets.forEach(element => {
+            element.addEventListener('click', function (event) {
+              try {
+                try {
+                  render();
+                } catch (error) {
+                  console.error('Function call failed: render', error);
+                }
+              } catch (error) {
+                console.error('Event handler error:', error);
+              }
+            });
+          });
+        } catch (error) {
+          console.error('Event setup failed:', error);
+        }
+        return li2;
+      };
+      var __key_1 = function (it, i) {
+        return it;
+      };
+      if (typeof window !== 'undefined' && window.__htms) {
+        window.__htms.keyedList(`#ul`, state.items, __render_item_1, __key_1);
+      } else {
+        // Fallback: rebuild
+        var c = document.querySelector(`#ul`);
+        if (c) {
+          c.textContent = '';
+          for (var i = 0; i < state.items.length; i++) {
+            var it = state.items[i];
+            c.appendChild(__render_item_1(it, i));
+          }
+        }
+      }
+    }());
   } catch (error) {
     console.error('Function render execution error:', error);
   }

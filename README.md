@@ -19,16 +19,20 @@ Alternative: `npx ts-node main.ts demos/mixed-tags.html` writes `demos/mixed-tag
 - Standard elements become `document.createElement(...)` calls; control tags become statements.
 
 ## Tags You Can Use
-- `<var name="x" value="42" mutable="true" />` → declares `let x = 42` (omit `mutable` for `const`). Accepts JSON arrays/objects.
-- `<set name="state.count" op="+=" value="1" />` → safe assignments (also `=, -=, *=, /=, ++, --`).
-- `<repeat variable="items">…</repeat>` or `<repeat count="3">…</repeat>`; inside loops you may interpolate `{item}` in text nodes.
-- `<if condition="count > 0">…</if><else>…</else>` → nested tags allowed in both branches.
-- `<call function="console.log" args="'Hello', name" />` → whitelisted/validated args.
-- `<event target="#btn" type="click" action="doThing()" />` → adds a listener (action must be a function call string).
+Quick reference — HTML-first building blocks:
+- State: `<var name="x" value="42" mutable="true" />` (JSON allowed), `<set name="x" op="=|+=|-=|*=|/=|++|--" value="…" />`.
+- Arrays: `<push array="state.todos" value="'Buy'" />`, `<splice array="state.todos" index="0" delete="1" values='["New"]' />`.
+- Control Flow: `<repeat variable="items" index="i">…</repeat>` or `<repeat count="3">…</repeat>`; `<if>…</if><else>…</else>`; `<switch>…</switch>`.
+- DOM: `<setprop selector="#msg" prop="textContent" value="'Hi'" />`, `<setattr selector="#a" name="title" value="'Info'" />`, `{item}` text interpolation inside loops.
+- Visibility: `<toggle target="#panel" condition="isOpen" />`, `<show target="#a" when="x > 5" />`.
+- Binding: `<bind selector="#cnt" prop="textContent" expr="String(state.items.length)" />` (updates when you use SET/PUSH/SPLICE).
+- Lists: `<keyedlist target="#ul" of="state.items" item="it" index="i" key="it.id"> <li>{it.name}</li> </keyedlist>` (diffs by keys; reuses/moves nodes).
+- Composition: `<append target="#container"> <div>…</div> </append>` appends generated children to an existing element.
+- Events: `<event target="#btn" type="click"> …child tags… </event>`; or use `<submit target="#form"> …child tags… </submit>` (prevents default by default).
 
 ## Demo: Todo (because of course)
 Source: `demos/todo-app.html` — compiles to `demos/todo-app.js`, then open `demos/todo-app.index.html`.
-It renders an input, an “Add” button, a list, and wires events to push new todos. All written in tags. Because we could.
+It renders an input, an “Add” button, a keyed list, and removal buttons — using PUSH, SPLICE, KEYEDLIST, EVENT, and SETPROP. All in tags.
 
 ## Disclaimers
 - Do not paste untrusted content. The compiler tries to help, but it is not a firewall.

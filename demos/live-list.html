@@ -1,35 +1,33 @@
 <var name="state" value='{"items":[]}' mutable="true"></var>
 
 <div id="live">
-  <input id="txt" type="text" placeholder="Add item" />
-  <button id="add">Add</button>
+  <form id="f">
+    <input id="txt" type="text" placeholder="Add item" />
+    <button type="submit">Add</button>
+  </form>
   <p>Count: <span id="cnt"></span></p>
   <ul id="ul"></ul>
 </div>
 
 <bind selector="#cnt" prop="textContent" expr="String(state.items.length)"></bind>
 
-<event target="#add" type="click">
-  <push array="state.items" value="document.getElementById('txt').value"></push>
+<submit target="#f">
+  <push array="state.items" expr="document.getElementById('txt').value"></push>
   <setprop selector="#txt" prop="value" value="''"></setprop>
   <call function="render"></call>
-</event>
+</submit>
 
 <function name="render">
-  <setprop selector="#ul" prop="textContent" value="''"></setprop>
-  <append target="#ul">
-    <repeat variable="state.items" index="i">
-      <li>
-        <span>{item}</span>
-        <button class="rm">✕</button>
-        <event target=".rm" type="click">
-          <splice array="state.items" index="i" delete="1"></splice>
-          <call function="render"></call>
-        </event>
-      </li>
-    </repeat>
-  </append>
+  <keyedlist target="#ul" of="state.items" item="it" index="i" key="it">
+    <li>
+      <span>{it}</span>
+      <button class="rm">✕</button>
+      <event target=".rm" type="click">
+        <splice array="state.items" index="i" delete="1"></splice>
+        <call function="render"></call>
+      </event>
+    </li>
+  </keyedlist>
 </function>
 
 <call function="render"></call>
-

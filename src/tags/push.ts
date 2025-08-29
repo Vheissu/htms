@@ -22,6 +22,7 @@ export const handlePushTag: TagHandler = (
   try {
     const array = element.getAttribute('array');
     const value = element.getAttribute('value') || '';
+    const exprAttr = element.getAttribute('expr');
     if (!array) {
       errors.push({ type: 'validation', message: 'PUSH requires array attribute', tag: 'PUSH' });
       return { code: '', errors, warnings };
@@ -37,7 +38,7 @@ export const handlePushTag: TagHandler = (
         return { code: '', errors, warnings };
       }
     }
-    const valExpr = buildValueExpr(value);
+    const valExpr = exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
     const code = `
       (function(){
         try { ${array}.push(${valExpr}); } catch (error) { console.error('PUSH failed:', error); }

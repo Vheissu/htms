@@ -1,20 +1,30 @@
 <var name="state" value='{"todos":[]}' mutable="true"></var>
 
 <div id="todoApp">
-  <input type="text" id="newTodo" placeholder="Enter new todo" />
-  <button id="addBtn">Add</button>
+  <form id="todoForm">
+    <input type="text" id="newTodo" placeholder="Enter new todo" />
+    <button type="submit">Add</button>
+  </form>
   <ul id="todoList"></ul>
 </div>
 
-<event target="#addBtn" type="click" action="addTodo()"></event>
+<submit target="#todoForm">
+  <push array="state.todos" value="document.getElementById('newTodo').value"></push>
+  <setprop selector="#newTodo" prop="value" value="''"></setprop>
+  <call function="render"></call>
+</submit>
 
-<function name="addTodo">
-  const input = document.getElementById('newTodo');
-  const value = (input.value || '').trim();
-  if (!value) return;
-  state.todos.push(value);
-  input.value = '';
-  const li = document.createElement('li');
-  li.textContent = value;
-  document.getElementById('todoList').appendChild(li);
+<function name="render">
+  <keyedlist target="#todoList" of="state.todos" item="t" index="i" key="t">
+    <li>
+      <span>{t}</span>
+      <button class="rm">✕</button>
+      <event target=".rm" type="click">
+        <splice array="state.todos" index="i" delete="1"></splice>
+        <call function="render"></call>
+      </event>
+    </li>
+  </keyedlist>
 </function>
+
+<call function="render"></call>

@@ -2,50 +2,183 @@
 'use strict';
 
 let state = { 'todos': [] };
-const div5 = document.createElement('div');
-div5.setAttribute('id', 'todoApp');
-const input3 = document.createElement('input');
-input3.setAttribute('type', 'text');
-input3.setAttribute('id', 'newTodo');
-input3.setAttribute('placeholder', 'Enter new todo');
-div5.appendChild(input3);
-const button6 = document.createElement('button');
-button6.setAttribute('id', 'addBtn');
-button6.textContent = `Add`;
-div5.appendChild(button6);
+const div6 = document.createElement('div');
+div6.setAttribute('id', 'todoApp');
+const form3 = document.createElement('form');
+form3.setAttribute('id', 'todoForm');
+const input4 = document.createElement('input');
+input4.setAttribute('type', 'text');
+input4.setAttribute('id', 'newTodo');
+input4.setAttribute('placeholder', 'Enter new todo');
+form3.appendChild(input4);
+const button9 = document.createElement('button');
+button9.setAttribute('type', 'submit');
+button9.textContent = `Add`;
+form3.appendChild(button9);
+div6.appendChild(form3);
 const ul6 = document.createElement('ul');
 ul6.setAttribute('id', 'todoList');
-div5.appendChild(ul6);
-document.body.appendChild(div5);
+div6.appendChild(ul6);
+document.body.appendChild(div6);
 try {
-  const eventTargets = document.querySelectorAll(`#addBtn`);
-  if (eventTargets.length === 0) {
-    console.warn('No elements found for event target: #addBtn');
+  const forms = document.querySelectorAll(`#todoForm`);
+  if (forms.length === 0) {
+    console.warn('No elements found for submit target: #todoForm');
   }
-  eventTargets.forEach(element => {
-    element.addEventListener('click', function (event) {
+  forms.forEach(function (element) {
+    element.addEventListener('submit', function (event) {
       try {
-        addTodo();
+        event.preventDefault && event.preventDefault();
+        (function () {
+          try {
+            state.todos.push('document.getElementById(\'newTodo\').value');
+          } catch (error) {
+            console.error('PUSH failed:', error);
+          }
+          if (typeof window !== 'undefined' && window.__htms) {
+            window.__htms.notify();
+          }
+        }());
+        (function () {
+          try {
+            const el = document.querySelector(`#newTodo`);
+            if (!el) {
+              console.warn('SETPROP target not found: #newTodo');
+              return;
+            }
+            el['value'] = '';
+          } catch (error) {
+            console.error('SETPROP failed:', error);
+          }
+        }());
+        try {
+          render();
+        } catch (error) {
+          console.error('Function call failed: render', error);
+        }
       } catch (error) {
-        console.error('Event handler error:', error);
+        console.error('Submit handler error:', error);
       }
     });
   });
 } catch (error) {
-  console.error('Event setup failed:', error);
+  console.error('Submit setup failed:', error);
 }
-function addTodo() {
+function render() {
   try {
-    const input = document.getElementById('newTodo');
-    const value = (input.value || '').trim();
-    if (!value)
-      return;
-    state.todos.push(value);
-    input.value = '';
-    const li = document.createElement('li');
-    li.textContent = value;
-    document.getElementById('todoList').appendChild(li);
+    (function () {
+      if (typeof window === 'undefined')
+        return;
+      if (!window.__htms) {
+        window.__htms = {
+          watchers: [],
+          bind: function () {
+          },
+          notify: function () {
+            this.watchers.forEach(function (w) {
+              try {
+                const el = document.querySelector(w.sel);
+                if (el)
+                  el[w.prop] = w.fn();
+              } catch (e) {
+              }
+            });
+          }
+        };
+      }
+      if (!window.__htms.keyedList) {
+        window.__htms.keyedList = function (sel, arr, render, keyFn) {
+          const container = document.querySelector(sel);
+          if (!container) {
+            console.warn('KEYEDLIST target not found:', sel);
+            return;
+          }
+          const existing = new Map();
+          Array.from(container.children).forEach(function (node) {
+            const k = node.getAttribute && node.getAttribute('data-key');
+            if (k != null)
+              existing.set(k, node);
+          });
+          const used = new Set();
+          for (let i = 0; i < arr.length; i++) {
+            const item = arr[i];
+            const key = String(keyFn(item, i));
+            let node = existing.get(key);
+            if (!node) {
+              node = render(item, i);
+              if (node && node.setAttribute)
+                node.setAttribute('data-key', key);
+            }
+            if (node) {
+              container.appendChild(node);
+              used.add(key);
+            }
+          }
+          existing.forEach(function (node, key) {
+            if (!used.has(key)) {
+              if (node && node.parentNode === container)
+                container.removeChild(node);
+            }
+          });
+        };
+      }
+    }());
+    (function () {
+      var __render_item_3 = function (t, i) {
+        const li6 = document.createElement('li');
+        const span5 = document.createElement('span');
+        span5.textContent = `{t}`;
+        li6.appendChild(span5);
+        const button10 = document.createElement('button');
+        button10.setAttribute('class', 'rm');
+        button10.textContent = `✕`;
+        li6.appendChild(button10);
+        try {
+          const eventTargets = document.querySelectorAll(`.rm`);
+          if (eventTargets.length === 0) {
+            console.warn('No elements found for event target: .rm');
+          }
+          eventTargets.forEach(element => {
+            element.addEventListener('click', function (event) {
+              try {
+                try {
+                  render();
+                } catch (error) {
+                  console.error('Function call failed: render', error);
+                }
+              } catch (error) {
+                console.error('Event handler error:', error);
+              }
+            });
+          });
+        } catch (error) {
+          console.error('Event setup failed:', error);
+        }
+        return li6;
+      };
+      var __key_3 = function (t, i) {
+        return t;
+      };
+      if (typeof window !== 'undefined' && window.__htms) {
+        window.__htms.keyedList(`#todoList`, state.todos, __render_item_3, __key_3);
+      } else {
+        // Fallback: rebuild
+        var c = document.querySelector(`#todoList`);
+        if (c) {
+          c.textContent = '';
+          for (var i = 0; i < state.todos.length; i++) {
+            var t = state.todos[i];
+            c.appendChild(__render_item_3(t, i));
+          }
+        }
+      }
+    }());
   } catch (error) {
-    console.error('Function addTodo execution error:', error);
+    console.error('Function render execution error:', error);
   }
+}
+try {
+  render();
+} catch (error) {
+  console.error('Function call failed: render', error);
 }
