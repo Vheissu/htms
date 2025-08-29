@@ -18,17 +18,29 @@ Alternative: `npx ts-node main.ts demos/mixed-tags.html` writes `demos/mixed-tag
 - A security layer blocks obviously cursed things (`eval`, inline event handlers, raw innerHTML assignments, etc.).
 - Standard elements become `document.createElement(...)` calls; control tags become statements.
 
-## Tags You Can Use
-Quick reference — HTML-first building blocks:
-- State: `<var name="x" value="42" mutable="true" />` (JSON allowed), `<set name="x" op="=|+=|-=|*=|/=|++|--" value="…" />`.
-- Arrays: `<push array="state.todos" value="'Buy'" />`, `<splice array="state.todos" index="0" delete="1" values='["New"]' />`.
-- Control Flow: `<repeat variable="items" index="i">…</repeat>` or `<repeat count="3">…</repeat>`; `<if>…</if><else>…</else>`; `<switch>…</switch>`.
-- DOM: `<setprop selector="#msg" prop="textContent" value="'Hi'" />`, `<setattr selector="#a" name="title" value="'Info'" />`, `{item}` text interpolation inside loops.
-- Visibility: `<toggle target="#panel" condition="isOpen" />`, `<show target="#a" when="x > 5" />`.
-- Binding: `<bind selector="#cnt" prop="textContent" expr="String(state.items.length)" />` (updates when you use SET/PUSH/SPLICE).
-- Lists: `<keyedlist target="#ul" of="state.items" item="it" index="i" key="it.id"> <li>{it.name}</li> </keyedlist>` (diffs by keys; reuses/moves nodes).
-- Composition: `<append target="#container"> <div>…</div> </append>` appends generated children to an existing element.
-- Events: `<event target="#btn" type="click"> …child tags… </event>`; or use `<submit target="#form"> …child tags… </submit>` (prevents default by default).
+## Tag Glossary (HTML‑first)
+- State & Arrays
+  - `<var name="x" value="42" mutable="true" />` — declare `let x = 42` (accepts JSON).
+  - `<set name="x" op="=|+=|-=|*=|/=|++|--" value="…" />` — mutate values; notifies bindings.
+  - `<push array="state.list" expr="document.getElementById('txt').value" />` — push; notifies bindings.
+  - `<splice array="state.list" index="0" delete="1" values='["New"]' />` — remove/insert; notifies bindings.
+- Control Flow
+  - `<repeat variable="items" index="i">…</repeat>` or `<repeat count="3">…</repeat>` — inside, use `{item}` in text nodes.
+  - `<if condition="flag">…</if><else>…</else>` and `<switch variable="day">…</switch>` — nested tags allowed.
+- DOM Updates
+  - `<setprop selector="#msg" prop="textContent" expr="'Hello'" />` — set property (use `expr` for JS, or `value` for literals).
+  - `<setattr selector="#link" name="title" value="'Info'" />` — set attribute.
+  - `<append target="#list"> <li>Row</li> </append>` — append generated children to an existing element.
+- Visibility
+  - `<toggle target="#panel" condition="isOpen" />` — show/hide (style.display).
+  - `<show target="#a" when="x > 5" />` — sugar over TOGGLE.
+- Reactive Bindings
+  - `<bind selector="#cnt" prop="textContent" expr="String(state.items.length)" />` — binds DOM to an expression; updates on SET/PUSH/SPLICE.
+- Lists (keyed)
+  - `<keyedlist target="#ul" of="state.items" item="it" index="i" key="it.id"> <li>{it.name}</li> </keyedlist>` — stable, keyed DOM updates.
+- Events
+  - `<event target="#btn" type="click"> …child tags… </event>` — handler is composed of child tags (no action string required).
+  - `<submit target="#form"> …child tags… </submit>` — form submit helper (prevents default). Use child tags to update state/DOM.
 
 ## Demo: Todo (because of course)
 Source: `demos/todo-app.html` — compiles to `demos/todo-app.js`, then open `demos/todo-app.index.html`.
