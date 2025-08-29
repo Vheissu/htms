@@ -2,14 +2,14 @@
 'use strict';
 
 const day = 'Monday';
-const div2 = document.createElement('div');
-div2.setAttribute('id', 'switchDemo');
+const div3 = document.createElement('div');
+div3.setAttribute('id', 'switchDemo');
 switch (day) {
 case 'Monday': {
     try {
-      const p4 = document.createElement('p');
-      p4.textContent = `It's the start of the week.`;
-      div2.appendChild(p4);
+      const p5 = document.createElement('p');
+      p5.textContent = `It's the start of the week.`;
+      div3.appendChild(p5);
     } catch (error) {
       console.error('Case execution error:', error);
     }
@@ -20,4 +20,4 @@ default: {
     break;
   }
 }
-document.body.appendChild(div2);
+document.body.appendChild(div3);

@@ -11,6 +11,7 @@ export const handleRepeatTag: TagHandler = (
   
   try {
     const variable = element.getAttribute('variable');
+    const indexVar = element.getAttribute('index') || '';
     const count = element.getAttribute('count');
     const body = element.children.length === 0 ? (element.textContent?.trim() || '') : '';
 
@@ -35,7 +36,7 @@ export const handleRepeatTag: TagHandler = (
     }
 
     let loopCode = '';
-    let loopVariable = 'item'; // default loop variable
+    let loopVariable = 'item'; // default item variable
 
     if (variable) {
       // Array iteration mode
@@ -49,7 +50,17 @@ export const handleRepeatTag: TagHandler = (
         return { code: '', errors, warnings };
       }
 
-      loopCode = `for (const ${loopVariable} of ${variable}) {`;
+      if (indexVar) {
+        const idxErrors = SecurityValidator.validateJavaScriptIdentifier(indexVar);
+        if (idxErrors.length > 0) {
+          errors.push(...idxErrors.map(e => ({ ...e, tag: 'REPEAT', message: `Invalid index variable: ${indexVar}` })));
+          return { code: '', errors, warnings };
+        }
+        // for-index pattern exposes both index and item
+        loopCode = `for (let ${indexVar} = 0; ${indexVar} < ${variable}.length; ${indexVar}++) {\n  const ${loopVariable} = ${variable}[${indexVar}];`;
+      } else {
+        loopCode = `for (const ${loopVariable} of ${variable}) {`;
+      }
       
     } else if (count) {
       // Numeric iteration mode

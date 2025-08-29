@@ -54,6 +54,10 @@ function main() {
       process.exitCode = 1;
     }
   }
+  // Ensure curated gallery exists
+  if (!fs.existsSync(path.join(DEMOS_DIR, 'index.html'))) {
+    console.warn('Warning: demos/index.html is missing.');
+  }
 }
 
 main();

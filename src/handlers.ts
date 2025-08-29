@@ -19,6 +19,7 @@ import { handleBindTag } from './tags/bind';
 import { handleSpliceTag } from './tags/splice';
 import { handleShowTag } from './tags/show';
 import { handleSetAttrTag } from './tags/setattr';
+import { handleAppendTag } from './tags/append';
 import { TagHandler, TagHandlerOptions, HandlerResult, CompilerError } from './types';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
@@ -55,6 +56,7 @@ const HANDLERS_MAPPING: HandlersMapping = {
   SHOW: handleShowTag,
   BIND: handleBindTag,
   SETATTR: handleSetAttrTag,
+  APPEND: handleAppendTag,
 };
 
 export function handleElement(

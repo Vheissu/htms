@@ -2,21 +2,21 @@
 'use strict';
 
 let state = { 'todos': [] };
-const div4 = document.createElement('div');
-div4.setAttribute('id', 'todoApp');
-const input2 = document.createElement('input');
-input2.setAttribute('type', 'text');
-input2.setAttribute('id', 'newTodo');
-input2.setAttribute('placeholder', 'Enter new todo');
-div4.appendChild(input2);
-const button5 = document.createElement('button');
-button5.setAttribute('id', 'addBtn');
-button5.textContent = `Add`;
-div4.appendChild(button5);
-const ul5 = document.createElement('ul');
-ul5.setAttribute('id', 'todoList');
-div4.appendChild(ul5);
-document.body.appendChild(div4);
+const div5 = document.createElement('div');
+div5.setAttribute('id', 'todoApp');
+const input3 = document.createElement('input');
+input3.setAttribute('type', 'text');
+input3.setAttribute('id', 'newTodo');
+input3.setAttribute('placeholder', 'Enter new todo');
+div5.appendChild(input3);
+const button6 = document.createElement('button');
+button6.setAttribute('id', 'addBtn');
+button6.textContent = `Add`;
+div5.appendChild(button6);
+const ul6 = document.createElement('ul');
+ul6.setAttribute('id', 'todoList');
+div5.appendChild(ul6);
+document.body.appendChild(div5);
 try {
   const eventTargets = document.querySelectorAll(`#addBtn`);
   if (eventTargets.length === 0) {

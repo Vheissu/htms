@@ -2,24 +2,24 @@
 'use strict';
 
 let state = { 'todos': [] };
-const div3 = document.createElement('div');
-div3.setAttribute('id', 'todoApp');
+const div4 = document.createElement('div');
+div4.setAttribute('id', 'todoApp');
 const h21 = document.createElement('h2');
 h21.textContent = `HTMS Todo`;
-div3.appendChild(h21);
-const input1 = document.createElement('input');
-input1.setAttribute('type', 'text');
-input1.setAttribute('id', 'newTodo');
-input1.setAttribute('placeholder', 'Add a task');
-div3.appendChild(input1);
-const button4 = document.createElement('button');
-button4.setAttribute('id', 'addBtn');
-button4.textContent = `Add`;
-div3.appendChild(button4);
-const ul4 = document.createElement('ul');
-ul4.setAttribute('id', 'list');
-div3.appendChild(ul4);
-document.body.appendChild(div3);
+div4.appendChild(h21);
+const input2 = document.createElement('input');
+input2.setAttribute('type', 'text');
+input2.setAttribute('id', 'newTodo');
+input2.setAttribute('placeholder', 'Add a task');
+div4.appendChild(input2);
+const button5 = document.createElement('button');
+button5.setAttribute('id', 'addBtn');
+button5.textContent = `Add`;
+div4.appendChild(button5);
+const ul5 = document.createElement('ul');
+ul5.setAttribute('id', 'list');
+div4.appendChild(ul5);
+document.body.appendChild(div4);
 try {
   const eventTargets = document.querySelectorAll(`#addBtn`);
   if (eventTargets.length === 0) {
@@ -67,28 +67,22 @@ function onEnter(event) {
 }
 function render() {
   try {
-    const list = document.getElementById('list');
-    while (list.firstChild)
-      list.removeChild(list.firstChild);
-    for (let i = 0; i < state.todos.length; i++) {
-      const t = state.todos[i];
-      const li = document.createElement('li');
-      const text = document.createElement('span');
-      text.textContent = t;
-      const btn = document.createElement('button');
-      btn.textContent = '\u2715';
-      btn.setAttribute('aria-label', `Remove ${ t }`);
-      btn.addEventListener('click', function () {
-        try {
-          state.todos.splice(i, 1);
-          render();
-        } catch (error) {
-          console.error('Remove todo failed:', error);
+    (function () {
+      try {
+        const el = document.querySelector(`#list`);
+        if (!el) {
+          console.warn('SETPROP target not found: #list');
+          return;
         }
-      });
-      li.appendChild(text);
-      li.appendChild(btn);
-      list.appendChild(li);
+        el['textContent'] = '';
+      } catch (error) {
+        console.error('SETPROP failed:', error);
+      }
+    }());
+    const __appendTarget2 = document.querySelector(`#list`);
+    if (!__appendTarget2) {
+      console.warn('APPEND target not found: #list');
+    } else {
     }
   } catch (error) {
     console.error('Function render execution error:', error);
@@ -98,9 +92,12 @@ function addTodo() {
   try {
     (function () {
       try {
-        state.todos.push(value);
+        state.todos.push('document.getElementById(\'newTodo\').value');
       } catch (error) {
         console.error('PUSH failed:', error);
+      }
+      if (typeof window !== 'undefined' && window.__htms) {
+        window.__htms.notify();
       }
     }());
     (function () {

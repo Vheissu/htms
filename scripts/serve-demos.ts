@@ -12,7 +12,8 @@ const CURATED = new Set([
   'conditionals.index.html', 'conditionals.js',
   'switch.index.html', 'switch.js',
   'nested-loop.index.html', 'nested-loop.js',
-  'events.index.html', 'events.js'
+  'events.index.html', 'events.js',
+  'live-list.index.html', 'live-list.js'
 ]);
 
 function getArg(flag: string): string | undefined {

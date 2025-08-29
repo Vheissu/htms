@@ -28,6 +28,9 @@ function setX(val) {
     } catch (error) {
       console.error('Set operation failed:', error);
     }
+    if (typeof window !== 'undefined' && window.__htms) {
+      window.__htms.notify();
+    }
     (function () {
       try {
         const el = document.querySelector(`#gt`);

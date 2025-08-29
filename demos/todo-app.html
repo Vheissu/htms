@@ -19,35 +19,23 @@
 </function>
 
 <function name="render">
-  const list = document.getElementById('list');
-  while (list.firstChild) list.removeChild(list.firstChild);
-  for (let i = 0; i < state.todos.length; i++) {
-    const t = state.todos[i];
-    const li = document.createElement('li');
-    const text = document.createElement('span');
-    text.textContent = t;
-    const btn = document.createElement('button');
-    btn.textContent = '✕';
-    btn.setAttribute('aria-label', `Remove ${t}`);
-    btn.addEventListener('click', function(){
-      try {
-        state.todos.splice(i, 1);
-        render();
-      } catch (error) {
-        console.error('Remove todo failed:', error);
-      }
-    });
-    li.appendChild(text);
-    li.appendChild(btn);
-    list.appendChild(li);
-  }
+  <setprop selector="#list" prop="textContent" value="''"></setprop>
+  <append target="#list">
+    <repeat variable="state.todos" index="i">
+      <li>
+        <span>Todo: {item}</span>
+        <button class="rm" aria-label="Remove">✕</button>
+        <event target=".rm" type="click">
+          <splice array="state.todos" index="i" delete="1"></splice>
+          <call function="render"></call>
+        </event>
+      </li>
+    </repeat>
+  </append>
 </function>
 
 <function name="addTodo">
-  const input = document.getElementById('newTodo');
-  const value = (input.value || '').trim();
-  if (!value) return;
-  <push array="state.todos" value="value"></push>
+  <push array="state.todos" value="document.getElementById('newTodo').value"></push>
   <setprop selector="#newTodo" prop="value" value="''"></setprop>
   render();
 </function>
