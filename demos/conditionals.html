@@ -1,7 +1,20 @@
-<if condition="x > 5">
-    <print>Greater than 5</print>
-  </if>
-  <else>
-    <print>Not greater than 5</print>
-  </else>
-  
+<var name="x" value="10" mutable="true"></var>
+
+<div id="cond">
+  <p id="gt">Greater than 5</p>
+  <p id="ngt">Not greater than 5</p>
+  <button id="set3">Set x=3</button>
+  <button id="set10">Set x=10</button>
+</div>
+
+<function name="setX" params="val">
+  <set name="x" op="=" value="val"></set>
+  <toggle target="#gt" condition="x > 5"></toggle>
+  <toggle target="#ngt" condition="x <= 5"></toggle>
+</function>
+
+<event target="#set3" type="click" action="setX(3)"></event>
+<event target="#set10" type="click" action="setX(10)"></event>
+
+<toggle target="#gt" condition="x > 5"></toggle>
+<toggle target="#ngt" condition="x <= 5"></toggle>

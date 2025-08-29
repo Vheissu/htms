@@ -57,38 +57,33 @@ export const handleHtmlElement: TagHandler = (
     }
 
     // Process text content
-    if (element.textContent && element.textContent.trim()) {
-      const textContent = element.textContent.trim();
-      
+    if (element.children.length === 0 && element.textContent && element.textContent.trim()) {
+      const rawText = element.textContent.trim();
+
       // Validate text content
-      const contentErrors = SecurityValidator.validateContent(textContent);
+      const contentErrors = SecurityValidator.validateContent(rawText);
       if (contentErrors.length > 0) {
         if (options.strictMode) {
           errors.push(...contentErrors.map(error => ({ ...error, tag: tagName.toUpperCase() })));
         } else {
-          warnings.push(...contentErrors.map(error => ({
-            message: error.message,
-            tag: tagName.toUpperCase()
-          })));
+          warnings.push(...contentErrors.map(error => ({ message: error.message, tag: tagName.toUpperCase() })));
         }
       }
 
-      const sanitizedContent = SecurityValidator.sanitizeString(textContent);
-      const escapedContent = SecurityValidator.escapeForTemplate(sanitizedContent);
-      
-      code += `${varName}.textContent = '${escapedContent}';\n`;
-      
-      if (textContent !== sanitizedContent) {
-        warnings.push({
-          message: 'Text content sanitized for security',
-          tag: tagName.toUpperCase()
-        });
+      const itemPattern = /\{item\}/g;
+      if (options.loopVariable && itemPattern.test(rawText)) {
+        const escaped = SecurityValidator.escapeForTemplate(rawText);
+        const replaced = escaped.replace(itemPattern, `\${${options.loopVariable}}`);
+        code += `${varName}.textContent = \`${replaced}\`;\n`;
+      } else {
+        const escapedContent = SecurityValidator.escapeForTemplate(rawText);
+        code += `${varName}.textContent = \`${escapedContent}\`;\n`;
       }
     }
 
-    // Process child elements recursively
+    // Process child elements recursively; ensure children append under this element
     for (const child of Array.from(element.children)) {
-      const childResult = handleElement(child, options);
+      const childResult = handleElement(child, { ...options, appendTargetVar: varName });
       
       if (childResult.errors.length > 0) {
         errors.push(...childResult.errors);
@@ -103,17 +98,13 @@ export const handleHtmlElement: TagHandler = (
       
       if (childResult.code) {
         code += childResult.code;
-        // Extract the child variable name from the generated code
-        const childVarMatch = childResult.code.match(/const (\w+) = document\.createElement/);
-        if (childVarMatch) {
-          const childVarName = childVarMatch[1];
-          code += `${varName}.appendChild(${childVarName});\n`;
-        }
       }
     }
 
-    // Append to parent or document body
-    if (options.parentContext === 'root') {
+    // Append to parent container or document body
+    if (options.appendTargetVar) {
+      code += `${options.appendTargetVar}.appendChild(${varName});\n`;
+    } else if (options.parentContext === 'root') {
       code += `document.body.appendChild(${varName});\n`;
     }
 

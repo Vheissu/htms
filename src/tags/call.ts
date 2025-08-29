@@ -110,11 +110,14 @@ export const handleCallTag: TagHandler = (
             validatedArgList.push(arg);
           }
           // Check if it's a variable name
-          else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(arg)) {
-            const varErrors = SecurityValidator.validateJavaScriptIdentifier(arg);
-            if (varErrors.length > 0) {
-              errors.push(...varErrors.map(error => ({ ...error, tag: 'CALL' })));
-              return { code: '', errors, warnings };
+          else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(arg)) {
+            const parts = arg.split('.');
+            for (const part of parts) {
+              const varErrors = SecurityValidator.validateJavaScriptIdentifier(part);
+              if (varErrors.length > 0) {
+                errors.push(...varErrors.map(error => ({ ...error, tag: 'CALL' })));
+                return { code: '', errors, warnings };
+              }
             }
             validatedArgList.push(arg);
           }

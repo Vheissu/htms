@@ -2,16 +2,16 @@ import validator from 'validator';
 import { CompilerError } from '../types';
 
 const DANGEROUS_PATTERNS = [
-  /eval\s*\(/,
-  /Function\s*\(/,
-  /setTimeout\s*\(/,
-  /setInterval\s*\(/,
+  /\beval\s*\(/,
+  /\bFunction\s*\(/,
+  /\bsetTimeout\s*\(/,
+  /\bsetInterval\s*\(/,
   /document\.write/,
   /innerHTML\s*=/,
   /outerHTML\s*=/,
   /javascript:/,
   /<script/i,
-  /on\w+\s*=/i,
+  /(?:^|[\s<])on\w+\s*=/i,
   /\.\.\//,
   /~\//,
   /\/proc\//,

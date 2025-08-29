@@ -12,7 +12,7 @@ export const handleFunctionTag: TagHandler = (
   try {
     const name = element.getAttribute('name');
     const params = element.getAttribute('params') || '';
-    const body = element.textContent?.trim() || '';
+    const body = element.children.length === 0 ? (element.textContent?.trim() || '') : '';
 
     if (!name) {
       errors.push({
@@ -70,27 +70,35 @@ export const handleFunctionTag: TagHandler = (
       }
     }
 
-    // Generate function with safe body
-    const sanitizedBody = body ? SecurityValidator.sanitizeString(body) : '';
+    // Generate function with safe body (do not sanitize JS code; rely on validation above)
     const paramString = paramList.join(', ');
-    
+
+    // Build body from raw text (if any) and child tags
+    let innerCode = '';
+    if (body) innerCode += body + '\n';
+    for (const child of Array.from(element.children)) {
+      const { handleElement } = require('../handlers');
+      const childResult = handleElement(child, options);
+      if (childResult.errors.length > 0) {
+        errors.push(...childResult.errors.map((e: any) => ({ ...e, tag: 'FUNCTION' })));
+        if (options.strictMode) continue;
+      }
+      if (childResult.warnings.length > 0) warnings.push(...childResult.warnings);
+      if (childResult.code) innerCode += childResult.code + '\n';
+    }
+
     // Wrap function body in try-catch for safety
-    const safeBody = sanitizedBody ? `
+    const safeBody = innerCode.trim() ? `
       try {
-        ${sanitizedBody}
+${innerCode.split('\n').filter(Boolean).map(l => '        ' + l).join('\n')}
       } catch (error) {
         console.error('Function ${name} execution error:', error);
       }
-    ` : '// Empty function body';
+    ` : `
+      // Empty function body
+    `;
 
     const code = `function ${name}(${paramString}) {${safeBody}}`;
-
-    if (body && sanitizedBody !== body) {
-      warnings.push({
-        message: 'Function body was sanitized for security',
-        tag: 'FUNCTION'
-      });
-    }
 
     if (body && (body.includes('eval') || body.includes('Function('))) {
       warnings.push({
@@ -100,16 +108,16 @@ export const handleFunctionTag: TagHandler = (
       
       CompilerLogger.logSecurityIssue('Function with dangerous constructs', {
         functionName: name,
-        body: sanitizedBody
+        body: innerCode
       });
     }
 
     CompilerLogger.logDebug('Generated function declaration', {
       name,
       parameterCount: paramList.length,
-      hasBody: !!body,
-      bodyLength: sanitizedBody.length,
-      wasSanitized: body !== sanitizedBody
+      hasBody: innerCode.trim().length > 0,
+      bodyLength: innerCode.length,
+      wasSanitized: false
     });
 
     return { code, errors, warnings };

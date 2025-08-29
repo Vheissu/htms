@@ -16,6 +16,9 @@ class JSDOMEnvironment extends $JSDOMEnvironment {
       global.TextDecoder = TextDecoder;
     if ( !global.Uint8Array )
       global.Uint8Array = Uint8Array;
+    if ( typeof global.setImmediate !== 'function' ) {
+      global.setImmediate = (fn, ...rest) => setTimeout(fn, 0, ...rest);
+    }
   }
 }
 

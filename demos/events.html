@@ -1,5 +1,6 @@
 <button id="submitBtn">Submit</button>
-<event id="submitBtn" type="click" action="submitFunction"></event>
-<function name="submitFunction">
-  <print>Button was clicked!</print>
-</function>
+<p id="msg"></p>
+<event target="#submitBtn" type="click">
+  <setprop selector="#msg" prop="textContent" value="'Button was clicked!'"></setprop>
+  <setprop selector="#msg" prop="style.color" value="'green'"></setprop>
+</event>

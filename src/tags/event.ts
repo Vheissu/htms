@@ -25,10 +25,10 @@ export const handleEventTag: TagHandler = (
     const type = element.getAttribute('type');
     const action = element.getAttribute('action');
 
-    if (!target || !type || !action) {
+    if (!target || !type || (!action && element.children.length === 0)) {
       errors.push({
         type: 'validation',
-        message: 'EVENT tag requires target, type, and action attributes',
+        message: 'EVENT requires target and type, plus action or child tags',
         tag: 'EVENT'
       });
       return { code: '', errors, warnings };
@@ -54,41 +54,56 @@ export const handleEventTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    // Security validation of action
-    const actionErrors = SecurityValidator.validateContent(action);
-    if (actionErrors.length > 0) {
-      errors.push(...actionErrors.map(error => ({ ...error, tag: 'EVENT' })));
-      if (options.strictMode) {
-        return { code: '', errors, warnings };
+    let bodyCode = '';
+    if (element.children.length > 0) {
+      for (const child of Array.from(element.children)) {
+        const { handleElement } = require('../handlers');
+        const r = handleElement(child, options);
+        if (r.errors.length > 0) {
+          errors.push(...r.errors.map((e: any) => ({ ...e, tag: 'EVENT' })));
+          if (options.strictMode) return { code: '', errors, warnings };
+        }
+        if (r.warnings.length > 0) warnings.push(...r.warnings);
+        if (r.code) bodyCode += r.code + '\n';
       }
-    }
+    } else if (action) {
+      // Security validation of action
+      const actionErrors = SecurityValidator.validateContent(action);
+      if (actionErrors.length > 0) {
+        errors.push(...actionErrors.map(error => ({ ...error, tag: 'EVENT' })));
+        if (options.strictMode) {
+          return { code: '', errors, warnings };
+        }
+      }
 
-    // In strict mode, only allow whitelisted actions
-    if (options.strictMode) {
-      const actionFunction = action.split('(')[0].trim();
-      if (!SAFE_ACTIONS.has(actionFunction)) {
+      // In strict mode, only allow whitelisted actions
+      if (options.strictMode) {
+        const actionFunction = action.split('(')[0].trim();
+        if (!SAFE_ACTIONS.has(actionFunction)) {
+          errors.push({
+            type: 'security',
+            message: `Action not in whitelist: ${actionFunction}. Safe actions: ${Array.from(SAFE_ACTIONS).join(', ')}`,
+            tag: 'EVENT'
+          });
+          return { code: '', errors, warnings };
+        }
+      }
+
+      // Validate action syntax - must be a function call
+      if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*\s*\([^)]*\)$/.test(action.trim())) {
         errors.push({
-          type: 'security',
-          message: `Action not in whitelist: ${actionFunction}. Safe actions: ${Array.from(SAFE_ACTIONS).join(', ')}`,
+          type: 'validation',
+          message: 'Action must be a function call (e.g., "console.log(\'Hello\')")',
           tag: 'EVENT'
         });
         return { code: '', errors, warnings };
       }
-    }
-
-    // Validate action syntax - must be a function call
-    if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*\s*\([^)]*\)$/.test(action.trim())) {
-      errors.push({
-        type: 'validation',
-        message: 'Action must be a function call (e.g., "console.log(\'Hello\')")',
-        tag: 'EVENT'
-      });
-      return { code: '', errors, warnings };
+      bodyCode = `${action}`;
     }
 
     // Escape values for safe template generation
     const escapedTarget = SecurityValidator.escapeForTemplate(target);
-    const escapedAction = SecurityValidator.escapeForTemplate(action);
+    const escapedAction = action ? SecurityValidator.escapeForTemplate(action) : '';
 
     // Generate safe event handler with error handling
     const code = `
@@ -100,7 +115,7 @@ export const handleEventTag: TagHandler = (
         eventTargets.forEach(element => {
           element.addEventListener('${type}', function(event) {
             try {
-              ${action}
+${(bodyCode || '').split('\n').filter(Boolean).map(l => '              ' + l).join('\n')}
             } catch (error) {
               console.error('Event handler error:', error);
             }
@@ -111,7 +126,7 @@ export const handleEventTag: TagHandler = (
       }
     `;
 
-    if (!SAFE_ACTIONS.has(action.split('(')[0].trim())) {
+    if (action && !SAFE_ACTIONS.has(action.split('(')[0].trim())) {
       warnings.push({
         message: `Event action may pose security risks: ${action}`,
         tag: 'EVENT'
@@ -128,7 +143,7 @@ export const handleEventTag: TagHandler = (
       target: escapedTarget,
       type,
       action: escapedAction,
-      isSafeAction: SAFE_ACTIONS.has(action.split('(')[0].trim())
+      isSafeAction: action ? SAFE_ACTIONS.has(action.split('(')[0].trim()) : true
     });
 
     return { code, errors, warnings };

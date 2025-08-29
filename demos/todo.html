@@ -1,5 +1,20 @@
+<var name="state" value='{"todos":[]}' mutable="true"></var>
+
 <div id="todoApp">
   <input type="text" id="newTodo" placeholder="Enter new todo" />
-  <button onclick="addTodo()">Add</button>
+  <button id="addBtn">Add</button>
   <ul id="todoList"></ul>
 </div>
+
+<event target="#addBtn" type="click" action="addTodo()"></event>
+
+<function name="addTodo">
+  const input = document.getElementById('newTodo');
+  const value = (input.value || '').trim();
+  if (!value) return;
+  state.todos.push(value);
+  input.value = '';
+  const li = document.createElement('li');
+  li.textContent = value;
+  document.getElementById('todoList').appendChild(li);
+</function>

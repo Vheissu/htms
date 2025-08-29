@@ -1,8 +1,14 @@
 <var name="outerLoop" value="[1, 2, 3]"></var>
-<repeat variable="outerLoop">
-  <print>Outer loop item: {item}</print>
-  <var name="innerLoop" value="['a', 'b', 'c']"></var>
-  <repeat variable="innerLoop">
-    <print>Inner loop item: {item}</print>
+<ul id="nested">
+  <repeat variable="outerLoop">
+    <li>
+      <span>Outer loop item: {item}</span>
+      <var name="innerLoop" value='["a","b","c"]'></var>
+      <ul>
+        <repeat variable="innerLoop">
+          <li>Inner loop item: {item}</li>
+        </repeat>
+      </ul>
+    </li>
   </repeat>
-</repeat>
+</ul>

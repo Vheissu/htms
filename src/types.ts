@@ -35,6 +35,8 @@ export interface TagHandlerOptions {
   loopVariable?: string;
   parentContext?: string;
   strictMode?: boolean;
+  // When set, newly created HTML elements should append to this container var
+  appendTargetVar?: string;
 }
 
 export interface HandlerResult {

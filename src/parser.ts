@@ -31,6 +31,11 @@ export function elementsToJsSnippets(
   
   try {
     for (const element of Array.from(elements)) {
+      // Skip standalone ELSE nodes; IF handler consumes its immediate sibling
+      if (element.tagName && element.tagName.toUpperCase() === 'ELSE') {
+        warnings.push({ message: 'Top-level ELSE ignored (paired with preceding IF)', tag: 'ELSE' });
+        continue;
+      }
       const result = handleElement(element, {
         strictMode: options.strictMode || false,
         parentContext: 'root'

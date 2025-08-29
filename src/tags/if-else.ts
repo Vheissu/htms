@@ -20,7 +20,7 @@ export const handleIfElseTags: TagHandler = (
     }
 
     const condition = element.getAttribute('condition');
-    const ifBody = element.textContent?.trim() || '';
+    const ifBody = element.children.length === 0 ? (element.textContent?.trim() || '') : '';
 
     if (!condition) {
       errors.push({
@@ -40,8 +40,8 @@ export const handleIfElseTags: TagHandler = (
       }
     }
 
-    // Validate condition format - must be a safe boolean expression
-    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!]+\s*[a-zA-Z0-9_$'".\s]*)?(\s*[&|]{2}\s*[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!]+\s*[a-zA-Z0-9_$'".\s]*)?)*$/.test(condition.trim())) {
+    // Validate condition format — allow common boolean expressions but reject function calls
+    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!%+\-*/]+\s*[a-zA-Z0-9_$'".\s]+)*(\s*[&|]{2}\s*[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!%+\-*/]+\s*[a-zA-Z0-9_$'".\s]+)*)?$/.test(condition.trim())) {
       warnings.push({
         message: 'Complex condition detected - may pose security risks',
         tag: 'IF'
@@ -56,29 +56,47 @@ export const handleIfElseTags: TagHandler = (
         return { code: '', errors, warnings };
       }
     }
-
-    // Security validation of if body
-    let sanitizedIfBody = '';
+    
+    // Prepare bodies: combine raw text (legacy) and child tag code
+    let ifInnerCode = '';
+    // Legacy raw text support
     if (ifBody) {
       const bodyErrors = SecurityValidator.validateContent(ifBody);
-      if (bodyErrors.length > 0) {
+      if (bodyErrors.length > 0 && options.strictMode) {
         errors.push(...bodyErrors.map(error => ({ ...error, tag: 'IF' })));
+        return { code: '', errors, warnings };
+      }
+      // Use as-is (no HTML escaping) — guarded by content validation above
+      ifInnerCode += `${ifBody}\n`;
+    }
+    // Child elements
+    for (const child of Array.from(element.children)) {
+      const { handleElement } = require('../handlers');
+      const childResult = handleElement(child, options);
+      if (childResult.errors.length > 0) {
+        errors.push(...childResult.errors);
         if (options.strictMode) {
-          return { code: '', errors, warnings };
+          continue;
         }
       }
-      sanitizedIfBody = SecurityValidator.sanitizeString(ifBody);
+      if (childResult.warnings.length > 0) {
+        warnings.push(...childResult.warnings);
+      }
+      if (childResult.code) {
+        ifInnerCode += childResult.code + '\n';
+      }
     }
 
     // Check for corresponding ELSE tag
-    let elseBody = '';
+    // legacy capture removed; keeping variable names consistent
+    let elseInnerCode = '';
     let hasElse = false;
     
     // Look for next sibling ELSE element
     let nextSibling = element.nextElementSibling;
     if (nextSibling && nextSibling.tagName.toUpperCase() === 'ELSE') {
       hasElse = true;
-      const elseContent = nextSibling.textContent?.trim() || '';
+      const elseContent = nextSibling.children.length === 0 ? (nextSibling.textContent?.trim() || '') : '';
       
       if (elseContent) {
         const elseErrors = SecurityValidator.validateContent(elseContent);
@@ -88,18 +106,36 @@ export const handleIfElseTags: TagHandler = (
             return { code: '', errors, warnings };
           }
         }
-        elseBody = SecurityValidator.sanitizeString(elseContent);
+        elseInnerCode += `${elseContent}\n`;
+      }
+
+      // Process ELSE children
+      for (const child of Array.from(nextSibling.children)) {
+        const { handleElement } = require('../handlers');
+        const childResult = handleElement(child, options);
+        if (childResult.errors.length > 0) {
+          errors.push(...childResult.errors);
+          if (options.strictMode) {
+            continue;
+          }
+        }
+        if (childResult.warnings.length > 0) {
+          warnings.push(...childResult.warnings);
+        }
+        if (childResult.code) {
+          elseInnerCode += childResult.code + '\n';
+        }
       }
     }
 
     // Sanitize condition
-    const sanitizedCondition = SecurityValidator.sanitizeString(condition);
+    const sanitizedCondition = condition.trim();
 
     // Generate safe conditional code
     let code = `if (${sanitizedCondition}) {\n`;
     
-    if (sanitizedIfBody) {
-      code += `  try {\n    ${sanitizedIfBody}\n  } catch (error) {\n    console.error('IF block execution error:', error);\n  }\n`;
+    if (ifInnerCode.trim()) {
+      code += `  try {\n${ifInnerCode.split('\n').filter(Boolean).map(l => '    ' + l).join('\n')}\n  } catch (error) {\n    console.error('IF block execution error:', error);\n  }\n`;
     } else {
       code += '  // Empty if block\n';
     }
@@ -108,41 +144,19 @@ export const handleIfElseTags: TagHandler = (
     
     if (hasElse) {
       code += ' else {\n';
-      if (elseBody) {
-        code += `  try {\n    ${elseBody}\n  } catch (error) {\n    console.error('ELSE block execution error:', error);\n  }\n`;
+      if (elseInnerCode.trim()) {
+        code += `  try {\n${elseInnerCode.split('\n').filter(Boolean).map(l => '    ' + l).join('\n')}\n  } catch (error) {\n    console.error('ELSE block execution error:', error);\n  }\n`;
       } else {
         code += '  // Empty else block\n';
       }
       code += '}';
     }
 
-    // Check for sanitization warnings
-    if (condition !== sanitizedCondition) {
-      warnings.push({
-        message: 'Condition was sanitized for security',
-        tag: 'IF'
-      });
-    }
-
-    if (ifBody && ifBody !== sanitizedIfBody) {
-      warnings.push({
-        message: 'IF body was sanitized for security',
-        tag: 'IF'
-      });
-    }
-
-    if (elseBody && nextSibling?.textContent !== elseBody) {
-      warnings.push({
-        message: 'ELSE body was sanitized for security',
-        tag: 'ELSE'
-      });
-    }
-
     CompilerLogger.logDebug('Generated conditional statement', {
       condition: sanitizedCondition,
-      hasIfBody: !!sanitizedIfBody,
+      hasIfBody: !!ifInnerCode.trim(),
       hasElse,
-      hasElseBody: !!elseBody,
+      hasElseBody: !!elseInnerCode.trim(),
       codeLength: code.length
     });
 

@@ -42,7 +42,7 @@ export const handleSwitchTag: TagHandler = (
       
       if (tagName === 'case') {
         const caseValue = child.getAttribute('value');
-        const caseBody = child.textContent?.trim() || '';
+        const caseBody = child.children.length === 0 ? (child.textContent?.trim() || '') : '';
         
         if (!caseValue) {
           warnings.push({
@@ -81,7 +81,8 @@ export const handleSwitchTag: TagHandler = (
         }
 
         // Security validation of case body
-        let sanitizedBody = '';
+        // Build case body from raw text (legacy) and child tags
+        let innerCaseCode = '';
         if (caseBody) {
           const bodyErrors = SecurityValidator.validateContent(caseBody);
           if (bodyErrors.length > 0) {
@@ -90,21 +91,26 @@ export const handleSwitchTag: TagHandler = (
               continue;
             }
           }
-          sanitizedBody = SecurityValidator.sanitizeString(caseBody);
+          innerCaseCode += caseBody + '\n';
+        }
+        for (const grandChild of Array.from(child.children)) {
+          const { handleElement } = require('../handlers');
+          const gcResult = handleElement(grandChild, options);
+          if (gcResult.errors.length > 0) {
+            errors.push(...gcResult.errors.map((e: any) => ({ ...e, tag: 'SWITCH' })));
+            if (options.strictMode) continue;
+          }
+          if (gcResult.warnings.length > 0) warnings.push(...gcResult.warnings);
+          if (gcResult.code) innerCaseCode += gcResult.code + '\n';
         }
 
-        const caseCode = sanitizedBody ? 
-          `case ${processedValue}: {\n    try {\n      ${sanitizedBody}\n    } catch (error) {\n      console.error('Case execution error:', error);\n    }\n    break;\n  }` :
+        const caseCode = innerCaseCode.trim() ? 
+          `case ${processedValue}: {\n    try {\n${innerCaseCode.split('\n').filter(Boolean).map(l => '      ' + l).join('\n')}\n    } catch (error) {\n      console.error('Case execution error:', error);\n    }\n    break;\n  }` :
           `case ${processedValue}: {\n    // Empty case\n    break;\n  }`;
         
         cases.push(caseCode);
 
-        if (caseBody && caseBody !== sanitizedBody) {
-          warnings.push({
-            message: `Case body sanitized for value: ${caseValue}`,
-            tag: 'SWITCH'
-          });
-        }
+        // No sanitization of code applied; content validated above
 
       } else if (tagName === 'default') {
         if (hasDefault) {
@@ -116,7 +122,7 @@ export const handleSwitchTag: TagHandler = (
         }
 
         hasDefault = true;
-        const defaultBody = child.textContent?.trim() || '';
+        const defaultBody = child.children.length === 0 ? (child.textContent?.trim() || '') : '';
         
         if (defaultBody) {
           const bodyErrors = SecurityValidator.validateContent(defaultBody);
@@ -126,16 +132,18 @@ export const handleSwitchTag: TagHandler = (
               continue;
             }
           }
-          
-          const sanitizedDefaultBody = SecurityValidator.sanitizeString(defaultBody);
-          defaultCase = `default: {\n    try {\n      ${sanitizedDefaultBody}\n    } catch (error) {\n      console.error('Default case execution error:', error);\n    }\n    break;\n  }`;
-          
-          if (defaultBody !== sanitizedDefaultBody) {
-            warnings.push({
-              message: 'Default case body sanitized for security',
-              tag: 'SWITCH'
-            });
+          let defaultInner = defaultBody + '\n';
+          for (const gc of Array.from(child.children)) {
+            const { handleElement } = require('../handlers');
+            const gcResult = handleElement(gc, options);
+            if (gcResult.errors.length > 0) {
+              errors.push(...gcResult.errors as any);
+              if (options.strictMode) continue;
+            }
+            if (gcResult.warnings.length > 0) warnings.push(...gcResult.warnings);
+            if (gcResult.code) defaultInner += gcResult.code + '\n';
           }
+          defaultCase = `default: {\n    try {\n${defaultInner.split('\n').filter(Boolean).map(l => '      ' + l).join('\n')}\n    } catch (error) {\n      console.error('Default case execution error:', error);\n    }\n    break;\n  }`;
         } else {
           defaultCase = 'default: {\n    // Empty default case\n    break;\n  }';
         }

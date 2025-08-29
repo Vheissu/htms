@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HTMS Demos</title>
+    <style>
+      :root { --gap: 16px; --card-bg: #fff; --border: #e5e7eb; --text: #111827; --muted:#6b7280; --shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.06);} 
+      * { box-sizing: border-box }
+      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: var(--text); background: #f9fafb; }
+      header { padding: 32px 24px 8px; }
+      header h1 { margin: 0 0 8px; font-size: 26px; }
+      header p { margin: 0; color: var(--muted); }
+      .grid { display: grid; gap: var(--gap); padding: 16px 24px 40px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));}
+      .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 16px; display: flex; flex-direction: column; justify-content: space-between; }
+      .card h3 { margin: 0 0 8px; font-size: 18px; }
+      .card p { margin: 0 0 16px; color: var(--muted); font-size: 14px; min-height: 38px; }
+      .card a { align-self: flex-start; text-decoration: none; background: #111827; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 14px; }
+      footer { padding: 12px 24px 24px; color: var(--muted); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>HTMS Demos</h1>
+      <p>Click a card to open its demo. These are the useful ones.</p>
+    </header>
+    <main class="grid">
+      <section class="card">
+        <div>
+          <h3>Todo App</h3>
+          <p>Add and remove items using VAR, SET, FUNCTION, and EVENT.</p>
+        </div>
+        <a href="/demos/todo-app.index.html">Open Demo</a>
+      </section>
+      <section class="card">
+        <div>
+          <h3>Array Loop</h3>
+          <p>Render a list via REPEAT and text interpolation.</p>
+        </div>
+        <a href="/demos/array-loop.index.html">Open Demo</a>
+      </section>
+      <section class="card">
+        <div>
+          <h3>Conditionals</h3>
+          <p>Show different content with IF/ELSE.</p>
+        </div>
+        <a href="/demos/conditionals.index.html">Open Demo</a>
+      </section>
+      <section class="card">
+        <div>
+          <h3>Switch</h3>
+          <p>Branch on variable values using SWITCH/CASE.</p>
+        </div>
+        <a href="/demos/switch.index.html">Open Demo</a>
+      </section>
+      <section class="card">
+        <div>
+          <h3>Nested Loops</h3>
+          <p>Generate nested lists using REPEAT within REPEAT.</p>
+        </div>
+        <a href="/demos/nested-loop.index.html">Open Demo</a>
+      </section>
+      <section class="card">
+        <div>
+          <h3>Events</h3>
+          <p>Wire a button click to a function via EVENT.</p>
+        </div>
+        <a href="/demos/events.index.html">Open Demo</a>
+      </section>
+    </main>
+    <footer>
+      Psst — other samples (like pure console logs) are excluded to keep this gallery focused.
+    </footer>
+  </body>
+  </html>

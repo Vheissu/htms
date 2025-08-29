@@ -12,7 +12,7 @@ export const handleRepeatTag: TagHandler = (
   try {
     const variable = element.getAttribute('variable');
     const count = element.getAttribute('count');
-    const body = element.textContent?.trim() || '';
+    const body = element.children.length === 0 ? (element.textContent?.trim() || '') : '';
 
     // Validate that we have either variable or count
     if (!variable && !count) {

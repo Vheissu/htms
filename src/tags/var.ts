@@ -12,6 +12,7 @@ export const handleVarTag: TagHandler = (
   try {
     const name = element.getAttribute('name');
     const value = element.getAttribute('value') || '';
+    const mutable = (element.getAttribute('mutable') || 'false').toLowerCase() === 'true';
 
     if (!name) {
       errors.push({
@@ -91,52 +92,49 @@ export const handleVarTag: TagHandler = (
     // Handle object literals
     else if (value.startsWith('{') && value.endsWith('}')) {
       try {
-        // Validate that it's a proper JSON object
         const parsed = JSON.parse(value);
         if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
-          errors.push({
-            type: 'validation',
-            message: 'Invalid object literal',
-            tag: 'VAR'
-          });
+          errors.push({ type: 'validation', message: 'Invalid object literal', tag: 'VAR' });
           return { code: '', errors, warnings };
         }
-        
-        // Validate object properties
-        for (const [key, val] of Object.entries(parsed)) {
-          const keyErrors = SecurityValidator.validateJavaScriptIdentifier(key);
-          if (keyErrors.length > 0) {
-            errors.push(...keyErrors.map(error => ({ ...error, tag: 'VAR' })));
-            return { code: '', errors, warnings };
+
+        const validateNested = (v: unknown): boolean => {
+          if (v === null) return true;
+          const t = typeof v;
+          if (t === 'number' || t === 'boolean') return true;
+          if (t === 'string') {
+            const ve = SecurityValidator.validateContent(v as string);
+            if (ve.length > 0 && options.strictMode) return false;
+            return true;
           }
-          
-          if (typeof val === 'string') {
-            const valErrors = SecurityValidator.validateContent(val);
-            if (valErrors.length > 0) {
-              errors.push(...valErrors.map(error => ({ ...error, tag: 'VAR' })));
-              if (options.strictMode) {
-                return { code: '', errors, warnings };
-              }
+          if (Array.isArray(v)) {
+            return v.every(validateNested);
+          }
+          if (t === 'object') {
+            for (const [k, vv] of Object.entries(v as Record<string, unknown>)) {
+              const ke = SecurityValidator.validateJavaScriptIdentifier(k);
+              if (ke.length > 0) return false;
+              if (!validateNested(vv)) return false;
             }
-          } else if (typeof val !== 'number' && typeof val !== 'boolean' && val !== null) {
-            errors.push({
-              type: 'validation',
-              message: `Unsupported object property type: ${typeof val}`,
-              tag: 'VAR'
-            });
-            return { code: '', errors, warnings };
+            return true;
           }
+          return false;
+        };
+
+        if (!validateNested(parsed)) {
+          errors.push({ type: 'validation', message: 'Invalid nested value in object literal', tag: 'VAR' });
+          return { code: '', errors, warnings };
         }
-        
+
         processedValue = JSON.stringify(parsed);
       } catch {
-        errors.push({
-          type: 'validation',
-          message: 'Invalid JSON object literal',
-          tag: 'VAR'
-        });
+        errors.push({ type: 'validation', message: 'Invalid JSON object literal', tag: 'VAR' });
         return { code: '', errors, warnings };
       }
+    }
+    // Handle quoted string literal (preserve quotes)
+    else if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      processedValue = value;
     }
     // Handle numeric values
     else if (/^-?\d+(\.\d+)?$/.test(value)) {
@@ -175,13 +173,15 @@ export const handleVarTag: TagHandler = (
       });
     }
 
-    const code = `const ${name} = ${processedValue};`;
+    const decl = mutable ? 'let' : 'const';
+    const code = `${decl} ${name} = ${processedValue};`;
 
     CompilerLogger.logDebug('Generated variable declaration', {
       name,
       originalValue: value,
       processedValue,
-      generatedCode: code
+      generatedCode: code,
+      mutable
     });
 
     return { code, errors, warnings };

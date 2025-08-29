@@ -12,6 +12,8 @@
     "test:coverage": "jest --coverage",
     "build": "tsc",
     "compile": "ts-node main.ts",
+    "demo:build": "ts-node scripts/build-demos.ts",
+    "demo:serve": "npm run build && npm run demo:build && ts-node scripts/serve-demos.ts",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",
