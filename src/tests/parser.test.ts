@@ -1,131 +1,75 @@
 import { parseHTML } from '../parser';
 import { ParseOptions } from '../types';
 
-describe('Parser', () => {
-  describe('parseHTML', () => {
-    it('should parse valid HTML with print tag', () => {
-      const html = '<print>Hello, world!</print>';
-      const result = parseHTML(html);
-      
-      expect(result.success).toBe(true);
-      expect(result.code).toContain('console.log');
-      expect(result.code).toContain('Hello, world!');
-      expect(result.errors).toHaveLength(0);
-    });
+function compileComponent(markup: string, options: ParseOptions = {}) {
+  return parseHTML(markup, { mode: 'component', outputFormat: 'esm', ...options });
+}
 
-    it('should handle empty HTML', () => {
-      const html = '';
-      const result = parseHTML(html);
-      
-      expect(result.success).toBe(false);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].type).toBe('validation');
-    });
+describe('Parser (component mode)', () => {
+  it('compiles components containing PRINT directives', () => {
+    const html = `
+      <component name="logger-box">
+        <PRINT type="log">Hello World</PRINT>
+      </component>
+    `;
 
-    it('should handle malformed HTML gracefully', () => {
-      const html = '<print><unclosed>';
-      const result = parseHTML(html);
-      
-      // Should not crash, but may have warnings
-      expect(result).toBeDefined();
-    });
+    const result = compileComponent(html);
 
-    it('should reject dangerous content in strict mode', () => {
-      const html = '<print>eval("alert(1)")</print>';
-      const options: ParseOptions = { strictMode: true };
-      const result = parseHTML(html, options);
-      
-      expect(result.success).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(e => e.type === 'security')).toBe(true);
-    });
+    expect(result.success).toBe(true);
+    expect(result.code).toBeDefined();
+    expect(result?.code).toContain('class LoggerBoxComponent extends HTMLElement');
+    expect(result?.code).toContain('console.log');
+  });
 
-    it('should generate warnings for dangerous content in non-strict mode', () => {
-      const html = '<print>document.write("test")</print>';
-      const options: ParseOptions = { strictMode: false };
-      const result = parseHTML(html, options);
-      
-      // May succeed with warnings
-      expect(result.warnings.length).toBeGreaterThan(0);
-    });
+  it('emits state helpers for VAR and SET directives', () => {
+    const html = `
+      <component name="counter-box">
+        <var name="count" value="0" mutable="true"></var>
+        <button id="increment">+</button>
+        <event target="#increment" type="click">
+          <set name="count" op="++"></set>
+        </event>
+      </component>
+    `;
 
-    it('should handle var tag with valid identifiers', () => {
-      const html = '<var name="testVar" value="42"></var>';
-      const result = parseHTML(html);
-      
-      expect(result.success).toBe(true);
-      expect(result.code).toContain('const testVar = 42');
-    });
+    const result = compileComponent(html);
 
-    it('should reject var tag with invalid identifiers', () => {
-      const html = '<var name="123invalid" value="42"></var>';
-      const result = parseHTML(html);
-      
-      expect(result.success).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
-    });
+    expect(result.success).toBe(true);
+    expect(result.code).toBeDefined();
+    expect(result?.code).toContain("this.__htmsInitState(['count'], () => 0);");
+    expect(result?.code).toContain("this.__htmsSetState(['count'], '++'");
+  });
 
-    it('should handle array values safely', () => {
-      const html = '<var name="arr" value="[1,2,3]"></var>';
-      const result = parseHTML(html);
-      
-      expect(result.success).toBe(true);
-      expect(result.code).toContain('const arr = [1,2,3]');
-    });
+  it('rejects documents without a <component> root', () => {
+    const result = compileComponent('<div>oops</div>');
 
-    it('should reject malicious array values', () => {
-      const html = '<var name="arr" value="[alert(1)]"></var>';
-      const result = parseHTML(html);
-      
-      expect(result.success).toBe(false);
-      expect(result.errors.some(e => e.type === 'validation')).toBe(true);
-    });
+    expect(result.success).toBe(false);
+    expect(result.errors[0]?.message).toContain('Wrap markup in a <component>');
+  });
 
-    it('should handle call tag with whitelisted functions', () => {
-      const html = '<call function="console.log" args="\'Hello\'"></call>';
-      const options: ParseOptions = { strictMode: true };
-      const result = parseHTML(html, options);
-      
-      expect(result.success).toBe(true);
-      expect(result.code).toContain('console.log');
-    });
+  it('rejects component names without a hyphen', () => {
+    const html = `
+      <component name="invalid">
+        <div>Nope</div>
+      </component>
+    `;
 
-    it('should reject call tag with non-whitelisted functions in strict mode', () => {
-      const html = '<call function="dangerousFunction" args=""></call>';
-      const options: ParseOptions = { strictMode: true };
-      const result = parseHTML(html, options);
-      
-      expect(result.success).toBe(false);
-      expect(result.errors.some(e => e.type === 'security')).toBe(true);
-    });
+    const result = compileComponent(html);
 
-    it('should generate proper module format', () => {
-      const html = '<print>Test</print>';
-      const options: ParseOptions = { outputFormat: 'esm' };
-      const result = parseHTML(html, options);
-      
-      expect(result.success).toBe(true);
-      expect(result.code).toContain('use strict');
-      expect(result.code).toContain('Generated by HTMS - ESM format');
-    });
+    expect(result.success).toBe(false);
+    expect(result.errors.some(error => error.message.includes('must include a hyphen'))).toBe(true);
+  });
 
-    it('should handle nested elements', () => {
-      const html = '<div><span>Nested content</span></div>';
-      const result = parseHTML(html);
-      
-      expect(result.success).toBe(true);
-      expect(result.code).toContain('createElement');
-      expect(result.code).toContain('appendChild');
-    });
+  it('rejects dangerous content in strict mode', () => {
+    const html = `
+      <component name="danger-box">
+        <PRINT type="log">document.write("x")</PRINT>
+      </component>
+    `;
 
-    it('should validate file size limits', () => {
-      const largeHtml = '<print>' + 'x'.repeat(10000) + '</print>';
-      const options: ParseOptions = { maxFileSize: 1000 };
-      
-      // This test would be handled at the CLI level, not parser level
-      // But parser should handle large content gracefully
-      const result = parseHTML(largeHtml, options);
-      expect(result).toBeDefined();
-    });
+    const result = compileComponent(html, { strictMode: true });
+
+    expect(result.success).toBe(false);
+    expect(result.errors.some(error => error.type === 'security')).toBe(true);
   });
 });

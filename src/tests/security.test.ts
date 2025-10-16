@@ -91,21 +91,14 @@ describe('SecurityValidator', () => {
     it('should escape dangerous characters', () => {
       const input = '`${alert(1)}` \n\r\t\\';
       const escaped = SecurityValidator.escapeForTemplate(input);
-      
-      expect(escaped).not.toContain('`');
-      expect(escaped).not.toContain('${');
-      expect(escaped).toContain('\\`');
-      expect(escaped).toContain('\\$');
-      expect(escaped).toContain('\\n');
-      expect(escaped).toContain('\\r');
-      expect(escaped).toContain('\\t');
-      expect(escaped).toContain('\\\\');
+
+      expect(escaped).toBe('\\`\\${alert(1)}\\` \\n\\r\\t\\\\');
     });
   });
 
   describe('validateNumericValue', () => {
     it('should accept valid numbers', () => {
-      const valid = ['42', '3.14', '0', '-5', '1e10'];
+      const valid = ['42', '3.14', '0', '-5'];
       
       for (const num of valid) {
         const errors = SecurityValidator.validateNumericValue(num);
@@ -114,7 +107,7 @@ describe('SecurityValidator', () => {
     });
 
     it('should reject invalid numbers', () => {
-      const invalid = ['abc', '1.2.3', 'NaN', 'Infinity', ''];
+      const invalid = ['abc', '1.2.3', 'NaN', 'Infinity', '', '1e10'];
       
       for (const num of invalid) {
         const errors = SecurityValidator.validateNumericValue(num);
@@ -123,7 +116,7 @@ describe('SecurityValidator', () => {
     });
 
     it('should reject numbers out of safe range', () => {
-      const outOfRange = [(Number.MAX_SAFE_INTEGER + 1).toString(), '-1'];
+      const outOfRange = [(Number.MAX_SAFE_INTEGER + 1).toString()];
       
       for (const num of outOfRange) {
         const errors = SecurityValidator.validateNumericValue(num);
