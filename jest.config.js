@@ -2,8 +2,11 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: './jest-environment-config.cjs',
-  // Run only repository tests under `tests/**`. Ignore built artifacts and legacy prototypes.
-  testMatch: ['<rootDir>/tests/**/*.spec.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/src/tests/', '<rootDir>/tests/e2e/'],
+  // Run repository tests under `tests/**` and legacy suites under `src/tests/**`.
+  testMatch: [
+    '<rootDir>/tests/**/*.(spec|test).ts',
+    '<rootDir>/src/tests/**/*.(spec|test).ts'
+  ],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/', '<rootDir>/tests/e2e/'],
   setupFiles: ['<rootDir>/tests/jest.setup.ts'],
 };
