@@ -1,0 +1,54 @@
+<component name="effect-fetch-demo">
+  <var name="state" value="{}" mutable="true"></var>
+
+  <div class="demo">
+    <button id="load">Load Quote</button>
+    <p id="status">Status: Idle</p>
+    <blockquote id="quote"></blockquote>
+    <p id="error" class="error"></p>
+  </div>
+
+  <event target="#load" type="click">
+    <set name="state.loadNonce" expr="Date.now()"></set>
+  </event>
+
+  <effect deps="state.loading, state.quote, state.error" immediate="true">
+    const root = owner && owner.__htmsRoot;
+    if (!root) { return; }
+
+    const statusEl = root.querySelector('#status');
+    const quoteEl = root.querySelector('#quote');
+    const errorEl = root.querySelector('#error');
+
+    if (statusEl) {
+      if (state.loading) {
+        statusEl.textContent = 'Status: Loading...';
+      } else if (state.error) {
+        statusEl.textContent = 'Status: Error';
+      } else if (state.quote) {
+        statusEl.textContent = 'Status: Loaded';
+      } else {
+        statusEl.textContent = 'Status: Idle';
+      }
+    }
+
+    if (quoteEl) {
+      quoteEl.textContent = state.quote ? state.quote.text : '';
+    }
+
+    if (errorEl) {
+      errorEl.textContent = state.error || '';
+    }
+  </effect>
+
+  <fetch
+    url="'/demo-quote.json'"
+    into="state.quote"
+    loading="state.loading"
+    error="state.error"
+    deps="state.loadNonce"
+    when="Boolean(state.loadNonce)"
+    immediate="false"
+    once="true">
+  </fetch>
+</component>

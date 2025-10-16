@@ -22,6 +22,8 @@ import { handleSetAttrTag } from './tags/setattr';
 import { handleAppendTag } from './tags/append';
 import { handleKeyedListTag } from './tags/keyed-list';
 import { handleSubmitTag } from './tags/submit';
+import { handleEffectTag } from './tags/effect';
+import { handleFetchTag } from './tags/fetch';
 import { TagHandler, TagHandlerOptions, HandlerResult, CompilerError } from './types';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
@@ -61,6 +63,8 @@ const HANDLERS_MAPPING: HandlersMapping = {
   APPEND: handleAppendTag,
   KEYEDLIST: handleKeyedListTag,
   SUBMIT: handleSubmitTag,
+  EFFECT: handleEffectTag,
+  FETCH: handleFetchTag,
 };
 
 export function handleElement(

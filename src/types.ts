@@ -41,6 +41,7 @@ export interface TagHandlerOptions {
   strictMode?: boolean;
   // When set, newly created HTML elements should append to this container var
   appendTargetVar?: string;
+  componentContext?: boolean;
 }
 
 export interface HandlerResult {

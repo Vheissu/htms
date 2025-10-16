@@ -5,6 +5,8 @@ import { handleShowTag } from '../../src/tags/show';
 import { handleSubmitTag } from '../../src/tags/submit';
 import { handleInjectTag } from '../../src/tags/inject';
 import { handleKeyedListTag } from '../../src/tags/keyed-list';
+import { handleEffectTag } from '../../src/tags/effect';
+import { handleFetchTag } from '../../src/tags/fetch';
 
 function createElement(markup: string): Element {
   const dom = new JSDOM(`<body>${markup}</body>`);
@@ -136,6 +138,86 @@ describe('Tag handlers', () => {
       const result = handleKeyedListTag(element, { strictMode: false });
 
       expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+    });
+  });
+
+  describe('EFFECT', () => {
+    it('registers runtime effects using run attribute', () => {
+      const element = createElement('<EFFECT run="console.log(count)"></EFFECT>');
+      const result = handleEffectTag(element, { strictMode: true });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toContain('registerEffect');
+      expect(result.code).toContain('console.log(count');
+    });
+
+    it('supports dependency lists and component ownership', () => {
+      const element = createElement('<EFFECT deps="user.id, token" immediate="false" once="true">cleanupFlag = true</EFFECT>');
+      const result = handleEffectTag(element, { strictMode: true, componentContext: true });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toContain('owner: owner');
+      expect(result.code).toContain('deps: [function(){ return user.id; }, function(){ return token; }]');
+      expect(result.code).toContain('immediate: false');
+      expect(result.code).toContain('once: true');
+      expect(result.code).toContain('cleanupFlag = true');
+    });
+
+    it('accepts cleanup attribute and guards invalid content', () => {
+      const element = createElement('<EFFECT run="doWork()" cleanup="tearDown()"></EFFECT>');
+      const result = handleEffectTag(element, { strictMode: true });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toContain('cleanup: function()');
+      expect(result.code).toContain('tearDown()');
+    });
+
+    it('requires effect body', () => {
+      const element = createElement('<EFFECT></EFFECT>');
+      const result = handleEffectTag(element, { strictMode: true });
+
+      expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+    });
+  });
+
+  describe('FETCH', () => {
+    it('generates guarded fetch effect', () => {
+      const element = createElement('<FETCH url="buildUrl(userId)" into="state.items" loading="state.loading"></FETCH>');
+      const result = handleFetchTag(element, { strictMode: true });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toContain('registerEffect');
+      expect(result.code).toContain('fetch(');
+      expect(result.code).toContain('runtime.notify');
+    });
+
+    it('wires component state targets and conditional guard', () => {
+      const element = createElement(
+        '<FETCH url="this.buildUrl()" method="post" body="payload" headers="makeHeaders()" into="state.data" error="state.error" loading="state.loading" when="shouldLoad" immediate="false" once="true"></FETCH>'
+      );
+      const result = handleFetchTag(element, { strictMode: true, componentContext: true });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toContain('})(this);');
+      expect(result.code).toContain("method: 'POST'");
+      expect(result.code).toContain("target['state']");
+      expect(result.code).toContain('immediate: false');
+      expect(result.code).toContain('once: true');
+      expect(result.code).toContain('if (!shouldRun)');
+    });
+
+    it('validates url presence', () => {
+      const element = createElement('<FETCH></FETCH>');
+      const result = handleFetchTag(element, { strictMode: true });
+
+      expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+    });
+
+    it('rejects unsupported methods', () => {
+      const element = createElement('<FETCH url="/api" method="trace"></FETCH>');
+      const result = handleFetchTag(element, { strictMode: true });
+
+      expect(result.errors.some(error => error.message.includes('Unsupported HTTP method'))).toBe(true);
     });
   });
 });

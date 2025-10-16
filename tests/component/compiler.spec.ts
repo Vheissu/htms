@@ -99,6 +99,32 @@ describe('Component compiler', () => {
     expect(code).toContain('node.appendChild(_frag');
   });
 
+  it('emits effect runtime registration with component ownership', () => {
+    const code = compile(`
+      <component name="effect-box">
+        <effect deps="this.count">
+          console.log(this.count);
+        </effect>
+      </component>
+    `);
+    expect(code).toContain('registerEffect({');
+    expect(code).toContain('owner: owner');
+    expect(code).toContain('console.log(this.count)');
+  });
+
+  it('wires fetch directives into render pipeline', () => {
+    const code = compile(`
+      <component name="fetch-box">
+        <var name="state" value="{}" mutable="true"></var>
+        <fetch url="this.getUrl()" into="state.data" error="state.error" loading="state.loading" when="this.shouldFetch"></fetch>
+      </component>
+    `);
+    expect(code).toContain('fetch(');
+    expect(code).toContain('}(this));');
+    expect(code).toContain("target['state']");
+    expect(code).toContain('this.render();');
+  });
+
   it('rejects documents without a component root', () => {
     const result = parseHTML('<div>oops</div>', { mode: 'component' });
     expect(result.success).toBe(false);

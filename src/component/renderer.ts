@@ -67,7 +67,8 @@ export function elementsToComponentCode(
     const handlerOptions: TagHandlerOptions = {
       strictMode,
       parentContext: 'component',
-      appendTargetVar
+      appendTargetVar,
+      componentContext: true
     };
 
     const result: HandlerResult = handleElement(element, handlerOptions);

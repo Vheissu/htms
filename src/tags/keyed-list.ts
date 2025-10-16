@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { ensureRuntime } from '../utils/runtime';
 
 let keyedCounter = 0;
 
@@ -69,28 +70,7 @@ export const handleKeyedListTag: TagHandler = (
     const selEsc = SecurityValidator.escapeForTemplate(target);
     const id = ++keyedCounter;
 
-    const runtime = `
-      (function(){
-        if (typeof window === 'undefined') return;
-        if (!window.__htms) { window.__htms = { watchers: [], bind: function(){}, notify: function(){ this.watchers.forEach(function(w){ try{ const el=document.querySelector(w.sel); if(el) el[w.prop]=w.fn(); } catch(e){} }); } }; }
-        if (!window.__htms.keyedList) {
-          window.__htms.keyedList = function(sel, arr, render, keyFn){
-            const container = document.querySelector(sel);
-            if (!container) { console.warn('KEYEDLIST target not found:', sel); return; }
-            const existing = new Map();
-            Array.from(container.children).forEach(function(node){ const k = node.getAttribute && node.getAttribute('data-key'); if (k!=null) existing.set(k, node); });
-            const used = new Set();
-            for (let i=0;i<arr.length;i++){
-              const item = arr[i];
-              const key = String(keyFn(item, i));
-              let node = existing.get(key);
-              if (!node) { node = render(item, i); if (node && node.setAttribute) node.setAttribute('data-key', key); }
-              if (node) { container.appendChild(node); used.add(key); }
-            }
-            existing.forEach(function(node, key){ if (!used.has(key)) { if (node && node.parentNode===container) container.removeChild(node); } });
-          };
-        }
-      })();`;
+    const runtime = ensureRuntime();
 
     const code = `${runtime}
       (function(){
