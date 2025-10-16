@@ -7,16 +7,14 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
 
 ## Quick Start
 - Install deps: `npm ci`
-- Build the compiler: `npm run build`
-- Run all demos: `npm run demo:serve` (serves on http://localhost:5173 and builds everything under `demos/`).
-- Or compile a single demo: `node dist/cli.js compile demos/todo-app.html -o demos/todo-app.js --format cjs`, then open `demos/todo-app.index.html`.
-
-Alternative: `npx ts-node main.ts demos/mixed-tags.html` writes `demos/mixed-tags.js` next to the source.
+- Build the TypeScript sources: `npm run build`
+- Compile a component demo: `node dist/cli.js compile demos/hello-world-component.html --mode component --output demos/hello-world-component.js`
+- Optional: run browser smoke tests (Chromium required once via `npx playwright install chromium`): `npm run test:e2e`
 
 ## How It Works (roughly)
-- Parses your tags with JSDOM, turns them into JS snippets via tag handlers, validates with Esprima, and emits code with Escodegen.
-- A security layer blocks obviously cursed things (`eval`, inline event handlers, raw innerHTML assignments, etc.).
-- Standard elements become `document.createElement(...)` calls; control tags become statements.
+- Parses HTMS markup with JSDOM, converts nodes to directives via tag handlers, validates with Esprima, then emits JavaScript through Escodegen.
+- A security pass rejects dangerous constructs (`eval`, inline handlers, raw `innerHTML`, path traversal, …).
+- In component mode, standard elements become cached template fragments, while control/state tags compile into instructions that mutate the component instance and re-render the shadow DOM.
 
 ## Tag Glossary (HTML‑first)
 - State & Arrays
@@ -42,9 +40,11 @@ Alternative: `npx ts-node main.ts demos/mixed-tags.html` writes `demos/mixed-tag
   - `<event target="#btn" type="click"> …child tags… </event>` — handler is composed of child tags (no action string required).
   - `<submit target="#form"> …child tags… </submit>` — form submit helper (prevents default). Use child tags to update state/DOM.
 
-## Demo: Todo (because of course)
-Source: `demos/todo-app.html` — compiles to `demos/todo-app.js`, then open `demos/todo-app.index.html`.
-It renders an input, an “Add” button, a keyed list, and removal buttons — using PUSH, SPLICE, KEYEDLIST, EVENT, and SETPROP. All in tags.
+## Component Demos
+- `demos/hello-world-component.html` — minimal “hello” rendered via shadow DOM.
+- `demos/event-toggle-component.html` — `<event>`, `<setattr>`, and `<toggle>` working together.
+- `demos/bind-component.html` — `<bind>` hydrates text content without global state.
+- `demos/counter-component.html` — `<var>`, `<set>`, and `<bind>` demonstrate reactive state and re-rendering.
 
 ## Disclaimers
 - Do not paste untrusted content. The compiler tries to help, but it is not a firewall.
