@@ -12,10 +12,11 @@
     <set name="state.loadNonce" expr="Date.now()"></set>
   </event>
 
-  <effect deps="state.loading, state.quote, state.error" immediate="true">
-    const root = owner && owner.__htmsRoot;
-    if (!root) { return; }
-
+  <effect deps="owner && owner.state && owner.state.loading, owner && owner.state && owner.state.quote, owner && owner.state && owner.state.error" immediate="true">
+    const host = owner;
+    if (!host || !host.__htmsRoot) { return; }
+    const root = host.__htmsRoot;
+    const state = host.state || {};
     const statusEl = root.querySelector('#status');
     const quoteEl = root.querySelector('#quote');
     const errorEl = root.querySelector('#error');
@@ -42,13 +43,21 @@
   </effect>
 
   <fetch
-    url="'/demo-quote.json'"
+    url="'https://example.com/demo-quote.json'"
     into="state.quote"
     loading="state.loading"
     error="state.error"
-    deps="state.loadNonce"
-    when="Boolean(state.loadNonce)"
-    immediate="false"
-    once="true">
+    deps="owner && owner.state && owner.state.loadNonce"
+    when="Boolean(owner && owner.state && owner.state.loadNonce)"
+    immediate="false">
   </fetch>
+
+  <effect deps="owner && owner.state && owner.state.loading, owner && owner.state && owner.state.quote, owner && owner.state && owner.state.error" immediate="true">
+    if (!owner || typeof owner.__htmsSetState !== 'function') { return; }
+    const state = owner.state || {};
+    const finished = !state.loading && (state.quote || state.error);
+    if (finished && state.loadNonce) {
+      owner.__htmsSetState(['state', 'loadNonce'], '=', () => null);
+    }
+  </effect>
 </component>
