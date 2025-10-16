@@ -1,4 +1,6 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { elementToTemplateNode, isLowerCaseTag } from '../component/template-utils';
+import { DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
@@ -20,7 +22,8 @@ export const handleIfElseTags: TagHandler = (
     }
 
     const condition = element.getAttribute('condition');
-    const ifBody = element.children.length === 0 ? (element.textContent?.trim() || '') : '';
+    const trueTemplates: TemplateNode[] = [];
+    const trueDirectives: DirectiveNode[] = [];
 
     if (!condition) {
       errors.push({
@@ -59,18 +62,26 @@ export const handleIfElseTags: TagHandler = (
     
     // Prepare bodies: combine raw text (legacy) and child tag code
     let ifInnerCode = '';
-    // Legacy raw text support
-    if (ifBody) {
-      const bodyErrors = SecurityValidator.validateContent(ifBody);
-      if (bodyErrors.length > 0 && options.strictMode) {
-        errors.push(...bodyErrors.map(error => ({ ...error, tag: 'IF' })));
-        return { code: '', errors, warnings };
+    for (const childNode of Array.from(element.childNodes)) {
+      if (childNode.nodeType === 3) {
+        const text = childNode.textContent ?? '';
+        if (text.trim().length === 0) {
+          continue;
+        }
+        const textErrors = SecurityValidator.validateContent(text);
+        if (textErrors.length > 0) {
+          errors.push(...textErrors.map(error => ({ ...error, tag: 'IF' })));
+          if (options.strictMode) {
+            return { code: '', errors, warnings };
+          }
+        }
+        const sanitizedText = SecurityValidator.sanitizeString(text);
+        ifInnerCode += `${text}\n`;
+        trueTemplates.push({ type: 'text', textContent: sanitizedText });
+        continue;
       }
-      // Use as-is (no HTML escaping) — guarded by content validation above
-      ifInnerCode += `${ifBody}\n`;
-    }
-    // Child elements
-    for (const child of Array.from(element.children)) {
+
+      const child = childNode as Element;
       const { handleElement } = require('../handlers');
       const childResult = handleElement(child, options);
       if (childResult.errors.length > 0) {
@@ -85,32 +96,52 @@ export const handleIfElseTags: TagHandler = (
       if (childResult.code) {
         ifInnerCode += childResult.code + '\n';
       }
+
+      if (childResult.component?.template) {
+        trueTemplates.push(...childResult.component.template);
+      } else if (isLowerCaseTag(child)) {
+        trueTemplates.push(elementToTemplateNode(child as Element));
+      }
+
+      if (childResult.component?.directives) {
+        trueDirectives.push(...childResult.component.directives);
+      } else if (childResult.code && !isLowerCaseTag(child)) {
+        trueDirectives.push({ kind: 'statement', code: childResult.code });
+      }
     }
 
     // Check for corresponding ELSE tag
     // legacy capture removed; keeping variable names consistent
     let elseInnerCode = '';
     let hasElse = false;
+    const falseTemplates: TemplateNode[] = [];
+    const falseDirectives: DirectiveNode[] = [];
     
     // Look for next sibling ELSE element
     let nextSibling = element.nextElementSibling;
     if (nextSibling && nextSibling.tagName.toUpperCase() === 'ELSE') {
       hasElse = true;
-      const elseContent = nextSibling.children.length === 0 ? (nextSibling.textContent?.trim() || '') : '';
-      
-      if (elseContent) {
-        const elseErrors = SecurityValidator.validateContent(elseContent);
-        if (elseErrors.length > 0) {
-          errors.push(...elseErrors.map(error => ({ ...error, tag: 'ELSE' })));
-          if (options.strictMode) {
-            return { code: '', errors, warnings };
+      // Process ELSE children and text nodes
+      for (const childNode of Array.from(nextSibling.childNodes)) {
+        if (childNode.nodeType === 3) {
+          const text = childNode.textContent ?? '';
+          if (text.trim().length === 0) {
+            continue;
           }
+          const textErrors = SecurityValidator.validateContent(text);
+          if (textErrors.length > 0) {
+            errors.push(...textErrors.map(error => ({ ...error, tag: 'ELSE' })));
+            if (options.strictMode) {
+              return { code: '', errors, warnings };
+            }
+          }
+          const sanitizedText = SecurityValidator.sanitizeString(text);
+          elseInnerCode += `${text}\n`;
+          falseTemplates.push({ type: 'text', textContent: sanitizedText });
+          continue;
         }
-        elseInnerCode += `${elseContent}\n`;
-      }
 
-      // Process ELSE children
-      for (const child of Array.from(nextSibling.children)) {
+        const child = childNode as Element;
         const { handleElement } = require('../handlers');
         const childResult = handleElement(child, options);
         if (childResult.errors.length > 0) {
@@ -124,6 +155,18 @@ export const handleIfElseTags: TagHandler = (
         }
         if (childResult.code) {
           elseInnerCode += childResult.code + '\n';
+        }
+
+        if (childResult.component?.template) {
+          falseTemplates.push(...childResult.component.template);
+        } else if (isLowerCaseTag(child)) {
+          falseTemplates.push(elementToTemplateNode(child as Element));
+        }
+
+        if (childResult.component?.directives) {
+          falseDirectives.push(...childResult.component.directives);
+        } else if (childResult.code && !isLowerCaseTag(child)) {
+          falseDirectives.push({ kind: 'statement', code: childResult.code });
         }
       }
     }
@@ -160,7 +203,29 @@ export const handleIfElseTags: TagHandler = (
       codeLength: code.length
     });
 
-    return { code, errors, warnings };
+    const componentDirective: DirectiveNode = {
+      kind: 'condition',
+      condition: sanitizedCondition,
+      whenTrue: {
+        template: trueTemplates,
+        directives: trueDirectives.length > 0 ? trueDirectives : undefined
+      },
+      whenFalse: hasElse
+        ? {
+            template: falseTemplates,
+            directives: falseDirectives.length > 0 ? falseDirectives : undefined
+          }
+        : undefined
+    };
+
+    return {
+      code,
+      errors,
+      warnings,
+      component: {
+        directives: [componentDirective]
+      }
+    };
 
   } catch (error) {
     const runtimeError = {

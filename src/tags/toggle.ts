@@ -1,10 +1,11 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { VisibilityDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
 export const handleToggleTag: TagHandler = (
   element: Element,
-  _options: TagHandlerOptions = {}
+  options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
   const warnings: HandlerResult['warnings'] = [];
@@ -29,7 +30,10 @@ export const handleToggleTag: TagHandler = (
     }
 
     const sel = SecurityValidator.escapeForTemplate(target);
-    const code = `
+    const isComponentContext = options.parentContext === 'component';
+    const code = isComponentContext
+      ? ''
+      : `
       (function(){
         try {
           const el = document.querySelector(\`${sel}\`);
@@ -41,9 +45,21 @@ export const handleToggleTag: TagHandler = (
       })();`;
 
     CompilerLogger.logDebug('Generated toggle', { target, condition });
-    return { code, errors, warnings };
+    const directive: VisibilityDirective = {
+      kind: 'visibility',
+      selector: target,
+      condition,
+      mode: 'toggle'
+    };
+    return {
+      code,
+      errors,
+      warnings,
+      component: {
+        directives: [directive]
+      }
+    };
   } catch (error) {
     return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'TOGGLE' }], warnings };
   }
 };
-

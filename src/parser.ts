@@ -5,6 +5,7 @@ import * as esprima from 'esprima';
 import { ParseOptions, CompilerResult, CompilerError, CompilerWarning } from './types';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
+import { compileComponents } from './component/compiler';
 
 export function getTopLevelElements(htmlContent: string): HTMLCollection {
   try {
@@ -194,14 +195,28 @@ function wrapInModuleFormat(code: string, format: string): string {
 
 export function parseHTML(htmlContent: string, options: ParseOptions = {}): CompilerResult {
   const startTime = Date.now();
-  
+
+  const mode = options.mode ?? 'component';
+  const parseOptions: ParseOptions = { ...options, mode };
+
+  if (mode !== 'component') {
+    return {
+      success: false,
+      code: undefined,
+      errors: [{
+        type: 'validation',
+        message: 'Legacy DOM compilation is no longer supported. Wrap markup in a <component> root.'
+      }],
+      warnings: []
+    };
+  }
+
   try {
-    CompilerLogger.logInfo('Starting HTML parsing', { 
+    CompilerLogger.logInfo('Starting HTML parsing', {
       contentLength: htmlContent.length,
-      options 
+      options: parseOptions
     });
 
-    // Pre-validation
     if (!htmlContent || typeof htmlContent !== 'string') {
       return {
         success: false,
@@ -213,11 +228,10 @@ export function parseHTML(htmlContent: string, options: ParseOptions = {}): Comp
       };
     }
 
-    // Security validation of input
     const securityErrors = SecurityValidator.validateContent(htmlContent);
     if (securityErrors.length > 0) {
-      CompilerLogger.logSecurityIssue('Security validation failed', { 
-        errors: securityErrors 
+      CompilerLogger.logSecurityIssue('Security validation failed', {
+        errors: securityErrors
       });
       return {
         success: false,
@@ -226,49 +240,35 @@ export function parseHTML(htmlContent: string, options: ParseOptions = {}): Comp
       };
     }
 
-    // Parse HTML elements
-    const elements = getTopLevelElements(htmlContent);
-    
-    // Convert elements to JavaScript
-    const jsResult = elementsToJsSnippets(elements, options);
-    
-    // Generate final code
-    const codeResult = generateFinalJsCode(jsResult.code, options);
-    
-    // Combine all errors and warnings
-    const allErrors = [...jsResult.errors, ...codeResult.errors];
-    const allWarnings = [...jsResult.warnings, ...codeResult.warnings];
-    
+    const componentResult = compileComponents(htmlContent, parseOptions);
+    const codeResult = componentResult.code
+      ? generateFinalJsCode(componentResult.code, parseOptions)
+      : { code: '', errors: [], warnings: [] };
+
+    const allErrors = [...componentResult.errors, ...codeResult.errors];
+    const allWarnings = [...componentResult.warnings, ...codeResult.warnings];
+
     const duration = Date.now() - startTime;
-    CompilerLogger.logPerformanceMetric('parseHTML', duration, {
+    CompilerLogger.logPerformanceMetric('parseHTML(component)', duration, {
       contentLength: htmlContent.length,
       generatedCodeLength: codeResult.code.length,
       errorCount: allErrors.length,
       warningCount: allWarnings.length
     });
 
-    const success = allErrors.length === 0 || (!options.strictMode && allErrors.every(e => e.type !== 'security'));
-    
-    if (success) {
-      CompilerLogger.logInfo('HTML parsing completed successfully', {
-        duration,
-        codeLength: codeResult.code.length,
-        warningCount: allWarnings.length
-      });
-    } else {
-      CompilerLogger.logValidationError('HTML parsing failed', {
-        duration,
-        errorCount: allErrors.length
-      });
+    const success = allErrors.length === 0;
+
+    if (!success) {
+      return { success, errors: allErrors, warnings: allWarnings } as CompilerResult;
     }
 
     return {
-      success,
-      code: success ? codeResult.code : undefined,
+      success: true,
+      code: codeResult.code,
       errors: allErrors,
-      warnings: allWarnings
+      warnings: allWarnings,
+      components: componentResult.components
     };
-    
   } catch (error) {
     const duration = Date.now() - startTime;
     const compilerError: CompilerError = {
@@ -276,15 +276,12 @@ export function parseHTML(htmlContent: string, options: ParseOptions = {}): Comp
       message: `Unexpected error during parsing: ${error instanceof Error ? error.message : String(error)}`
     };
 
-    CompilerLogger.logCompilerError('Unexpected parsing error', { 
+    CompilerLogger.logCompilerError('Unexpected parsing error', {
       error: compilerError.message,
       duration
     });
 
-    return {
-      success: false,
-      errors: [compilerError],
-      warnings: []
-    };
+    return { success: false, errors: [compilerError], warnings: [] };
   }
+
 }

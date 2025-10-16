@@ -7,25 +7,31 @@ import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
 import { ParseOptions } from './types';
 
-const program = new Command();
+export function createProgram(): Command {
+  const program = new Command();
 
-program
-  .name('htms')
-  .description('HTML to JavaScript compiler')
-  .version('1.0.0');
+  program
+    .name('htms')
+    .description('HTML to JavaScript compiler')
+    .version('1.0.0');
 
-program
-  .command('compile')
-  .description('Compile HTML file to JavaScript')
-  .argument('<input>', 'Input HTML file path')
-  .option('-o, --output <path>', 'Output file path')
-  .option('--format <format>', 'Output format (esm|cjs|iife)', 'esm')
-  .option('--strict', 'Enable strict mode', false)
-  .option('--max-size <size>', 'Maximum file size in bytes', '1048576') // 1MB default
-  .action(async (input: string, options) => {
+  program
+    .command('compile')
+    .description('Compile HTML file to JavaScript')
+    .argument('<input>', 'Input HTML file path')
+    .option('-o, --output <path>', 'Output file path')
+    .option('--format <format>', 'Output format (esm|cjs|iife)', 'esm')
+    .option('--strict', 'Enable strict mode', false)
+    .option('--max-size <size>', 'Maximum file size in bytes', '1048576') // 1MB default
+    .option('--mode <mode>', 'Compilation mode (only component supported)', 'component')
+    .action(async (input: string, options) => {
     const startTime = Date.now();
     
     try {
+      if (options.mode && options.mode !== 'component') {
+        console.error('Error: only component mode is supported.');
+        process.exit(1);
+      }
       // Validate input arguments
       const validationErrors = SecurityValidator.validateFilePath(input);
       if (validationErrors.length > 0) {
@@ -91,7 +97,8 @@ program
       const parseOptions: ParseOptions = {
         maxFileSize: maxSize,
         strictMode: options.strict,
-        outputFormat: options.format
+        outputFormat: options.format,
+        mode: 'component'
       };
 
       CompilerLogger.logInfo('Starting compilation', { input, options: parseOptions });
@@ -168,13 +175,13 @@ program
       console.error('❌ Unexpected error during compilation:', error);
       process.exit(1);
     }
-  });
+    });
 
-program
-  .command('validate')
-  .description('Validate HTML file without compilation')
-  .argument('<input>', 'Input HTML file path')
-  .action(async (input: string) => {
+  program
+    .command('validate')
+    .description('Validate HTML file without compilation')
+    .argument('<input>', 'Input HTML file path')
+    .action(async (input: string) => {
     try {
       const validationErrors = SecurityValidator.validateFilePath(input);
       const extensionErrors = SecurityValidator.validateFileExtension(input, ['html', 'htm']);
@@ -203,10 +210,16 @@ program
       console.error('❌ Validation error:', error);
       process.exit(1);
     }
-  });
+    });
 
-if (process.argv.length < 3) {
-  program.help();
+  return program;
 }
 
-program.parse();
+export const program = createProgram();
+
+if (require.main === module) {
+  if (process.argv.length < 3) {
+    program.help();
+  }
+  program.parse();
+}

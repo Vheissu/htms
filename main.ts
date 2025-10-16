@@ -1,23 +1,33 @@
+#!/usr/bin/env ts-node
+
 import fs from 'fs';
 import path from 'path';
-import { parseHTML } from './parser';
+import { parseHTML } from './src/parser';
+import { ParseOptions } from './src/types';
 
-const filePath: string = process.argv[2];
+const filePath: string | undefined = process.argv[2];
+
+if (!filePath) {
+  console.error('Usage: ts-node main.ts <input.html>');
+  process.exit(1);
+}
 
 fs.readFile(filePath, 'utf8', (err, htmlContent) => {
   if (err) throw err;
-  
-  // Parse the HTML content to generate JavaScript code
-  const finalCode: string = parseHTML(htmlContent);
-  
-  // Get the base name without extension
-  const baseName = path.basename(filePath, path.extname(filePath));
 
-  // Construct the output file path
+  const parseOptions: ParseOptions = { mode: 'component' };
+  const result = parseHTML(htmlContent, parseOptions);
+
+  if (!result.success || !result.code) {
+    console.error('Compilation failed:');
+    result.errors.forEach(error => console.error(`  ${error.type}: ${error.message}`));
+    process.exit(1);
+  }
+
+  const baseName = path.basename(filePath, path.extname(filePath));
   const outputFilePath = path.join(path.dirname(filePath), `${baseName}.js`);
-  
-  // Write the generated code to the output file
-  fs.writeFile(outputFilePath, finalCode, (writeErr) => {
+
+  fs.writeFile(outputFilePath, result.code, writeErr => {
     if (writeErr) throw writeErr;
     console.log(`Successfully generated ${outputFilePath}`);
   });

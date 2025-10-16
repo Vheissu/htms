@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { StateDirective } from '../component/ir';
 
 function buildValueExpr(value: string): string | null {
   if (!value) return 'undefined';
@@ -14,7 +15,7 @@ function buildValueExpr(value: string): string | null {
 
 export const handlePushTag: TagHandler = (
   element: Element,
-  _options: TagHandlerOptions = {}
+  options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
   const warnings: HandlerResult['warnings'] = [];
@@ -39,13 +40,31 @@ export const handlePushTag: TagHandler = (
       }
     }
     const valExpr = exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
-    const code = `
+    const isComponentContext = options.parentContext === 'component';
+    const code = isComponentContext
+      ? ''
+      : `
       (function(){
         try { ${array}.push(${valExpr}); } catch (error) { console.error('PUSH failed:', error); }
         if (typeof window !== 'undefined' && window.__htms) { window.__htms.notify(); }
       })();`;
     CompilerLogger.logDebug('Generated push', { array });
-    return { code, errors, warnings };
+    const path = array.split('.');
+    const stateDirective: StateDirective = {
+      kind: 'state',
+      mode: 'push',
+      path,
+      value: valExpr ?? 'undefined'
+    };
+
+    return {
+      code,
+      errors,
+      warnings,
+      component: {
+        directives: [stateDirective]
+      }
+    };
   } catch (error) {
     return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'PUSH' }], warnings };
   }

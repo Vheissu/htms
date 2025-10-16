@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { StateDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
@@ -174,7 +175,8 @@ export const handleVarTag: TagHandler = (
     }
 
     const decl = mutable ? 'let' : 'const';
-    const code = `${decl} ${name} = ${processedValue};`;
+    const isComponentContext = options.parentContext === 'component';
+    const code = isComponentContext ? '' : `${decl} ${name} = ${processedValue};`;
 
     CompilerLogger.logDebug('Generated variable declaration', {
       name,
@@ -184,7 +186,21 @@ export const handleVarTag: TagHandler = (
       mutable
     });
 
-    return { code, errors, warnings };
+    const stateDirective: StateDirective = {
+      kind: 'state',
+      mode: 'init',
+      path: name.split('.'),
+      value: processedValue
+    };
+
+    return {
+      code,
+      errors,
+      warnings,
+      component: {
+        directives: [stateDirective]
+      }
+    };
 
   } catch (error) {
     const runtimeError = {

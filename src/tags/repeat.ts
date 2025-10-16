@@ -1,4 +1,6 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { elementToTemplateNode, isLowerCaseTag } from '../component/template-utils';
+import { DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
@@ -37,17 +39,29 @@ export const handleRepeatTag: TagHandler = (
 
     let loopCode = '';
     let loopVariable = 'item'; // default item variable
+    let countNum: number | null = null;
+    const componentDirectives: DirectiveNode[] = [];
+    let componentTemplateChildren: TemplateNode[] = [];
 
     if (variable) {
       // Array iteration mode
-      const varErrors = SecurityValidator.validateJavaScriptIdentifier(variable);
-      if (varErrors.length > 0) {
-        errors.push(...varErrors.map(error => ({ 
-          ...error, 
-          tag: 'REPEAT',
-          message: `Invalid variable name: ${variable}` 
-        })));
-        return { code: '', errors, warnings };
+      const simpleIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(variable);
+      if (!simpleIdentifier) {
+        const exprErrors = SecurityValidator.validateContent(variable);
+        if (exprErrors.length > 0) {
+          errors.push(...exprErrors.map(error => ({ ...error, tag: 'REPEAT', message: `Invalid variable expression: ${variable}` })));
+          return { code: '', errors, warnings };
+        }
+      } else {
+        const varErrors = SecurityValidator.validateJavaScriptIdentifier(variable);
+        if (varErrors.length > 0) {
+          errors.push(...varErrors.map(error => ({ 
+            ...error, 
+            tag: 'REPEAT',
+            message: `Invalid variable name: ${variable}` 
+          })));
+          return { code: '', errors, warnings };
+        }
       }
 
       if (indexVar) {
@@ -70,7 +84,7 @@ export const handleRepeatTag: TagHandler = (
         return { code: '', errors, warnings };
       }
 
-      const countNum = parseInt(count);
+      countNum = parseInt(count, 10);
       if (countNum < 0 || countNum > 10000) {
         errors.push({
           type: 'validation',
@@ -131,6 +145,18 @@ export const handleRepeatTag: TagHandler = (
       if (childResult.code) {
         childCode += '  ' + childResult.code.replace(/\n/g, '\n  ') + '\n';
       }
+
+      if (childResult.component?.template) {
+        componentTemplateChildren.push(...childResult.component.template);
+      } else if (isLowerCaseTag(child)) {
+        componentTemplateChildren.push(elementToTemplateNode(child as Element));
+      }
+
+      if (childResult.component?.directives) {
+        componentDirectives.push(...childResult.component.directives);
+      } else if (childResult.code && !isLowerCaseTag(child)) {
+        componentDirectives.push({ kind: 'statement', code: childResult.code });
+      }
     }
 
     // Combine loop body and child code
@@ -138,10 +164,11 @@ export const handleRepeatTag: TagHandler = (
     if (sanitizedBody) {
       combinedBody += `  try {\n    ${sanitizedBody}\n  } catch (error) {\n    console.error('Loop body execution error:', error);\n  }\n`;
     }
+
     if (childCode) {
       combinedBody += childCode;
     }
-    
+
     if (!combinedBody.trim()) {
       warnings.push({
         message: 'Empty loop body',
@@ -168,7 +195,33 @@ export const handleRepeatTag: TagHandler = (
       codeLength: code.length
     });
 
-    return { code, errors, warnings };
+    const componentLoopDirective: DirectiveNode | undefined = variable
+      ? {
+          kind: 'loop',
+          mode: 'array',
+          source: variable,
+          itemVar: loopVariable,
+          indexVar: indexVar || undefined,
+          template: componentTemplateChildren,
+          directives: componentDirectives
+        }
+      : countNum !== null
+      ? {
+          kind: 'loop',
+          mode: 'range',
+          count: countNum,
+          indexVar: loopVariable,
+          template: componentTemplateChildren,
+          directives: componentDirectives
+        }
+      : undefined;
+
+    return {
+      code,
+      errors,
+      warnings,
+      component: componentLoopDirective ? { directives: [componentLoopDirective] } : undefined
+    };
 
   } catch (error) {
     const runtimeError = {

@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { AttributeDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
@@ -17,7 +18,7 @@ function buildValueExpr(value: string): string | null {
 
 export const handleSetPropTag: TagHandler = (
   element: Element,
-  _options: TagHandlerOptions = {}
+  options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
   const warnings: HandlerResult['warnings'] = [];
@@ -52,7 +53,10 @@ export const handleSetPropTag: TagHandler = (
     let path = `el[\"${head}\"]`;
     for (const p of tail) path += `[\"${p}\"]`;
 
-    const code = `
+    const isComponentContext = options.parentContext === 'component';
+    const code = isComponentContext
+      ? ''
+      : `
       (function(){
         try {
           const el = document.querySelector(\`${sel}\`);
@@ -64,7 +68,25 @@ export const handleSetPropTag: TagHandler = (
       })();`;
 
     CompilerLogger.logDebug('Generated setprop', { selector, prop });
-    return { code, errors, warnings };
+    const pathSegments = prop.split('.');
+
+    const directive: AttributeDirective = {
+      kind: 'attribute',
+      selector,
+      target: 'property',
+      name: prop,
+      path: pathSegments,
+      value: valExpr
+    };
+
+    return {
+      code,
+      errors,
+      warnings,
+      component: {
+        directives: [directive]
+      }
+    };
   } catch (error) {
     return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'SETPROP' }], warnings };
   }

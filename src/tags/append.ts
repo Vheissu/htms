@@ -1,4 +1,6 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { AppendDirective, DirectiveNode, TemplateNode } from '../component/ir';
+import { elementToTemplateNode, isLowerCaseTag } from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
@@ -23,27 +25,68 @@ export const handleAppendTag: TagHandler = (
     }
 
     const sel = SecurityValidator.escapeForTemplate(target);
-    const varName = `__appendTarget${++appendCounter}`;
-    let code = `const ${varName} = document.querySelector(\`${sel}\`);\n`;
-    code += `if (!${varName}) { console.warn('APPEND target not found: ${sel}'); } else {\n`;
-
-    for (const child of Array.from(element.children)) {
-      const { handleElement } = require('../handlers');
-      const childResult = handleElement(child, { ...options, appendTargetVar: varName });
-      if (childResult.errors.length > 0) {
-        errors.push(...childResult.errors);
-        // continue in non-strict mode
-      }
-      if (childResult.warnings.length > 0) warnings.push(...childResult.warnings);
-      if (childResult.code) code += childResult.code + '\n';
+    const legacyVarName = `__appendTarget${++appendCounter}`;
+    const isComponentContext = options.parentContext === 'component';
+    let code = '';
+    if (!isComponentContext) {
+      code = `const ${legacyVarName} = document.querySelector(\`${sel}\`);\n`;
+      code += `if (!${legacyVarName}) { console.warn('APPEND target not found: ${sel}'); } else {\n`;
     }
 
-    code += `}\n`;
+    const componentTemplates: TemplateNode[] = [];
+    const componentDirectives: DirectiveNode[] = [];
+
+    for (const child of Array.from(element.children)) {
+      if (isComponentContext && isLowerCaseTag(child)) {
+        componentTemplates.push(elementToTemplateNode(child));
+        continue;
+      }
+
+      const { handleElement } = require('../handlers');
+      const childResult = handleElement(child, {
+        ...options,
+        appendTargetVar: isComponentContext ? options.appendTargetVar : legacyVarName
+      });
+      if (childResult.errors.length > 0) {
+        errors.push(...childResult.errors);
+      }
+      if (childResult.warnings.length > 0) warnings.push(...childResult.warnings);
+      if (!isComponentContext && childResult.code) {
+        code += childResult.code + '\n';
+      }
+
+      if (childResult.component?.template) {
+        componentTemplates.push(...childResult.component.template);
+      }
+
+      if (childResult.component?.directives) {
+        componentDirectives.push(...childResult.component.directives);
+      } else if (childResult.code && !isComponentContext) {
+        componentDirectives.push({ kind: 'statement', code: childResult.code });
+      }
+    }
+
+    if (!isComponentContext) {
+      code += `}\n`;
+    }
 
     CompilerLogger.logDebug('Generated append', { target: sel });
-    return { code, errors, warnings };
+    const directive: AppendDirective = {
+      kind: 'append',
+      selector: target,
+      template: componentTemplates,
+      directives: componentDirectives.length > 0 ? componentDirectives : undefined
+    };
+
+    return {
+      code,
+      errors,
+      warnings,
+      component: {
+        directives: [directive]
+      }
+    };
   } catch (error) {
     return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'APPEND' }], warnings };
   }
 };
-

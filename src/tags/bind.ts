@@ -1,10 +1,11 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { BindDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
 export const handleBindTag: TagHandler = (
   element: Element,
-  _options: TagHandlerOptions = {}
+  options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
   const warnings: HandlerResult['warnings'] = [];
@@ -66,7 +67,10 @@ export const handleBindTag: TagHandler = (
         }
       })();`;
 
-    const code = `${runtime}
+    const isComponentContext = options.parentContext === 'component';
+    const code = isComponentContext
+      ? ''
+      : `${runtime}
       (function(){
         if (typeof window !== 'undefined' && window.__htms) {
           window.__htms.bind(\`${selEsc}\`, \`${propEsc}\`, function(){ return ${expr}; });
@@ -74,7 +78,21 @@ export const handleBindTag: TagHandler = (
       })();`;
 
     CompilerLogger.logDebug('Generated bind', { selector, prop });
-    return { code, errors, warnings };
+    const directive: BindDirective = {
+      kind: 'bind',
+      selector,
+      property: prop,
+      expression: expr
+    };
+
+    return {
+      code,
+      errors,
+      warnings,
+      component: {
+        directives: [directive]
+      }
+    };
 
   } catch (error) {
     return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'BIND' }], warnings };

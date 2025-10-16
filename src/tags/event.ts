@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { DirectiveNode, EventDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
@@ -14,7 +15,7 @@ const SAFE_ACTIONS = new Set([
 ]);
 
 export const handleEventTag: TagHandler = (
-  element: Element, 
+  element: Element,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
@@ -55,6 +56,8 @@ export const handleEventTag: TagHandler = (
     }
 
     let bodyCode = '';
+    const nestedDirectives: DirectiveNode[] = [];
+    const isComponentContext = options.parentContext === 'component';
     if (element.children.length > 0) {
       for (const child of Array.from(element.children)) {
         const { handleElement } = require('../handlers');
@@ -64,7 +67,13 @@ export const handleEventTag: TagHandler = (
           if (options.strictMode) return { code: '', errors, warnings };
         }
         if (r.warnings.length > 0) warnings.push(...r.warnings);
-        if (r.code) bodyCode += r.code + '\n';
+        if (r.component?.directives) {
+          nestedDirectives.push(...r.component.directives);
+        }
+        const hasComponentDirective = !!(r.component && r.component.directives && r.component.directives.length > 0);
+        if (!(isComponentContext && hasComponentDirective) && r.code) {
+          bodyCode += r.code + '\n';
+        }
       }
     } else if (action) {
       // Security validation of action
@@ -106,7 +115,7 @@ export const handleEventTag: TagHandler = (
     const escapedAction = action ? SecurityValidator.escapeForTemplate(action) : '';
 
     // Generate safe event handler with error handling
-    const code = `
+    const code = isComponentContext ? '' : `
       try {
         const eventTargets = document.querySelectorAll(\`${escapedTarget}\`);
         if (eventTargets.length === 0) {
@@ -146,7 +155,25 @@ ${(bodyCode || '').split('\n').filter(Boolean).map(l => '              ' + l).jo
       isSafeAction: action ? SAFE_ACTIONS.has(action.split('(')[0].trim()) : true
     });
 
-    return { code, errors, warnings };
+    const eventDirective: EventDirective = {
+      kind: 'event',
+      selector: target,
+      eventType: type,
+      body: bodyCode
+        .split('\n')
+        .map(line => line.replace(/\s+$/, ''))
+        .filter(line => line.trim().length > 0),
+      directives: nestedDirectives.length > 0 ? nestedDirectives : undefined
+    };
+
+    return {
+      code,
+      errors,
+      warnings,
+      component: {
+        directives: [eventDirective]
+      }
+    };
 
   } catch (error) {
     const runtimeError = {
