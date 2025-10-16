@@ -1,0 +1,8 @@
+<component name="flash-box">
+  <button id="activate">Activate</button>
+  <div id="panel" class="panel">Ready</div>
+  <event target="#activate" type="click">
+    <setattr selector="#panel" name="data-state" value="active"></setattr>
+    <toggle target="#panel" condition="true"></toggle>
+  </event>
+</component>

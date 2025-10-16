@@ -1,0 +1,26 @@
+<component name="form-box">
+  <var name="name" value="''" mutable="true"></var>
+  <var name="email" value="''" mutable="true"></var>
+
+  <div class="form">
+    <form id="signup">
+      <label>Name <input id="nameInput" autocomplete="off" /></label>
+      <label>Email <input id="emailInput" type="email" autocomplete="off" /></label>
+      <button type="submit">Save</button>
+    </form>
+    <p id="summary"></p>
+  </div>
+
+  <function name="preventSubmit" params="event">
+    event.preventDefault();
+    return;
+  </function>
+
+  <event target="#signup" type="submit">
+    <call function="preventSubmit" args="event"></call>
+    <set name="name" op="=" expr="this.__htmsRoot.querySelector('#nameInput').value.trim()"></set>
+    <set name="email" op="=" expr="this.__htmsRoot.querySelector('#emailInput').value.trim()"></set>
+  </event>
+
+  <bind selector="#summary" prop="textContent" expr='this.name && this.email ? `Saved ${this.name} <${this.email}>` : "Fill out the form"'></bind>
+</component>

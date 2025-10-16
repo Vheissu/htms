@@ -1,0 +1,43 @@
+<component name="todo-box">
+  <var name="todos" value="[]" mutable="true"></var>
+  <var name="nextTodo" value="''" mutable="true"></var>
+
+  <div class="todo">
+    <h2>HTMS Todo</h2>
+    <div class="input-row">
+      <input type="text" id="newTodo" placeholder="Add a task" />
+      <button id="addBtn" type="button">Add</button>
+    </div>
+    <ul id="todoList"></ul>
+  </div>
+
+  <event target="#addBtn" type="click">
+    <set name="nextTodo" op="=" expr="this.__htmsRoot.querySelector('#newTodo').value.trim()"></set>
+    <if condition="this.nextTodo.length > 0">
+      <push array="todos" expr="this.nextTodo"></push>
+      <setprop selector="#newTodo" prop="value" value="''"></setprop>
+      <set name="nextTodo" op="=" value="''"></set>
+    </if>
+  </event>
+
+  <event target="#newTodo" type="keypress">
+    <if condition="event.key === 'Enter'">
+      <set name="nextTodo" op="=" expr="event.currentTarget.value.trim()"></set>
+      <if condition="this.nextTodo.length > 0">
+        <push array="todos" expr="this.nextTodo"></push>
+        <set name="nextTodo" op="=" value="''"></set>
+        <setprop selector="#newTodo" prop="value" value="''"></setprop>
+      </if>
+    </if>
+  </event>
+
+  <repeat variable="this.todos" index="i">
+    <li class="todo-item">
+      <span>{item}</span>
+      <button class="remove" type="button" aria-label="Remove">✕</button>
+      <event target=".remove" type="click">
+        <splice array="todos" index="i" delete="1"></splice>
+      </event>
+    </li>
+  </repeat>
+</component>

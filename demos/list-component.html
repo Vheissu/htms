@@ -1,0 +1,20 @@
+<component name="list-box">
+  <var name="people" value='["Ada", "Lin", "Ida"]' mutable="true"></var>
+  <div class="box">
+    <h3>Favorite Scientists</h3>
+    <ul id="people"></ul>
+  </div>
+  <repeat variable="this.people" index="i">
+    <li class="person">
+      <span>{item}</span>
+      <switch variable="item">
+        <case value="Ada"><span class="badge">Analytical</span></case>
+        <default><span class="badge badge-muted">Curious</span></default>
+      </switch>
+      <button class="promote" type="button">Remove</button>
+      <event target=".promote" type="click">
+        <splice array="people" index="i" delete="1" values='[item]'></splice>
+      </event>
+    </li>
+  </repeat>
+</component>

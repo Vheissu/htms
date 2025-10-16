@@ -1,0 +1,9 @@
+<component name="counter-box">
+  <var name="count" value="0" mutable="true"></var>
+  <div id="count" class="count"></div>
+  <button id="increment">Increment</button>
+  <event target="#increment" type="click">
+    <set name="count" op="++"></set>
+  </event>
+  <bind selector="#count" prop="textContent" expr="String(this.count)"></bind>
+</component>
