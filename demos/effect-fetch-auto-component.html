@@ -1,0 +1,84 @@
+<component name="effect-fetch-auto-demo">
+  <var name="state" value="{}" mutable="true"></var>
+
+  <div class="demo">
+    <p id="status">Status: Loading...</p>
+    <blockquote id="quote"></blockquote>
+    <button id="refresh">Refresh Quote</button>
+  </div>
+
+  <event target="#refresh" type="click">
+    <set name="state.loadNonce" expr="Date.now()"></set>
+  </event>
+
+  <effect
+    deps="owner && owner.state && owner.state.loadNonce"
+    immediate="true">
+    if (!owner || typeof owner.__htmsSetState !== 'function') { return; }
+    if (owner.__htmsAutoFetchScheduled) { return; }
+    const state = owner.state || {};
+    if (state.loadNonce) { return; }
+    owner.__htmsAutoFetchScheduled = true;
+    const runBootstrap = () => {
+      if (!owner || typeof owner.__htmsSetState !== 'function') { return; }
+      owner.__htmsSetState(['state', 'loadNonce'], '=', () => Date.now());
+      owner.__htmsAutoFetchScheduled = false;
+      if (typeof window !== 'undefined' && window.__htms) {
+        window.__htms.notify();
+      }
+    };
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(runBootstrap);
+    } else {
+      Promise.resolve().then(runBootstrap);
+    }
+  </effect>
+
+  <effect
+    deps="owner && owner.state && owner.state.loading, owner && owner.state && owner.state.quote, owner && owner.state && owner.state.error"
+    immediate="true">
+    const host = owner;
+    if (!host || !host.__htmsRoot) { return; }
+    const state = host.state || {};
+    const root = host.__htmsRoot;
+    const statusEl = root.querySelector('#status');
+    const quoteEl = root.querySelector('#quote');
+
+    if (statusEl) {
+      if (state.loading) {
+        statusEl.textContent = 'Status: Loading...';
+      } else if (state.error) {
+        statusEl.textContent = 'Status: Error';
+      } else if (state.quote) {
+        statusEl.textContent = 'Status: Loaded';
+      } else {
+        statusEl.textContent = 'Status: Idle';
+      }
+    }
+
+    if (quoteEl) {
+      quoteEl.textContent = state.quote ? state.quote.text : '';
+    }
+  </effect>
+
+  <fetch
+    url="'https://example.com/demo-quote.json'"
+    into="state.quote"
+    loading="state.loading"
+    error="state.error"
+    deps="owner && owner.state && owner.state.loadNonce"
+    when="Boolean(owner && owner.state && owner.state.loadNonce)"
+    immediate="false">
+  </fetch>
+
+  <effect
+    deps="owner && owner.state && owner.state.loading, owner && owner.state && owner.state.quote, owner && owner.state && owner.state.error"
+    immediate="true">
+    if (!owner || typeof owner.__htmsSetState !== 'function') { return; }
+    const state = owner.state || {};
+    const finished = !state.loading && (state.quote || state.error);
+    if (finished && state.loadNonce) {
+      owner.__htmsSetState(['state', 'loadNonce'], '=', () => null);
+    }
+  </effect>
+</component>

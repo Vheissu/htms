@@ -11,6 +11,8 @@ const FLASH_JS = path.resolve(__dirname, '../../demos/event-toggle-component.js'
 const BIND_JS = path.resolve(__dirname, '../../demos/bind-component.js');
 const COUNTER_JS = path.resolve(__dirname, '../../demos/counter-component.js');
 const EFFECT_FETCH_JS = path.resolve(__dirname, '../../demos/effect-fetch-component.js');
+const EFFECT_FETCH_ERROR_JS = path.resolve(__dirname, '../../demos/effect-fetch-error-component.js');
+const EFFECT_FETCH_AUTO_JS = path.resolve(__dirname, '../../demos/effect-fetch-auto-component.js');
 
 test.describe('hello-world component', () => {
   test('renders shadow DOM content', async ({ page }) => {
@@ -167,5 +169,78 @@ test.describe('effect + fetch demo', () => {
 
     expect(quoteText).toBe('Integration works!');
     expect(errorText).toBe('');
+  });
+});
+
+test.describe('effect + fetch (error) demo', () => {
+  test('surfaces errors from failing fetches', async ({ page }) => {
+    await page.route('**/demo-error.json', route => {
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Server exploded' })
+      });
+    });
+
+    await page.goto('about:blank');
+    await page.addScriptTag({ path: EFFECT_FETCH_ERROR_JS, type: 'module' });
+    await page.setContent('<effect-fetch-error-demo></effect-fetch-error-demo>');
+
+    const component = page.locator('effect-fetch-error-demo');
+    await page.waitForFunction(() => {
+      const el = document.querySelector('effect-fetch-error-demo');
+      return !!el?.shadowRoot?.querySelector('#status');
+    });
+
+    await component.locator('button#load').click();
+
+    await page.waitForFunction(() => {
+      const el = document.querySelector('effect-fetch-error-demo');
+      const shadow = el?.shadowRoot;
+      const status = shadow?.querySelector('#status')?.textContent?.trim();
+      return status === 'Status: Error';
+    });
+
+    const errorText = await component.evaluate(el => {
+      const shadow = el.shadowRoot;
+      return shadow?.querySelector('#error')?.textContent?.trim();
+    });
+
+    expect(errorText).toContain('Request failed with status 500');
+  });
+});
+
+test.describe('effect + fetch (auto) demo', () => {
+  test('prefetches on mount and refreshes on demand', async ({ page }) => {
+    let callCount = 0;
+    await page.route('**/demo-quote.json', route => {
+      callCount += 1;
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ text: `Quote ${callCount}` })
+      });
+    });
+
+    await page.goto('about:blank');
+    await page.addScriptTag({ path: EFFECT_FETCH_AUTO_JS, type: 'module' });
+    await page.setContent('<effect-fetch-auto-demo></effect-fetch-auto-demo>');
+
+    const component = page.locator('effect-fetch-auto-demo');
+    await page.waitForFunction(() => {
+      const el = document.querySelector('effect-fetch-auto-demo');
+      const shadow = el?.shadowRoot;
+      return shadow?.querySelector('#quote')?.textContent?.trim() === 'Quote 1';
+    });
+
+    await component.locator('button#refresh').click();
+
+    await page.waitForFunction(() => {
+      const el = document.querySelector('effect-fetch-auto-demo');
+      const shadow = el?.shadowRoot;
+      return shadow?.querySelector('#quote')?.textContent?.trim() === 'Quote 2';
+    });
+
+    expect(callCount).toBeGreaterThanOrEqual(2);
   });
 });
