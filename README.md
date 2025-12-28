@@ -49,3 +49,46 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
 ## Disclaimers
 - Do not paste untrusted content. The compiler tries to help, but it is not a firewall.
 - This is a proof‑of‑concept with tests. If you build something real, we salute you (from a safe distance).
+
+## Server-Side Rendering (SSR)
+HTMS now supports server-side rendering! Components can be pre-rendered to static HTML on the server and then hydrated on the client.
+
+### Compiling with SSR Support
+Use the `--ssr` flag when compiling components:
+```bash
+node dist/cli.js compile demos/hello-world-component.html --ssr --output output.js
+```
+
+### Using renderToString
+SSR-compiled components include a static `renderToString()` method:
+```javascript
+import { HelloWorldComponent } from './output.js';
+
+// Generate HTML on the server
+const html = HelloWorldComponent.renderToString({ name: 'World' });
+// Returns: '<div class="message">Hello World</div>'
+```
+
+### Server-Side Rendering with Node.js
+```javascript
+import { renderComponentToString } from 'htms/ssr';
+
+// Render component IR to HTML
+const result = renderComponentToString(componentIR, {
+  props: { name: 'World', count: 42 }
+});
+
+console.log(result.html); // Static HTML string
+```
+
+### Client-Side Hydration
+The generated components automatically hydrate when the custom element is registered and connected to the DOM:
+```html
+<!-- Server-rendered HTML -->
+<hello-world name="World"></hello-world>
+
+<!-- Load and register component -->
+<script type="module" src="./output.js"></script>
+```
+
+When the component connects to the DOM, it will hydrate and become fully interactive.

@@ -24,6 +24,7 @@ export function createProgram(): Command {
     .option('--strict', 'Enable strict mode', false)
     .option('--max-size <size>', 'Maximum file size in bytes', '1048576') // 1MB default
     .option('--mode <mode>', 'Compilation mode (only component supported)', 'component')
+    .option('--ssr', 'Enable server-side rendering support', false)
     .action(async (input: string, options) => {
     const startTime = Date.now();
     
@@ -98,7 +99,8 @@ export function createProgram(): Command {
         maxFileSize: maxSize,
         strictMode: options.strict,
         outputFormat: options.format,
-        mode: 'component'
+        mode: 'component',
+        ssr: options.ssr
       };
 
       CompilerLogger.logInfo('Starting compilation', { input, options: parseOptions });

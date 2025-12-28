@@ -6,6 +6,7 @@ import { ParseOptions, CompilerResult, CompilerError, CompilerWarning } from './
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
 import { compileComponents } from './component/compiler';
+import { compileComponentsWithSSR } from './ssr/compiler';
 
 export function getTopLevelElements(htmlContent: string): HTMLCollection {
   try {
@@ -240,7 +241,9 @@ export function parseHTML(htmlContent: string, options: ParseOptions = {}): Comp
       };
     }
 
-    const componentResult = compileComponents(htmlContent, parseOptions);
+    const componentResult = options.ssr 
+      ? compileComponentsWithSSR(htmlContent, parseOptions)
+      : compileComponents(htmlContent, parseOptions);
     const codeResult = componentResult.code
       ? generateFinalJsCode(componentResult.code, parseOptions)
       : { code: '', errors: [], warnings: [] };

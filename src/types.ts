@@ -6,6 +6,7 @@ export interface ParseOptions {
   strictMode?: boolean;
   outputFormat?: 'esm' | 'cjs' | 'iife';
   mode?: 'dom' | 'component';
+  ssr?: boolean; // Enable SSR support
 }
 
 export interface CompilerResult {
