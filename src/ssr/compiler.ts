@@ -251,7 +251,7 @@ function buildSSRComponentClass(
     let html = template;
     for (const [key, value] of Object.entries(props)) {
       const regex = new RegExp(\`\\\\{\\$\{key\}\\\\}\`, 'g');
-      html = html.replace(regex, String(value != null ? value : ''));
+      html = html.replace(regex, String(value !== null && value !== undefined ? value : ''));
     }
     return html;
   }`;
@@ -266,7 +266,7 @@ function buildSSRComponentClass(
       ? metadata.props
           .map(
             prop =>
-              `    if (!(this as any).hasOwnProperty('${prop}')) {\n      const attrValue = this.getAttribute('${prop}');\n      (this as any)['${prop}'] = attrValue != null ? attrValue : null;\n    }`
+              `    if (!(this as any).hasOwnProperty('${prop}')) {\n      const attrValue = this.getAttribute('${prop}');\n      (this as any)['${prop}'] = attrValue !== null && attrValue !== undefined ? attrValue : null;\n    }`
           )
           .join('\n')
       : '';

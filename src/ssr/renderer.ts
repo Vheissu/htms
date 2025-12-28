@@ -93,12 +93,13 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
+const SELF_CLOSING_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr'
+]);
+
 function isSelfClosingTag(tagName: string): boolean {
-  const selfClosing = new Set([
-    'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
-    'link', 'meta', 'param', 'source', 'track', 'wbr'
-  ]);
-  return selfClosing.has(tagName.toLowerCase());
+  return SELF_CLOSING_TAGS.has(tagName.toLowerCase());
 }
 
 /**
