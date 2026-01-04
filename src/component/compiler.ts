@@ -11,6 +11,9 @@ import {
   AppendDirective,
   BindDirective,
   SwitchDirective,
+  WhileDirective,
+  ClassDirective,
+  StyleDirective,
   StateDirective,
   TemplateNode
 } from './ir';
@@ -57,6 +60,12 @@ function containsState(directives?: DirectiveNode[]): boolean {
         break;
       case 'append':
         if (containsState(directive.directives)) return true;
+        break;
+      case 'while':
+        if (containsState(directive.directives)) return true;
+        break;
+      case 'class':
+      case 'style':
         break;
       case 'switch':
         if (directive.cases.some(c => containsState(c.directives))) return true;
@@ -405,6 +414,18 @@ function renderDirective(
     return renderSwitchDirective(directive, targetVar, counter, indent);
   }
 
+  if (directive.kind === 'while') {
+    return renderWhileDirective(directive, targetVar, counter, indent);
+  }
+
+  if (directive.kind === 'class') {
+    return renderClassDirective(directive, targetVar, indent);
+  }
+
+  if (directive.kind === 'style') {
+    return renderStyleDirective(directive, targetVar, indent);
+  }
+
   if (directive.kind === 'attribute') {
     return renderAttributeDirective(directive, targetVar, counter, indent);
   }
@@ -630,6 +651,93 @@ function renderSwitchDirective(
     lines.push(`${branchIndent}${targetVar}.appendChild(${fragmentVar});`);
     lines.push(`${indent}}`);
   }
+
+  return lines;
+}
+
+function renderWhileDirective(
+  directive: WhileDirective,
+  targetVar: string,
+  counter: { value: number },
+  indent: string
+): string[] {
+  const lines: string[] = [];
+  const guardVar = `_guard${counter.value++}`;
+  const fragmentVar = `_frag${counter.value++}`;
+  const innerIndent = `${indent}  `;
+  const loopIndent = `${innerIndent}  `;
+
+  lines.push(`${indent}{`);
+  lines.push(`${innerIndent}let ${guardVar} = 0;`);
+  lines.push(`${innerIndent}while (${directive.condition}) {`);
+  lines.push(
+    `${loopIndent}if (${guardVar}++ >= ${directive.maxIterations}) { console.warn('WHILE exceeded max iterations'); break; }`
+  );
+  lines.push(`${loopIndent}const ${fragmentVar} = document.createDocumentFragment();`);
+  lines.push(
+    ...fillFragment(fragmentVar, directive.template, directive.directives, counter, loopIndent)
+  );
+  lines.push(`${loopIndent}${targetVar}.appendChild(${fragmentVar});`);
+  lines.push(`${innerIndent}}`);
+  lines.push(`${indent}}`);
+
+  return lines;
+}
+
+function renderClassDirective(
+  directive: ClassDirective,
+  targetVar: string,
+  indent: string
+): string[] {
+  const lines: string[] = [];
+  const innerIndent = `${indent}  `;
+  const selector = JSON.stringify(directive.selector);
+  const action = directive.action;
+  const condition = directive.condition;
+  const classList = directive.classNames.map(name => JSON.stringify(name)).join(', ');
+
+  lines.push(`${indent}{`);
+  lines.push(`${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`);
+  lines.push(`${innerIndent}targets.forEach(node => {`);
+  lines.push(`${innerIndent}  const classes = [${classList}];`);
+  lines.push(`${innerIndent}  classes.forEach(cls => {`);
+  if (condition) {
+    lines.push(`${innerIndent}    node.classList.toggle(cls, !!(${condition}));`);
+  } else if (action === 'add') {
+    lines.push(`${innerIndent}    node.classList.add(cls);`);
+  } else if (action === 'remove') {
+    lines.push(`${innerIndent}    node.classList.remove(cls);`);
+  } else {
+    lines.push(`${innerIndent}    node.classList.toggle(cls);`);
+  }
+  lines.push(`${innerIndent}  });`);
+  lines.push(`${innerIndent}});`);
+  lines.push(`${indent}}`);
+
+  return lines;
+}
+
+function renderStyleDirective(
+  directive: StyleDirective,
+  targetVar: string,
+  indent: string
+): string[] {
+  const lines: string[] = [];
+  const innerIndent = `${indent}  `;
+  const selector = JSON.stringify(directive.selector);
+  const prop = JSON.stringify(directive.property);
+  const value = directive.value;
+
+  lines.push(`${indent}{`);
+  lines.push(`${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`);
+  lines.push(`${innerIndent}targets.forEach(node => {`);
+  if (directive.mode === 'css') {
+    lines.push(`${innerIndent}  node.style.setProperty(${prop}, ${value});`);
+  } else {
+    lines.push(`${innerIndent}  node.style[${prop}] = ${value};`);
+  }
+  lines.push(`${innerIndent}});`);
+  lines.push(`${indent}}`);
 
   return lines;
 }

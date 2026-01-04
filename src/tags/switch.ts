@@ -12,26 +12,50 @@ export const handleSwitchTag: TagHandler = (
   const warnings: HandlerResult['warnings'] = [];
   
   try {
+    const exprAttr = element.getAttribute('expr') || element.getAttribute('expression');
     const variable = element.getAttribute('variable');
+    const expression = exprAttr || variable;
 
-    if (!variable) {
+    if (!expression) {
       errors.push({
         type: 'validation',
-        message: 'SWITCH tag requires a variable attribute',
+        message: 'SWITCH tag requires a variable or expr attribute',
         tag: 'SWITCH'
       });
       return { code: '', errors, warnings };
     }
 
-    // Validate variable name
-    const varErrors = SecurityValidator.validateJavaScriptIdentifier(variable);
-    if (varErrors.length > 0) {
-      errors.push(...varErrors.map(error => ({ 
-        ...error, 
-        tag: 'SWITCH',
-        message: `Invalid variable name: ${variable}` 
-      })));
-      return { code: '', errors, warnings };
+    if (exprAttr) {
+      const exprErrors = SecurityValidator.validateContent(expression);
+      if (exprErrors.length > 0) {
+        errors.push(...exprErrors.map(error => ({ ...error, tag: 'SWITCH' })));
+        if (options.strictMode) {
+          return { code: '', errors, warnings };
+        }
+      }
+    } else if (variable) {
+      const parts = variable.split('.');
+      if (parts[0] === 'this') {
+        parts.shift();
+      }
+      let invalid = false;
+      for (const part of parts) {
+        const varErrors = SecurityValidator.validateJavaScriptIdentifier(part);
+        if (varErrors.length > 0) {
+          errors.push(
+            ...varErrors.map(error => ({
+              ...error,
+              tag: 'SWITCH',
+              message: `Invalid variable name: ${variable}`
+            }))
+          );
+          invalid = true;
+          break;
+        }
+      }
+      if (invalid) {
+        return { code: '', errors, warnings };
+      }
     }
 
     // Process case and default elements
@@ -235,7 +259,7 @@ export const handleSwitchTag: TagHandler = (
     }
 
     // Generate switch statement
-    let code = `switch (${variable}) {\n`;
+    let code = `switch (${expression}) {\n`;
     
     for (const caseCode of cases) {
       code += `  ${caseCode.replace(/\n/g, '\n  ')}\n`;
@@ -248,7 +272,7 @@ export const handleSwitchTag: TagHandler = (
     code += '}';
 
     CompilerLogger.logDebug('Generated switch statement', {
-      variable,
+      expression,
       caseCount: cases.length,
       hasDefault,
       codeLength: code.length
@@ -258,7 +282,7 @@ export const handleSwitchTag: TagHandler = (
     if (componentCases.length > 0 || defaultTemplates) {
       switchDirective = {
         kind: 'switch',
-        expression: variable,
+        expression,
         cases: componentCases,
         defaultCase: defaultTemplates
           ? {

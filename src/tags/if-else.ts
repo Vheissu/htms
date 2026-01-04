@@ -4,6 +4,125 @@ import { DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
+const ELSEIF_TAGS = new Set(['ELSEIF', 'ELSE-IF']);
+
+function isElseIfTag(tagName: string): boolean {
+  return ELSEIF_TAGS.has(tagName.toUpperCase());
+}
+
+function validateCondition(
+  condition: string,
+  tag: string,
+  errors: HandlerResult['errors'],
+  warnings: HandlerResult['warnings'],
+  strictMode: boolean
+): string | null {
+  const conditionErrors = SecurityValidator.validateContent(condition);
+  if (conditionErrors.length > 0) {
+    errors.push(...conditionErrors.map(error => ({ ...error, tag })));
+    if (strictMode) {
+      return null;
+    }
+  }
+
+  // Validate condition format — allow common boolean expressions but reject function calls
+  if (
+    !/^[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!%+\-*/]+\s*[a-zA-Z0-9_$'".\s]+)*(\s*[&|]{2}\s*[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!%+\-*/]+\s*[a-zA-Z0-9_$'".\s]+)*)?$/.test(
+      condition.trim()
+    )
+  ) {
+    warnings.push({
+      message: 'Complex condition detected - may pose security risks',
+      tag
+    });
+
+    if (strictMode) {
+      errors.push({
+        type: 'security',
+        message: 'Complex conditions not allowed in strict mode',
+        tag
+      });
+      return null;
+    }
+  }
+
+  return condition.trim();
+}
+
+function collectBranchContent(
+  element: Element,
+  options: TagHandlerOptions,
+  tag: string,
+  errors: HandlerResult['errors'],
+  warnings: HandlerResult['warnings']
+): { code: string; templates: TemplateNode[]; directives: DirectiveNode[] } {
+  let innerCode = '';
+  const templates: TemplateNode[] = [];
+  const directives: DirectiveNode[] = [];
+
+  for (const childNode of Array.from(element.childNodes)) {
+    if (childNode.nodeType === 3) {
+      const text = childNode.textContent ?? '';
+      if (text.trim().length === 0) {
+        continue;
+      }
+      const textErrors = SecurityValidator.validateContent(text);
+      if (textErrors.length > 0) {
+        errors.push(...textErrors.map(error => ({ ...error, tag })));
+        if (options.strictMode) {
+          continue;
+        }
+      }
+      const sanitizedText = SecurityValidator.sanitizeString(text);
+      innerCode += `${text}\n`;
+      templates.push({ type: 'text', textContent: sanitizedText });
+      continue;
+    }
+
+    const child = childNode as Element;
+    const { handleElement } = require('../handlers');
+    const childResult = handleElement(child, options);
+    if (childResult.errors.length > 0) {
+      errors.push(...childResult.errors);
+      if (options.strictMode) {
+        continue;
+      }
+    }
+    if (childResult.warnings.length > 0) {
+      warnings.push(...childResult.warnings);
+    }
+    if (childResult.code) {
+      innerCode += childResult.code + '\n';
+    }
+
+    if (childResult.component?.template) {
+      templates.push(...childResult.component.template);
+    } else if (isLowerCaseTag(child)) {
+      templates.push(elementToTemplateNode(child as Element));
+    }
+
+    if (childResult.component?.directives) {
+      directives.push(...childResult.component.directives);
+    } else if (childResult.code && !isLowerCaseTag(child)) {
+      directives.push({ kind: 'statement', code: childResult.code });
+    }
+  }
+
+  return { code: innerCode, templates, directives };
+}
+
+function formatBranchBody(code: string, label: string): string {
+  if (!code.trim()) {
+    return `  // Empty ${label.toLowerCase()} block`;
+  }
+  const lines = code
+    .split('\n')
+    .filter(Boolean)
+    .map(line => `    ${line}`)
+    .join('\n');
+  return `  try {\n${lines}\n  } catch (error) {\n    console.error('${label} block execution error:', error);\n  }`;
+}
+
 export const handleIfElseTags: TagHandler = (
   element: Element, 
   options: TagHandlerOptions = {}
@@ -22,9 +141,6 @@ export const handleIfElseTags: TagHandler = (
     }
 
     const condition = element.getAttribute('condition');
-    const trueTemplates: TemplateNode[] = [];
-    const trueDirectives: DirectiveNode[] = [];
-
     if (!condition) {
       errors.push({
         type: 'validation',
@@ -33,190 +149,154 @@ export const handleIfElseTags: TagHandler = (
       });
       return { code: '', errors, warnings };
     }
-
-    // Security validation of condition
-    const conditionErrors = SecurityValidator.validateContent(condition);
-    if (conditionErrors.length > 0) {
-      errors.push(...conditionErrors.map(error => ({ ...error, tag: 'IF' })));
-      if (options.strictMode) {
-        return { code: '', errors, warnings };
-      }
+    const sanitizedCondition = validateCondition(
+      condition,
+      'IF',
+      errors,
+      warnings,
+      options.strictMode ?? false
+    );
+    if (!sanitizedCondition) {
+      return { code: '', errors, warnings };
     }
 
-    // Validate condition format — allow common boolean expressions but reject function calls
-    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!%+\-*/]+\s*[a-zA-Z0-9_$'".\s]+)*(\s*[&|]{2}\s*[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!%+\-*/]+\s*[a-zA-Z0-9_$'".\s]+)*)?$/.test(condition.trim())) {
-      warnings.push({
-        message: 'Complex condition detected - may pose security risks',
-        tag: 'IF'
-      });
-      
-      if (options.strictMode) {
-        errors.push({
-          type: 'security',
-          message: 'Complex conditions not allowed in strict mode',
-          tag: 'IF'
-        });
-        return { code: '', errors, warnings };
+    const ifBranch = collectBranchContent(element, options, 'IF', errors, warnings);
+    const branches: Array<{
+      condition: string;
+      code: string;
+      templates: TemplateNode[];
+      directives: DirectiveNode[];
+    }> = [
+      {
+        condition: sanitizedCondition,
+        code: ifBranch.code,
+        templates: ifBranch.templates,
+        directives: ifBranch.directives
       }
-    }
-    
-    // Prepare bodies: combine raw text (legacy) and child tag code
-    let ifInnerCode = '';
-    for (const childNode of Array.from(element.childNodes)) {
-      if (childNode.nodeType === 3) {
-        const text = childNode.textContent ?? '';
-        if (text.trim().length === 0) {
-          continue;
-        }
-        const textErrors = SecurityValidator.validateContent(text);
-        if (textErrors.length > 0) {
-          errors.push(...textErrors.map(error => ({ ...error, tag: 'IF' })));
+    ];
+
+    let elseBranch: { code: string; templates: TemplateNode[]; directives: DirectiveNode[] } | null =
+      null;
+
+    let nextSibling = element.nextElementSibling;
+    while (nextSibling) {
+      const tagName = nextSibling.tagName.toUpperCase();
+      if (isElseIfTag(tagName)) {
+        (nextSibling as any).__htmsConsumed = true;
+        const elseIfCondition = nextSibling.getAttribute('condition');
+        if (!elseIfCondition) {
+          errors.push({
+            type: 'validation',
+            message: 'ELSEIF tag requires a condition attribute',
+            tag: tagName
+          });
           if (options.strictMode) {
             return { code: '', errors, warnings };
           }
+          nextSibling = nextSibling.nextElementSibling;
+          continue;
         }
-        const sanitizedText = SecurityValidator.sanitizeString(text);
-        ifInnerCode += `${text}\n`;
-        trueTemplates.push({ type: 'text', textContent: sanitizedText });
+
+        const sanitizedElseIf = validateCondition(
+          elseIfCondition,
+          tagName,
+          errors,
+          warnings,
+          options.strictMode ?? false
+        );
+        if (!sanitizedElseIf) {
+          if (options.strictMode) {
+            return { code: '', errors, warnings };
+          }
+          nextSibling = nextSibling.nextElementSibling;
+          continue;
+        }
+
+        const branch = collectBranchContent(nextSibling, options, tagName, errors, warnings);
+        branches.push({
+          condition: sanitizedElseIf,
+          code: branch.code,
+          templates: branch.templates,
+          directives: branch.directives
+        });
+        nextSibling = nextSibling.nextElementSibling;
         continue;
       }
 
-      const child = childNode as Element;
-      const { handleElement } = require('../handlers');
-      const childResult = handleElement(child, options);
-      if (childResult.errors.length > 0) {
-        errors.push(...childResult.errors);
-        if (options.strictMode) {
-          continue;
-        }
+      if (tagName === 'ELSE') {
+        (nextSibling as any).__htmsConsumed = true;
+        const branch = collectBranchContent(nextSibling, options, 'ELSE', errors, warnings);
+        elseBranch = {
+          code: branch.code,
+          templates: branch.templates,
+          directives: branch.directives
+        };
       }
-      if (childResult.warnings.length > 0) {
-        warnings.push(...childResult.warnings);
-      }
-      if (childResult.code) {
-        ifInnerCode += childResult.code + '\n';
-      }
+      break;
+    }
 
-      if (childResult.component?.template) {
-        trueTemplates.push(...childResult.component.template);
-      } else if (isLowerCaseTag(child)) {
-        trueTemplates.push(elementToTemplateNode(child as Element));
-      }
+    let code = `if (${branches[0].condition}) {\n${formatBranchBody(
+      branches[0].code,
+      'IF'
+    )}\n}`;
 
-      if (childResult.component?.directives) {
-        trueDirectives.push(...childResult.component.directives);
-      } else if (childResult.code && !isLowerCaseTag(child)) {
-        trueDirectives.push({ kind: 'statement', code: childResult.code });
+    if (branches.length > 1) {
+      for (let i = 1; i < branches.length; i++) {
+        code += ` else if (${branches[i].condition}) {\n${formatBranchBody(
+          branches[i].code,
+          'ELSEIF'
+        )}\n}`;
       }
     }
 
-    // Check for corresponding ELSE tag
-    // legacy capture removed; keeping variable names consistent
-    let elseInnerCode = '';
-    let hasElse = false;
-    const falseTemplates: TemplateNode[] = [];
-    const falseDirectives: DirectiveNode[] = [];
-    
-    // Look for next sibling ELSE element
-    let nextSibling = element.nextElementSibling;
-    if (nextSibling && nextSibling.tagName.toUpperCase() === 'ELSE') {
-      hasElse = true;
-      // Process ELSE children and text nodes
-      for (const childNode of Array.from(nextSibling.childNodes)) {
-        if (childNode.nodeType === 3) {
-          const text = childNode.textContent ?? '';
-          if (text.trim().length === 0) {
-            continue;
-          }
-          const textErrors = SecurityValidator.validateContent(text);
-          if (textErrors.length > 0) {
-            errors.push(...textErrors.map(error => ({ ...error, tag: 'ELSE' })));
-            if (options.strictMode) {
-              return { code: '', errors, warnings };
-            }
-          }
-          const sanitizedText = SecurityValidator.sanitizeString(text);
-          elseInnerCode += `${text}\n`;
-          falseTemplates.push({ type: 'text', textContent: sanitizedText });
-          continue;
-        }
+    if (elseBranch) {
+      code += ` else {\n${formatBranchBody(elseBranch.code, 'ELSE')}\n}`;
+    }
 
-        const child = childNode as Element;
-        const { handleElement } = require('../handlers');
-        const childResult = handleElement(child, options);
-        if (childResult.errors.length > 0) {
-          errors.push(...childResult.errors);
-          if (options.strictMode) {
-            continue;
-          }
-        }
-        if (childResult.warnings.length > 0) {
-          warnings.push(...childResult.warnings);
-        }
-        if (childResult.code) {
-          elseInnerCode += childResult.code + '\n';
-        }
+    const buildChain = (index: number): DirectiveNode => {
+      const current = branches[index];
+      const whenTrue = {
+        template: current.templates,
+        directives: current.directives.length > 0 ? current.directives : undefined
+      };
 
-        if (childResult.component?.template) {
-          falseTemplates.push(...childResult.component.template);
-        } else if (isLowerCaseTag(child)) {
-          falseTemplates.push(elementToTemplateNode(child as Element));
-        }
-
-        if (childResult.component?.directives) {
-          falseDirectives.push(...childResult.component.directives);
-        } else if (childResult.code && !isLowerCaseTag(child)) {
-          falseDirectives.push({ kind: 'statement', code: childResult.code });
-        }
+      if (index === branches.length - 1) {
+        return {
+          kind: 'condition',
+          condition: current.condition,
+          whenTrue,
+          whenFalse: elseBranch
+            ? {
+                template: elseBranch.templates,
+                directives:
+                  elseBranch.directives.length > 0 ? elseBranch.directives : undefined
+              }
+            : undefined
+        };
       }
-    }
 
-    // Sanitize condition
-    const sanitizedCondition = condition.trim();
+      const nextDirective = buildChain(index + 1);
+      return {
+        kind: 'condition',
+        condition: current.condition,
+        whenTrue,
+        whenFalse: {
+          template: [],
+          directives: [nextDirective]
+        }
+      };
+    };
 
-    // Generate safe conditional code
-    let code = `if (${sanitizedCondition}) {\n`;
-    
-    if (ifInnerCode.trim()) {
-      code += `  try {\n${ifInnerCode.split('\n').filter(Boolean).map(l => '    ' + l).join('\n')}\n  } catch (error) {\n    console.error('IF block execution error:', error);\n  }\n`;
-    } else {
-      code += '  // Empty if block\n';
-    }
-    
-    code += '}';
-    
-    if (hasElse) {
-      code += ' else {\n';
-      if (elseInnerCode.trim()) {
-        code += `  try {\n${elseInnerCode.split('\n').filter(Boolean).map(l => '    ' + l).join('\n')}\n  } catch (error) {\n    console.error('ELSE block execution error:', error);\n  }\n`;
-      } else {
-        code += '  // Empty else block\n';
-      }
-      code += '}';
-    }
+    const componentDirective = buildChain(0);
 
     CompilerLogger.logDebug('Generated conditional statement', {
       condition: sanitizedCondition,
-      hasIfBody: !!ifInnerCode.trim(),
-      hasElse,
-      hasElseBody: !!elseInnerCode.trim(),
+      hasIfBody: !!ifBranch.code.trim(),
+      hasElse: !!elseBranch,
+      hasElseBody: !!elseBranch?.code.trim(),
+      elseIfCount: branches.length - 1,
       codeLength: code.length
     });
-
-    const componentDirective: DirectiveNode = {
-      kind: 'condition',
-      condition: sanitizedCondition,
-      whenTrue: {
-        template: trueTemplates,
-        directives: trueDirectives.length > 0 ? trueDirectives : undefined
-      },
-      whenFalse: hasElse
-        ? {
-            template: falseTemplates,
-            directives: falseDirectives.length > 0 ? falseDirectives : undefined
-          }
-        : undefined
-    };
 
     return {
       code,

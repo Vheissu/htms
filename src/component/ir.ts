@@ -94,6 +94,30 @@ export interface SwitchDirective {
   };
 }
 
+export interface WhileDirective {
+  kind: 'while';
+  condition: string;
+  maxIterations: number;
+  template: TemplateNode[];
+  directives?: DirectiveNode[];
+}
+
+export interface ClassDirective {
+  kind: 'class';
+  selector: string;
+  classNames: string[];
+  action: 'add' | 'remove' | 'toggle';
+  condition?: string;
+}
+
+export interface StyleDirective {
+  kind: 'style';
+  selector: string;
+  property: string;
+  value: string;
+  mode: 'property' | 'css';
+}
+
 export interface StateDirective {
   kind: 'state';
   mode: 'init' | 'set' | 'push' | 'splice';
@@ -114,6 +138,9 @@ export type DirectiveNode =
   | AppendDirective
   | BindDirective
   | SwitchDirective
+  | WhileDirective
+  | ClassDirective
+  | StyleDirective
   | StateDirective
   | { kind: 'statement'; code: string };
 

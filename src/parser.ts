@@ -32,10 +32,19 @@ export function elementsToJsSnippets(
   
   try {
     for (const element of Array.from(elements)) {
-      // Skip standalone ELSE nodes; IF handler consumes its immediate sibling
-      if (element.tagName && element.tagName.toUpperCase() === 'ELSE') {
-        warnings.push({ message: 'Top-level ELSE ignored (paired with preceding IF)', tag: 'ELSE' });
+      if ((element as any).__htmsConsumed) {
         continue;
+      }
+      // Skip standalone ELSE nodes; IF handler consumes its immediate sibling
+      if (element.tagName) {
+        const tagName = element.tagName.toUpperCase();
+        if (tagName === 'ELSE' || tagName === 'ELSEIF' || tagName === 'ELSE-IF') {
+          warnings.push({
+            message: 'Top-level conditional branch ignored (paired with preceding IF)',
+            tag: tagName
+          });
+          continue;
+        }
       }
       const result = handleElement(element, {
         strictMode: options.strictMode || false,

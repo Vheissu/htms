@@ -11,6 +11,7 @@ import { handlePrintTag } from './tags/print';
 import { handleRepeatTag } from './tags/repeat';
 import { handleSwitchTag } from './tags/switch';
 import { handleVarTag } from './tags/var';
+import { handleWhileTag } from './tags/while';
 import { handleSetTag } from './tags/set';
 import { handlePushTag } from './tags/push';
 import { handleSetPropTag } from './tags/setprop';
@@ -24,22 +25,25 @@ import { handleKeyedListTag } from './tags/keyed-list';
 import { handleSubmitTag } from './tags/submit';
 import { handleEffectTag } from './tags/effect';
 import { handleFetchTag } from './tags/fetch';
+import { handleClassTag } from './tags/class';
+import { handleStyleTag } from './tags/style';
+import { handleModelTag } from './tags/model';
 import { TagHandler, TagHandlerOptions, HandlerResult, CompilerError } from './types';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
 
-interface HandlersMapping {
-  [key: string]: TagHandler;
-}
-
 const ALLOWED_STANDARD_ELEMENTS = new Set([
   'INPUT', 'BUTTON', 'UL', 'LI', 'DIV', 'SPAN', 'P', 'H1', 'H2', 'H3', 
-  'STRONG', 'A', 'IMG', 'FORM', 'LABEL', 'SELECT', 'OPTION', 'TEXTAREA', 
+  'H4', 'H5', 'H6', 'STRONG', 'EM', 'I', 'B', 'SMALL', 'MARK', 'CODE', 'PRE',
+  'A', 'IMG', 'FORM', 'LABEL', 'SELECT', 'OPTION', 'TEXTAREA', 'FIELDSET',
+  'LEGEND', 'DATALIST', 'OUTPUT', 'PROGRESS', 'METER', 'OL', 'DL', 'DT', 'DD',
   'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'NAV', 'HEADER', 'FOOTER', 
-  'SECTION', 'ARTICLE', 'ASIDE', 'MAIN', 'FIGURE', 'FIGCAPTION', 'AUDIO', 'VIDEO'
+  'SECTION', 'ARTICLE', 'ASIDE', 'MAIN', 'FIGURE', 'FIGCAPTION', 'AUDIO', 'VIDEO',
+  'BLOCKQUOTE', 'CITE', 'TIME', 'DETAILS', 'SUMMARY', 'CANVAS', 'HR', 'BR',
+  'STYLE', 'LINK', 'META'
 ]);
 
-const HANDLERS_MAPPING: HandlersMapping = {
+const HANDLERS_MAPPING = {
   PRINT: handlePrintTag,
   REPEAT: handleRepeatTag,
   VAR: handleVarTag,
@@ -47,6 +51,7 @@ const HANDLERS_MAPPING: HandlersMapping = {
   FUNCTION: handleFunctionTag,
   CALL: handleCallTag,
   SWITCH: handleSwitchTag,
+  WHILE: handleWhileTag,
   OBJECT: handleObjectTag,
   ARRAY: handleArrayTag,
   COMMENT: handleCommentTag,
@@ -65,7 +70,10 @@ const HANDLERS_MAPPING: HandlersMapping = {
   SUBMIT: handleSubmitTag,
   EFFECT: handleEffectTag,
   FETCH: handleFetchTag,
-};
+  CLASS: handleClassTag,
+  STYLE: handleStyleTag,
+  MODEL: handleModelTag,
+} satisfies Record<string, TagHandler>;
 
 export function handleElement(
   element: Element,
@@ -84,6 +92,10 @@ export function handleElement(
       };
     }
 
+    if ((element as any).__htmsConsumed) {
+      return { code: '', errors: [], warnings: [] };
+    }
+
     const tagName = element.tagName.toUpperCase();
     
     CompilerLogger.logDebug('Processing element', { 
@@ -92,14 +104,20 @@ export function handleElement(
       hasChildren: element.children.length > 0
     });
 
+    const hasHandler = Object.prototype.hasOwnProperty.call(HANDLERS_MAPPING, tagName);
+    const preferCustom =
+      tagName === 'STYLE' &&
+      (element.hasAttribute('selector') ||
+        element.hasAttribute('prop') ||
+        element.hasAttribute('name'));
+
     // Check if it's a standard HTML element
-    if (isStandardHtmlElement(element)) {
+    if (isStandardHtmlElement(element) && !(hasHandler && preferCustom)) {
       return handleHtmlElement(element, options);
     }
 
     // Check if it's a supported custom tag
-    const handlerFunction = HANDLERS_MAPPING[tagName];
-    if (!handlerFunction) {
+    if (!hasHandler) {
       const error: CompilerError = {
         type: 'validation',
         message: `Unsupported tag: ${tagName}`,
@@ -146,6 +164,7 @@ export function handleElement(
     }
 
     // Execute the handler
+    const handlerFunction = HANDLERS_MAPPING[tagName as keyof typeof HANDLERS_MAPPING];
     const result = handlerFunction(element, options);
     
     // Note: Security is enforced on inputs and final AST (in parse phase).

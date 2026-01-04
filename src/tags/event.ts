@@ -5,7 +5,7 @@ import { CompilerLogger } from '../utils/logger';
 
 const ALLOWED_EVENT_TYPES = new Set([
   'click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mouseout',
-  'keydown', 'keyup', 'keypress', 'focus', 'blur', 'change', 'submit',
+  'keydown', 'keyup', 'keypress', 'focus', 'blur', 'change', 'input', 'submit',
   'load', 'unload', 'resize', 'scroll'
 ]);
 

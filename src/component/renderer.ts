@@ -51,15 +51,28 @@ export function elementsToComponentCode(
     }
 
     const element = node as Element;
-    if (element.tagName && element.tagName.toUpperCase() === 'ELSE') {
-      warnings.push({
-        message: 'Unpaired top-level <else> ignored inside component',
-        tag: 'ELSE'
-      });
+    if ((element as any).__htmsConsumed) {
       continue;
     }
+    if (element.tagName) {
+      const tagName = element.tagName.toUpperCase();
+      if (tagName === 'ELSE' || tagName === 'ELSEIF' || tagName === 'ELSE-IF') {
+        warnings.push({
+          message: 'Unpaired top-level conditional branch ignored inside component',
+          tag: tagName
+        });
+        continue;
+      }
+    }
 
-    if (coreIsStandardHtmlElement(element)) {
+    const tagName = element.tagName.toUpperCase();
+    const treatAsCustom =
+      tagName === 'STYLE' &&
+      (element.hasAttribute('selector') ||
+        element.hasAttribute('prop') ||
+        element.hasAttribute('name'));
+
+    if (coreIsStandardHtmlElement(element) && !treatAsCustom) {
       ir.templateNodes.push(elementToTemplateNode(element));
       continue;
     }

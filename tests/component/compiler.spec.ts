@@ -75,6 +75,78 @@ describe('Component compiler', () => {
     expect(code).toContain('else {');
   });
 
+  it('accepts switch expressions', () => {
+    const code = compile(`
+      <component name="switch-expr">
+        <switch expr="this.mode">
+          <case value="on"><div class="on"></div></case>
+          <default><div class="off"></div></default>
+        </switch>
+      </component>
+    `);
+    expect(code).toContain('const _switch');
+    expect(code).toContain('this.mode');
+  });
+
+  it('supports else-if chains', () => {
+    const code = compile(`
+      <component name="chain-box">
+        <if condition="this.mode === 'a'"><div class="a"></div></if>
+        <else-if condition="this.mode === 'b'"><div class="b"></div></else-if>
+        <else><div class="c"></div></else>
+      </component>
+    `);
+    expect(code).toContain('if (this.mode === \'a\')');
+    expect(code).toContain('if (this.mode === \'b\')');
+  });
+
+  it('emits while directives with guards', () => {
+    const code = compile(`
+      <component name="while-box">
+        <var name="count" value="0" mutable="true"></var>
+        <while condition="this.count < 3" max="5">
+          <div class="item"></div>
+          <set name="count" op="++"></set>
+        </while>
+      </component>
+    `);
+    expect(code).toContain('while (this.count < 3)');
+    expect(code).toContain('WHILE exceeded max iterations');
+  });
+
+  it('supports class directives', () => {
+    const code = compile(`
+      <component name="class-box">
+        <div id="card"></div>
+        <class selector="#card" name="active" when="this.active"></class>
+      </component>
+    `);
+    expect(code).toContain('classList.toggle');
+    expect(code).toContain('this.active');
+  });
+
+  it('supports style directives', () => {
+    const code = compile(`
+      <component name="style-box">
+        <div id="card"></div>
+        <style selector="#card" prop="background-color" value="red"></style>
+      </component>
+    `);
+    expect(code).toContain('style.setProperty');
+  });
+
+  it('supports model bindings', () => {
+    const code = compile(`
+      <component name="model-box">
+        <var name="name" value="''" mutable="true"></var>
+        <input id="name" />
+        <model selector="#name" path="name"></model>
+      </component>
+    `);
+    expect(code).toContain("addEventListener('input'");
+    expect(code).toContain("this.__htmsSetState(['name']");
+  });
+
   it('creates visibility directives for toggle', () => {
     const code = compile(`
       <component name="toggle-box">
