@@ -7,6 +7,57 @@ import { DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
+function collectNestedComponentDirectives(
+  element: Element,
+  options: TagHandlerOptions,
+  loopVariable: string,
+  errors: HandlerResult['errors'],
+  warnings: HandlerResult['warnings']
+): DirectiveNode[] {
+  const directives: DirectiveNode[] = [];
+
+  for (const child of Array.from(element.children)) {
+    if (isLowerCaseTag(child)) {
+      directives.push(
+        ...collectNestedComponentDirectives(
+          child,
+          options,
+          loopVariable,
+          errors,
+          warnings
+        )
+      );
+      continue;
+    }
+
+    const { handleElement } = require('../handlers');
+    const childResult: HandlerResult = handleElement(child, {
+      ...options,
+      loopVariable,
+      parentContext: 'loop',
+    });
+
+    if (childResult.errors.length > 0) {
+      errors.push(...childResult.errors);
+      if (options.strictMode) {
+        continue;
+      }
+    }
+
+    if (childResult.warnings.length > 0) {
+      warnings.push(...childResult.warnings);
+    }
+
+    if (childResult.component?.directives) {
+      directives.push(...childResult.component.directives);
+    } else if (childResult.code) {
+      directives.push({ kind: 'statement', code: childResult.code });
+    }
+  }
+
+  return directives;
+}
+
 export const handleRepeatTag: TagHandler = (
   element: Element,
   options: TagHandlerOptions = {}
@@ -179,6 +230,15 @@ export const handleRepeatTag: TagHandler = (
         componentTemplateChildren.push(...childResult.component.template);
       } else if (isLowerCaseTag(child)) {
         componentTemplateChildren.push(elementToTemplateNode(child as Element));
+        componentDirectives.push(
+          ...collectNestedComponentDirectives(
+            child,
+            childOptions,
+            loopVariable,
+            errors,
+            warnings
+          )
+        );
       }
 
       if (childResult.component?.directives) {

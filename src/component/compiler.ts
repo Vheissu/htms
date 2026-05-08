@@ -10,6 +10,7 @@ import {
   AttributeDirective,
   AppendDirective,
   BindDirective,
+  KeyedListDirective,
   SwitchDirective,
   WhileDirective,
   ClassDirective,
@@ -68,6 +69,9 @@ function containsState(directives?: DirectiveNode[]): boolean {
       case 'event':
         if (containsState(directive.directives)) return true;
         break;
+      case 'keyed-list':
+        if (containsState(directive.directives)) return true;
+        break;
       case 'visibility':
       case 'attribute':
       case 'bind':
@@ -118,6 +122,9 @@ function collectStateRoots(directives?: DirectiveNode[]): string[] {
           }
           break;
         case 'event':
+          visit(directive.directives);
+          break;
+        case 'keyed-list':
           visit(directive.directives);
           break;
         case 'append':
@@ -722,6 +729,17 @@ function renderDirective(
     return renderBindDirective(directive, targetVar, counter, indent);
   }
 
+  if (directive.kind === 'keyed-list') {
+    return renderKeyedListDirective(
+      directive,
+      targetVar,
+      counter,
+      indent,
+      scopeVars,
+      componentInterpolationVars
+    );
+  }
+
   if (directive.kind === 'state') {
     return renderStateDirective(directive, indent);
   }
@@ -1242,6 +1260,76 @@ function renderBindDirective(
     `${innerIndent}    console.error('BIND evaluation failed for ${directive.selector}', error);`
   );
   lines.push(`${innerIndent}  }`);
+  lines.push(`${innerIndent}});`);
+  lines.push(`${indent}}`);
+
+  return lines;
+}
+
+function renderKeyedListDirective(
+  directive: KeyedListDirective,
+  targetVar: string,
+  counter: { value: number },
+  indent: string,
+  scopeVars: string[],
+  componentInterpolationVars: string[]
+): string[] {
+  const lines: string[] = [];
+  const innerIndent = `${indent}  `;
+  const bodyIndent = `${innerIndent}  `;
+  const loopIndent = `${bodyIndent}  `;
+  const selector = JSON.stringify(directive.selector);
+  const targetsVar = `_targets${counter.value++}`;
+  const rawSourceVar = `_source${counter.value++}`;
+  const arraySourceVar = `_items${counter.value++}`;
+  const fragmentVar = `_frag${counter.value++}`;
+  const keyVar = `_key${counter.value++}`;
+  const keyedNodeVar = `_keyedNode${counter.value++}`;
+  const loopScopeVars = [...scopeVars, directive.itemVar, directive.indexVar];
+
+  lines.push(`${indent}{`);
+  lines.push(
+    `${innerIndent}const ${targetsVar} = ${targetVar}.querySelectorAll(${selector});`
+  );
+  lines.push(`${innerIndent}${targetsVar}.forEach(container => {`);
+  lines.push(`${bodyIndent}while (container.firstChild) {`);
+  lines.push(`${loopIndent}container.removeChild(container.firstChild);`);
+  lines.push(`${bodyIndent}}`);
+  lines.push(`${bodyIndent}const ${rawSourceVar} = ${directive.source};`);
+  lines.push(
+    `${bodyIndent}const ${arraySourceVar} = Array.isArray(${rawSourceVar}) ? ${rawSourceVar} : [];`
+  );
+  lines.push(
+    `${bodyIndent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${arraySourceVar}.length; ${directive.indexVar}++) {`
+  );
+  lines.push(
+    `${loopIndent}const ${directive.itemVar} = ${arraySourceVar}[${directive.indexVar}];`
+  );
+  lines.push(
+    `${loopIndent}const ${fragmentVar} = document.createDocumentFragment();`
+  );
+  lines.push(
+    ...fillFragment(
+      fragmentVar,
+      directive.template,
+      directive.directives,
+      counter,
+      loopIndent,
+      loopScopeVars,
+      componentInterpolationVars
+    )
+  );
+  lines.push(`${loopIndent}const ${keyVar} = ${directive.key};`);
+  lines.push(`${loopIndent}const ${keyedNodeVar} = ${fragmentVar}.firstElementChild;`);
+  lines.push(
+    `${loopIndent}if (${keyedNodeVar} && typeof ${keyedNodeVar}.setAttribute === 'function') {`
+  );
+  lines.push(
+    `${loopIndent}  ${keyedNodeVar}.setAttribute('data-key', String(${keyVar}));`
+  );
+  lines.push(`${loopIndent}}`);
+  lines.push(`${loopIndent}container.appendChild(${fragmentVar});`);
+  lines.push(`${bodyIndent}}`);
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
 

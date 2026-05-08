@@ -1,9 +1,76 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import {
+  DirectiveNode,
+  KeyedListDirective,
+  TemplateNode,
+} from '../component/ir';
+import {
+  elementToTemplateNode,
+  isLowerCaseTag,
+} from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 
 let keyedCounter = 0;
+
+function resolveComponentSource(source: string): string {
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(source)
+    ? `this.${source}`
+    : source;
+}
+
+function collectNestedComponentDirectives(
+  element: Element,
+  options: TagHandlerOptions,
+  itemVar: string,
+  errors: HandlerResult['errors'],
+  warnings: HandlerResult['warnings']
+): DirectiveNode[] {
+  const directives: DirectiveNode[] = [];
+
+  for (const child of Array.from(element.children)) {
+    if (isLowerCaseTag(child)) {
+      directives.push(
+        ...collectNestedComponentDirectives(
+          child,
+          options,
+          itemVar,
+          errors,
+          warnings
+        )
+      );
+      continue;
+    }
+
+    const { handleElement } = require('../handlers');
+    const childResult: HandlerResult = handleElement(child, {
+      ...options,
+      loopVariable: itemVar,
+      parentContext: 'loop',
+      componentContext: true,
+    });
+
+    if (childResult.errors.length > 0) {
+      errors.push(...childResult.errors);
+      if (options.strictMode) {
+        continue;
+      }
+    }
+
+    if (childResult.warnings.length > 0) {
+      warnings.push(...childResult.warnings);
+    }
+
+    if (childResult.component?.directives) {
+      directives.push(...childResult.component.directives);
+    } else if (childResult.code) {
+      directives.push({ kind: 'statement', code: childResult.code });
+    }
+  }
+
+  return directives;
+}
 
 export const handleKeyedListTag: TagHandler = (
   element: Element,
@@ -20,12 +87,20 @@ export const handleKeyedListTag: TagHandler = (
     const keyExpr = element.getAttribute('key') || itemVar;
 
     if (!target || !ofExpr) {
-      errors.push({ type: 'validation', message: 'KEYEDLIST requires target and of', tag: 'KEYEDLIST' });
+      errors.push({
+        type: 'validation',
+        message: 'KEYEDLIST requires target and of',
+        tag: 'KEYEDLIST',
+      });
       return { code: '', errors, warnings };
     }
 
     if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(target)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector for target', tag: 'KEYEDLIST' });
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector for target',
+        tag: 'KEYEDLIST',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -33,21 +108,104 @@ export const handleKeyedListTag: TagHandler = (
     for (const v of [itemVar, indexVar]) {
       const idErr = SecurityValidator.validateJavaScriptIdentifier(v);
       if (idErr.length > 0) {
-        errors.push(...idErr.map(e => ({ ...e, tag: 'KEYEDLIST' })));
+        errors.push(...idErr.map((e) => ({ ...e, tag: 'KEYEDLIST' })));
         return { code: '', errors, warnings };
       }
+    }
+
+    const sourceErrors = SecurityValidator.validateContent(ofExpr);
+    if (sourceErrors.length > 0) {
+      errors.push(
+        ...sourceErrors.map((e) => ({
+          ...e,
+          tag: 'KEYEDLIST',
+          message: `Invalid list expression: ${ofExpr}`,
+        }))
+      );
+      return { code: '', errors, warnings };
+    }
+
+    const keyErrors = SecurityValidator.validateContent(keyExpr);
+    if (keyErrors.length > 0) {
+      errors.push(
+        ...keyErrors.map((e) => ({
+          ...e,
+          tag: 'KEYEDLIST',
+          message: `Invalid key expression: ${keyExpr}`,
+        }))
+      );
+      return { code: '', errors, warnings };
     }
 
     // Validate child template: require exactly one top-level element child
     const children = Array.from(element.children);
     if (children.length !== 1) {
-      errors.push({ type: 'validation', message: 'KEYEDLIST requires exactly one template element child', tag: 'KEYEDLIST' });
+      errors.push({
+        type: 'validation',
+        message: 'KEYEDLIST requires exactly one template element child',
+        tag: 'KEYEDLIST',
+      });
       return { code: '', errors, warnings };
     }
 
     const templateEl = children[0];
+    if (options.componentContext) {
+      if (!isLowerCaseTag(templateEl)) {
+        errors.push({
+          type: 'validation',
+          message: 'KEYEDLIST component template must be a standard HTML element',
+          tag: 'KEYEDLIST',
+        });
+        return { code: '', errors, warnings };
+      }
+
+      const template: TemplateNode[] = [elementToTemplateNode(templateEl)];
+      const directives = collectNestedComponentDirectives(
+        templateEl,
+        options,
+        itemVar,
+        errors,
+        warnings
+      );
+
+      if (errors.length > 0 && options.strictMode) {
+        return { code: '', errors, warnings };
+      }
+
+      const componentDirective: KeyedListDirective = {
+        kind: 'keyed-list',
+        selector: target,
+        source: resolveComponentSource(ofExpr),
+        itemVar,
+        indexVar,
+        key: keyExpr,
+        template,
+        directives,
+      };
+
+      CompilerLogger.logDebug('Generated component keyed list', {
+        target,
+        ofExpr,
+        itemVar,
+        indexVar,
+      });
+
+      return {
+        code: '',
+        errors,
+        warnings,
+        component: {
+          directives: [componentDirective],
+        },
+      };
+    }
+
     const { handleElement } = require('../handlers');
-    const tpl = handleElement(templateEl, { ...options, loopVariable: itemVar, parentContext: 'template' });
+    const tpl = handleElement(templateEl, {
+      ...options,
+      loopVariable: itemVar,
+      parentContext: 'template',
+    });
     if (tpl.errors.length > 0) {
       errors.push(...tpl.errors.map((e: any) => ({ ...e, tag: 'KEYEDLIST' })));
       if (options.strictMode) return { code: '', errors, warnings };
@@ -55,14 +213,22 @@ export const handleKeyedListTag: TagHandler = (
     if (tpl.warnings.length > 0) warnings.push(...tpl.warnings);
 
     if (!tpl.code) {
-      errors.push({ type: 'validation', message: 'Empty KEYEDLIST template', tag: 'KEYEDLIST' });
+      errors.push({
+        type: 'validation',
+        message: 'Empty KEYEDLIST template',
+        tag: 'KEYEDLIST',
+      });
       return { code: '', errors, warnings };
     }
 
     // Extract top element variable name
     const m = tpl.code.match(/const (\w+) = document\.createElement/);
     if (!m) {
-      errors.push({ type: 'validation', message: 'Template must create a top-level element', tag: 'KEYEDLIST' });
+      errors.push({
+        type: 'validation',
+        message: 'Template must create a top-level element',
+        tag: 'KEYEDLIST',
+      });
       return { code: '', errors, warnings };
     }
     const topVar = m[1];
@@ -88,9 +254,18 @@ ${tpl.code.split('\n').map((l: string) => '          ' + l).join('\n')}
         }
       })();`;
 
-    CompilerLogger.logDebug('Generated keyed list', { target, ofExpr, itemVar, indexVar });
+    CompilerLogger.logDebug('Generated keyed list', {
+      target,
+      ofExpr,
+      itemVar,
+      indexVar,
+    });
     return { code, errors, warnings };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'KEYEDLIST' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'KEYEDLIST' }],
+      warnings,
+    };
   }
 };

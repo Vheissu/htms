@@ -78,6 +78,17 @@ export interface BindDirective {
   expression: string;
 }
 
+export interface KeyedListDirective {
+  kind: 'keyed-list';
+  selector: string;
+  source: string;
+  itemVar: string;
+  indexVar: string;
+  key: string;
+  template: TemplateNode[];
+  directives?: DirectiveNode[];
+}
+
 export interface SwitchCase {
   value: string;
   template: TemplateNode[];
@@ -137,6 +148,7 @@ export type DirectiveNode =
   | AttributeDirective
   | AppendDirective
   | BindDirective
+  | KeyedListDirective
   | SwitchDirective
   | WhileDirective
   | ClassDirective

@@ -158,6 +158,37 @@ describe('Tag handlers', () => {
       expect(result.code).toContain('data-key');
     });
 
+    it('creates component-scoped keyed list directives', () => {
+      const element = createElement(`
+        <KEYEDLIST target="#items" of="items" item="person" index="i" key="person.id">
+          <li class="entry">
+            <span>{person.name}</span>
+            <button class="remove" type="button">Remove</button>
+            <event target=".remove" type="click">
+              <splice array="items" index="i" delete="1"></splice>
+            </event>
+          </li>
+        </KEYEDLIST>
+      `);
+      const result = handleKeyedListTag(element, {
+        parentContext: 'component',
+        componentContext: true,
+      });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toBe('');
+      expect(result.component?.directives?.[0]).toMatchObject({
+        kind: 'keyed-list',
+        selector: '#items',
+        source: 'this.items',
+        itemVar: 'person',
+        indexVar: 'i',
+        key: 'person.id',
+      });
+      expect(result.component?.directives?.[0]).toHaveProperty('template');
+      expect(result.component?.directives?.[0]).toHaveProperty('directives');
+    });
+
     it('requires a single template child', () => {
       const element = createElement(
         '<KEYEDLIST target="#items" of="items"></KEYEDLIST>'
