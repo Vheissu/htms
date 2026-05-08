@@ -63,7 +63,7 @@ badge.labelText = 'Synced';
 | -------------------------- | ------------------------- | --------------------------------------------------------- |
 | `constructor`              | Element creation          | Initializes state from `<var>` tags with `scope="class"`. |
 | `connectedCallback`        | Element inserted          | Runs compiled body (default append template + bindings).  |
-| `disconnectedCallback`     | Element removed           | Collects clean-up blocks (e.g., `EVENT` handlers).        |
+| `disconnectedCallback`     | Element removed           | Disposes runtime effects owned by the component.          |
 | `attributeChangedCallback` | Observed attribute change | Bridges attributes to properties; invokes bindings.       |
 
 ### State & Reactivity
@@ -76,6 +76,7 @@ badge.labelText = 'Synced';
 
 - `<event target="#btn" type="click">` attaches listeners within the component’s shadow tree. Handlers execute HTMS child tags with `this` bound to the component instance.
 - `<submit>` reuses event semantics with `preventDefault` injected automatically.
+- `<effect>` and `<fetch>` register component-owned runtime effects. Generated components dispose those effects immediately when disconnected, including cleanup callbacks and in-flight fetch abort handlers.
 
 ## Control Flow Translation
 

@@ -1,5 +1,13 @@
 import { parseHTML } from '../../src/parser';
 
+interface HtmsTestWindow extends Window {
+  __htms?: {
+    effects: unknown[];
+  };
+  __effectRuns?: number;
+  __effectCleanupCount?: number;
+}
+
 describe('Component compiler', () => {
   const compile = (markup: string): string => {
     const result = parseHTML(markup, { mode: 'component' });
@@ -16,7 +24,16 @@ describe('Component compiler', () => {
 
   afterEach(() => {
     document.body.innerHTML = '';
+    const testWindow = window as HtmsTestWindow;
+    delete testWindow.__htms;
+    delete testWindow.__effectRuns;
+    delete testWindow.__effectCleanupCount;
   });
+
+  const flushRuntime = async (): Promise<void> => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
 
   it('initialises state variables via __htmsInitState', () => {
     const code = compile(`
@@ -288,6 +305,34 @@ describe('Component compiler', () => {
     expect(code).toContain('}(this));');
     expect(code).toContain("target['state']");
     expect(code).toContain('this.render();');
+  });
+
+  it('disposes component-owned runtime effects on disconnect', async () => {
+    const code = compile(`
+      <component name="cleanup-box">
+        <effect
+          run="window.__effectRuns = (window.__effectRuns || 0) + 1"
+          cleanup="window.__effectCleanupCount = (window.__effectCleanupCount || 0) + 1">
+        </effect>
+      </component>
+    `);
+
+    expect(code).toContain('disposeEffectsFor(this)');
+
+    execute(code);
+
+    const element = document.createElement('cleanup-box');
+    document.body.appendChild(element);
+    await flushRuntime();
+
+    const testWindow = window as HtmsTestWindow;
+    expect(testWindow.__effectRuns).toBe(1);
+    expect(testWindow.__htms?.effects).toHaveLength(1);
+
+    element.remove();
+
+    expect(testWindow.__effectCleanupCount).toBe(1);
+    expect(testWindow.__htms?.effects).toHaveLength(0);
   });
 
   it('rejects documents without a component root', () => {

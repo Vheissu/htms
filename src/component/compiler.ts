@@ -518,6 +518,9 @@ ${inputInitialization ? `${inputInitialization}\n` : ''}  }
 
   disconnectedCallback() {
     this.__htmsConnected = false;
+    if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
+      window.__htms.disposeEffectsFor(this);
+    }
   }
 
   render() {

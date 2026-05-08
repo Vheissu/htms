@@ -42,6 +42,7 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
 - Parses HTMS markup with JSDOM, converts nodes to directives via tag handlers, validates with Esprima, then emits JavaScript through Escodegen.
 - A security pass rejects dangerous constructs (`eval`, inline handlers, raw `innerHTML`, path traversal, …).
 - In component mode, standard elements become cached template fragments, while control/state tags compile into instructions that mutate the component instance and re-render the shadow DOM.
+- Component-owned runtime effects are disposed in `disconnectedCallback`, so cleanup handlers and fetch aborts run when elements leave the page.
 
 ## Tag Glossary (HTML‑first)
 
