@@ -9,6 +9,15 @@ describe('Component compiler', () => {
     return result.code;
   };
 
+  const execute = (code: string): void => {
+    const runnable = code.replace(/export\s*\{[\s\S]*?\};?\s*$/m, '');
+    new Function(runnable)();
+  };
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
   it('initialises state variables via __htmsInitState', () => {
     const code = compile(`
       <component name="state-box">
@@ -57,8 +66,52 @@ describe('Component compiler', () => {
         </repeat>
       </component>
     `);
-    expect(code).toContain('for (let i = 0; i < items.length');
+    expect(code).toContain('Array.isArray');
+    expect(code).toContain('for (let i = 0; i < _items');
     expect(code).toContain('const _frag');
+  });
+
+  it('interpolates repeat item and index tokens in component templates', () => {
+    const code = compile(`
+      <component name="repeat-text-box" props="items">
+        <repeat variable="this.items" index="i">
+          <p data-id="{item.id}" aria-label="Row {i}: {item.name}">{i}: {item.name}</p>
+        </repeat>
+      </component>
+    `);
+
+    execute(code);
+
+    const emptyElement = document.createElement(
+      'repeat-text-box'
+    ) as HTMLElement & {
+      shadowRoot: ShadowRoot;
+    };
+    document.body.appendChild(emptyElement);
+    expect(emptyElement.shadowRoot.querySelectorAll('p')).toHaveLength(0);
+    document.body.innerHTML = '';
+
+    const element = document.createElement('repeat-text-box') as HTMLElement & {
+      items: Array<{ id: string; name: string }>;
+      shadowRoot: ShadowRoot;
+    };
+    element.items = [
+      { id: 'a1', name: 'Alpha' },
+      { id: 'b2', name: 'Beta' },
+    ];
+    document.body.appendChild(element);
+
+    const rows = Array.from(element.shadowRoot.querySelectorAll('p')).map(
+      (node) => ({
+        text: node.textContent,
+        id: node.getAttribute('data-id'),
+        label: node.getAttribute('aria-label'),
+      })
+    );
+    expect(rows).toEqual([
+      { text: '0: Alpha', id: 'a1', label: 'Row 0: Alpha' },
+      { text: '1: Beta', id: 'b2', label: 'Row 1: Beta' },
+    ]);
   });
 
   it('handles switch/case branches', () => {
@@ -96,8 +149,8 @@ describe('Component compiler', () => {
         <else><div class="c"></div></else>
       </component>
     `);
-    expect(code).toContain('if (this.mode === \'a\')');
-    expect(code).toContain('if (this.mode === \'b\')');
+    expect(code).toContain("if (this.mode === 'a')");
+    expect(code).toContain("if (this.mode === 'b')");
   });
 
   it('emits while directives with guards', () => {
@@ -145,6 +198,46 @@ describe('Component compiler', () => {
     `);
     expect(code).toContain("addEventListener('input'");
     expect(code).toContain("this.__htmsSetState(['name']");
+  });
+
+  it('reflects observed attributes into reactive component properties', () => {
+    const code = compile(`
+      <component name="input-prop-box" props="labelText" observed="label-text">
+        <span id="label"></span>
+        <bind selector="#label" prop="textContent" expr="this.labelText"></bind>
+      </component>
+    `);
+
+    expect(code).not.toContain('this as any');
+    expect(code).toContain('static get observedAttributes()');
+    expect(code).toContain("return ['label-text'];");
+    expect(code).toContain(
+      "this.__htmsDefineInputProperty('labelText', 'label-text');"
+    );
+
+    execute(code);
+
+    const element = document.createElement('input-prop-box') as HTMLElement & {
+      labelText: string;
+      shadowRoot: ShadowRoot;
+    };
+    element.setAttribute('label-text', 'Initial');
+    document.body.appendChild(element);
+
+    expect(element.shadowRoot.querySelector('#label')?.textContent).toBe(
+      'Initial'
+    );
+
+    element.setAttribute('label-text', 'From attribute');
+    expect(element.labelText).toBe('From attribute');
+    expect(element.shadowRoot.querySelector('#label')?.textContent).toBe(
+      'From attribute'
+    );
+
+    element.labelText = 'From property';
+    expect(element.shadowRoot.querySelector('#label')?.textContent).toBe(
+      'From property'
+    );
   });
 
   it('creates visibility directives for toggle', () => {

@@ -15,15 +15,18 @@ import {
   ClassDirective,
   StyleDirective,
   StateDirective,
-  TemplateNode
+  TemplateNode,
 } from './ir';
-import { serializeTemplateNodes, templateNodesToHTML } from './template-serializer';
+import {
+  serializeTemplateNodes,
+  templateNodesToHTML,
+} from './template-serializer';
 import {
   CompilerError,
   CompilerWarning,
   ParseOptions,
   ComponentCompileResult,
-  ComponentArtifact
+  ComponentArtifact,
 } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
@@ -34,6 +37,12 @@ interface ComponentMetadata {
   shadowMode: 'open' | 'closed' | 'none';
   props: string[];
   observedAttributes: string[];
+  inputs: ComponentInput[];
+}
+
+interface ComponentInput {
+  propName: string;
+  attributeName: string;
 }
 
 const SHADOW_MODES = new Set(['open', 'closed', 'none']);
@@ -49,7 +58,11 @@ function containsState(directives?: DirectiveNode[]): boolean {
         break;
       case 'condition':
         if (containsState(directive.whenTrue.directives)) return true;
-        if (directive.whenFalse && containsState(directive.whenFalse.directives)) return true;
+        if (
+          directive.whenFalse &&
+          containsState(directive.whenFalse.directives)
+        )
+          return true;
         break;
       case 'event':
         if (containsState(directive.directives)) return true;
@@ -68,15 +81,23 @@ function containsState(directives?: DirectiveNode[]): boolean {
       case 'style':
         break;
       case 'switch':
-        if (directive.cases.some(c => containsState(c.directives))) return true;
-        if (directive.defaultCase && containsState(directive.defaultCase.directives)) return true;
+        if (directive.cases.some((c) => containsState(c.directives)))
+          return true;
+        if (
+          directive.defaultCase &&
+          containsState(directive.defaultCase.directives)
+        )
+          return true;
         break;
     }
   }
   return false;
 }
 
-export function compileComponents(htmlContent: string, options: ParseOptions = {}): ComponentCompileResult {
+export function compileComponents(
+  htmlContent: string,
+  options: ParseOptions = {}
+): ComponentCompileResult {
   const dom = new JSDOM(htmlContent);
   const bodyChildren = Array.from(dom.window.document.body.children);
   const componentSnippets: string[] = [];
@@ -87,7 +108,8 @@ export function compileComponents(htmlContent: string, options: ParseOptions = {
   if (bodyChildren.length === 0) {
     errors.push({
       type: 'validation',
-      message: 'No root elements found. Expected at least one <component> element.'
+      message:
+        'No root elements found. Expected at least one <component> element.',
     });
     return { success: false, errors, warnings, components: [] };
   }
@@ -97,7 +119,7 @@ export function compileComponents(htmlContent: string, options: ParseOptions = {
       errors.push({
         type: 'validation',
         message: `Root element <${child.tagName.toLowerCase()}> is not allowed. Wrap markup in a <component> root.`,
-        tag: child.tagName
+        tag: child.tagName,
       });
       continue;
     }
@@ -119,7 +141,7 @@ export function compileComponents(htmlContent: string, options: ParseOptions = {
   if (!joinedCode.trim()) {
     errors.push({
       type: 'runtime',
-      message: 'Component compilation produced no output'
+      message: 'Component compilation produced no output',
     });
     return { success: false, errors, warnings, components: [] };
   }
@@ -129,7 +151,7 @@ export function compileComponents(htmlContent: string, options: ParseOptions = {
     code: joinedCode,
     components: artifacts,
     errors,
-    warnings
+    warnings,
   };
 }
 
@@ -140,7 +162,10 @@ interface ComponentCompileInternalResult {
   artifact?: ComponentArtifact;
 }
 
-function compileComponentElement(element: Element, options: ParseOptions): ComponentCompileInternalResult {
+function compileComponentElement(
+  element: Element,
+  options: ParseOptions
+): ComponentCompileInternalResult {
   const errors: CompilerError[] = [];
   const warnings: CompilerWarning[] = [];
 
@@ -150,11 +175,11 @@ function compileComponentElement(element: Element, options: ParseOptions): Compo
   }
 
   const renderTargetVar = 'componentRoot';
-  const { ir: renderIR, errors: renderErrors, warnings: renderWarnings } = elementsToComponentCode(
-    element,
-    renderTargetVar,
-    options
-  );
+  const {
+    ir: renderIR,
+    errors: renderErrors,
+    warnings: renderWarnings,
+  } = elementsToComponentCode(element, renderTargetVar, options);
 
   errors.push(...renderErrors);
   warnings.push(...renderWarnings);
@@ -170,7 +195,7 @@ function compileComponentElement(element: Element, options: ParseOptions): Compo
   CompilerLogger.logInfo('Component compiled', {
     component: metadata.tagName,
     className: metadata.className,
-    shadowMode: metadata.shadowMode
+    shadowMode: metadata.shadowMode,
   });
 
   return {
@@ -181,8 +206,8 @@ function compileComponentElement(element: Element, options: ParseOptions): Compo
       name: metadata.tagName,
       className: metadata.className,
       tagName: metadata.tagName,
-      code: [classCode, registrationCode, exportCode].join('\n\n')
-    }
+      code: [classCode, registrationCode, exportCode].join('\n\n'),
+    },
   };
 }
 
@@ -195,7 +220,7 @@ function readComponentMetadata(
   if (!nameAttr) {
     errors.push({
       type: 'validation',
-      message: '<component> requires a "name" attribute'
+      message: '<component> requires a "name" attribute',
     });
     return null;
   }
@@ -204,12 +229,15 @@ function readComponentMetadata(
   if (!tagName.includes('-')) {
     errors.push({
       type: 'validation',
-      message: `Component name "${tagName}" must include a hyphen`
+      message: `Component name "${tagName}" must include a hyphen`,
     });
     return null;
   }
 
-  const nameValidationErrors = SecurityValidator.validateHtmlAttribute('component', tagName);
+  const nameValidationErrors = SecurityValidator.validateHtmlAttribute(
+    'component',
+    tagName
+  );
   if (nameValidationErrors.length > 0) {
     errors.push(...nameValidationErrors);
     return null;
@@ -221,26 +249,39 @@ function readComponentMetadata(
   if (!SHADOW_MODES.has(shadowAttr)) {
     warnings.push({
       message: `Invalid shadow mode "${shadowAttr}" on component "${tagName}". Defaulting to "open".`,
-      tag: 'COMPONENT'
+      tag: 'COMPONENT',
     });
   }
-  const shadowMode = SHADOW_MODES.has(shadowAttr) ? (shadowAttr as 'open' | 'closed' | 'none') : 'open';
+  const shadowMode = SHADOW_MODES.has(shadowAttr)
+    ? (shadowAttr as 'open' | 'closed' | 'none')
+    : 'open';
 
-  const props = parseNameList(element.getAttribute('props'), errors, 'property');
-  const observedAttributes = parseAttributeList(element.getAttribute('observed'), errors);
+  const props = parseNameList(
+    element.getAttribute('props'),
+    errors,
+    'property'
+  );
+  const observedAttributes = parseAttributeList(
+    element.getAttribute('observed'),
+    errors
+  );
+  const inputs = resolveComponentInputs(props, observedAttributes, errors);
 
   return {
     tagName,
     className,
     shadowMode,
     props,
-    observedAttributes
+    observedAttributes,
+    inputs,
   };
 }
 
 function toClassName(tagName: string): string {
   const segments = tagName.split(/[-_]/).filter(Boolean);
-  const pascal = segments.map(segment => segment.charAt(0).toUpperCase() + segment.slice(1)).join('');
+  const pascal = segments
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join('');
   return `${pascal || 'Component'}Component`;
 }
 
@@ -257,9 +298,9 @@ function parseNameList(
     const idErrors = SecurityValidator.validateJavaScriptIdentifier(trimmed);
     if (idErrors.length > 0) {
       errors.push(
-        ...idErrors.map(error => ({
+        ...idErrors.map((error) => ({
           ...error,
-          message: `${descriptor} "${trimmed}" is invalid: ${error.message}`
+          message: `${descriptor} "${trimmed}" is invalid: ${error.message}`,
         }))
       );
       continue;
@@ -269,42 +310,119 @@ function parseNameList(
   return identifiers;
 }
 
-function parseAttributeList(value: string | null, errors: CompilerError[]): string[] {
+function parseAttributeList(
+  value: string | null,
+  errors: CompilerError[]
+): string[] {
   if (!value) return [];
-  const attrs: string[] = [];
+  const attrs = new Set<string>();
   for (const raw of value.split(',')) {
     const trimmed = raw.trim();
     if (!trimmed) continue;
-    const validationErrors = SecurityValidator.validateHtmlAttribute(trimmed, '');
+    const validationErrors = SecurityValidator.validateHtmlAttribute(
+      trimmed,
+      ''
+    );
     if (validationErrors.length > 0) {
       errors.push(
-        ...validationErrors.map(error => ({
+        ...validationErrors.map((error) => ({
           ...error,
-          message: `Observed attribute "${trimmed}" is invalid: ${error.message}`
+          message: `Observed attribute "${trimmed}" is invalid: ${error.message}`,
         }))
       );
       continue;
     }
-    attrs.push(trimmed);
+    attrs.add(trimmed);
   }
-  return attrs;
+  return Array.from(attrs);
 }
 
-function buildComponentClass(metadata: ComponentMetadata, renderIR: ComponentIR, renderTargetVar: string): string {
+function toAttributeName(propName: string): string {
+  return propName.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+function toPropertyName(attributeName: string): string {
+  return attributeName.replace(/-([a-z0-9])/g, (_, char: string) =>
+    char.toUpperCase()
+  );
+}
+
+function resolveComponentInputs(
+  props: string[],
+  observedAttributes: string[],
+  errors: CompilerError[]
+): ComponentInput[] {
+  const inputs = new Map<string, ComponentInput>();
+
+  for (const propName of props) {
+    inputs.set(propName, {
+      propName,
+      attributeName: toAttributeName(propName),
+    });
+  }
+
+  for (const attributeName of observedAttributes) {
+    const matchingProp = props.find(
+      (prop) =>
+        prop === attributeName || toAttributeName(prop) === attributeName
+    );
+    const propName = matchingProp ?? toPropertyName(attributeName);
+    const propErrors = SecurityValidator.validateJavaScriptIdentifier(propName);
+
+    if (propErrors.length > 0) {
+      errors.push(
+        ...propErrors.map((error) => ({
+          ...error,
+          message: `Observed attribute "${attributeName}" cannot be reflected to property "${propName}": ${error.message}`,
+        }))
+      );
+      continue;
+    }
+
+    if (!inputs.has(propName)) {
+      inputs.set(propName, {
+        propName,
+        attributeName,
+      });
+      continue;
+    }
+
+    const existing = inputs.get(propName);
+    if (existing) {
+      existing.attributeName = attributeName;
+    }
+  }
+
+  return Array.from(inputs.values());
+}
+
+function buildComponentClass(
+  metadata: ComponentMetadata,
+  renderIR: ComponentIR,
+  renderTargetVar: string
+): string {
   const observedGetter =
     metadata.observedAttributes.length > 0
       ? `  static get observedAttributes() { return ${JSON.stringify(metadata.observedAttributes)}; }`
       : '';
 
-  const propsInitialization =
-    metadata.props.length > 0
-      ? metadata.props
+  const inputInitialization =
+    metadata.inputs.length > 0
+      ? metadata.inputs
           .map(
-            prop =>
-              `    if (!(this as any).hasOwnProperty('${prop}')) {\n      (this as any)['${prop}'] = this.getAttribute('${prop}') ?? null;\n    }`
+            (input) =>
+              `    this.__htmsDefineInputProperty(${JSON.stringify(input.propName)}, ${JSON.stringify(input.attributeName)});`
           )
           .join('\n')
       : '';
+
+  const inputMap =
+    metadata.inputs.length > 0
+      ? metadata.inputs.reduce<Record<string, string>>((map, input) => {
+          map[input.attributeName] = input.propName;
+          return map;
+        }, {})
+      : {};
 
   const shadowInit =
     metadata.shadowMode === 'none'
@@ -317,16 +435,24 @@ function buildComponentClass(metadata: ComponentMetadata, renderIR: ComponentIR,
     if (oldValue === newValue) {
       return;
     }
-    this.render();
+    const reflected = this.__htmsSetInputFromAttribute(name, newValue);
+    if (!reflected && this.__htmsConnected) {
+      this.render();
+    }
   }`
       : '';
 
-  const lifecycleExtras = [observedGetter, attributeChanged].filter(section => section.length > 0);
-  const lifecycleSection = lifecycleExtras.length > 0 ? `\n\n${lifecycleExtras.join('\n\n')}\n` : '\n';
+  const lifecycleExtras = [observedGetter, attributeChanged].filter(
+    (section) => section.length > 0
+  );
+  const lifecycleSection =
+    lifecycleExtras.length > 0 ? `\n\n${lifecycleExtras.join('\n\n')}\n` : '\n';
 
   const templateHTML = templateNodesToHTML(renderIR.templateNodes);
   const hasStaticTemplate = templateHTML.trim().length > 0;
-  const templateStatements = hasStaticTemplate ? '' : serializeTemplateNodes(renderIR.templateNodes, renderTargetVar);
+  const templateStatements = hasStaticTemplate
+    ? ''
+    : serializeTemplateNodes(renderIR.templateNodes, renderTargetVar);
 
   const renderLines: string[] = [
     `    const root = this.__htmsRoot || this;`,
@@ -336,11 +462,13 @@ function buildComponentClass(metadata: ComponentMetadata, renderIR: ComponentIR,
     `    const ${renderTargetVar} = root;`,
     `    while (${renderTargetVar}.firstChild) {`,
     `      ${renderTargetVar}.removeChild(${renderTargetVar}.firstChild);`,
-    `    }`
+    `    }`,
   ];
 
   if (hasStaticTemplate) {
-    renderLines.push(`    const staticFragment = ${metadata.className}.__htmsTemplate.content.cloneNode(true);`);
+    renderLines.push(
+      `    const staticFragment = ${metadata.className}.__htmsTemplate.content.cloneNode(true);`
+    );
     renderLines.push(`    ${renderTargetVar}.appendChild(staticFragment);`);
   } else if (templateStatements.trim().length > 0) {
     for (const line of templateStatements.split('\n')) {
@@ -352,7 +480,12 @@ function buildComponentClass(metadata: ComponentMetadata, renderIR: ComponentIR,
   const directiveCounter = { value: 0 };
   const hasStateDirectives = containsState(renderIR.directives);
   for (const directive of renderIR.directives) {
-    const directiveLines = renderDirective(directive, renderTargetVar, directiveCounter, '    ');
+    const directiveLines = renderDirective(
+      directive,
+      renderTargetVar,
+      directiveCounter,
+      '    '
+    );
     renderLines.push(...directiveLines);
   }
 
@@ -360,20 +493,32 @@ function buildComponentClass(metadata: ComponentMetadata, renderIR: ComponentIR,
     ? `  static get __htmsTemplate() {\n    if (!this.__templateCache) {\n      const template = document.createElement('template');\n      template.innerHTML = ${JSON.stringify(templateHTML)};\n      this.__templateCache = template;\n    }\n    return this.__templateCache;\n  }\n\n`
     : '';
 
+  const inputHelpers =
+    metadata.inputs.length > 0
+      ? `  static get __htmsInputMap() {\n    return ${JSON.stringify(inputMap)};\n  }\n\n  __htmsDefineInputProperty(propName, attributeName) {\n    const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);\n    const ownValue = hadOwnValue ? this[propName] : undefined;\n    if (hadOwnValue) {\n      delete this[propName];\n    }\n\n    Object.defineProperty(this, propName, {\n      configurable: true,\n      enumerable: true,\n      get: () => this.__htmsProps[propName],\n      set: value => {\n        const previous = this.__htmsProps[propName];\n        if (Object.is(previous, value)) {\n          return;\n        }\n        this.__htmsProps[propName] = value;\n        if (this.__htmsConnected) {\n          this.render();\n        }\n      }\n    });\n\n    if (hadOwnValue) {\n      this.__htmsProps[propName] = ownValue;\n      return;\n    }\n\n    if (this.hasAttribute(attributeName)) {\n      this.__htmsProps[propName] = this.getAttribute(attributeName);\n      return;\n    }\n\n    this.__htmsProps[propName] = null;\n  }\n\n  __htmsSetInputFromAttribute(name, value) {\n    const propName = this.constructor.__htmsInputMap[name];\n    if (!propName) {\n      return false;\n    }\n    this[propName] = value;\n    return true;\n  }\n\n`
+      : '';
+
   const stateHelpers = hasStateDirectives
     ? `  __htmsResolvePath(path) {\n    if (!Array.isArray(path) || path.length === 0) {\n      throw new Error('Invalid state path');\n    }\n    let ref = this;\n    for (let i = 0; i < path.length - 1; i++) {\n      const key = path[i];\n      const next = ref[key];\n      if (next === undefined || next === null || typeof next !== 'object') {\n        ref[key] = {};\n      }\n      ref = ref[key];\n    }\n    return { target: ref, key: path[path.length - 1] };\n  }\n\n  __htmsInitState(path, initializer) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (!Object.prototype.hasOwnProperty.call(target, key)) {\n      target[key] = initializer();\n    }\n  }\n\n  __htmsSetState(path, op, valueFactory) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (op === '++') {\n      const current = typeof target[key] === 'number' ? target[key] : 0;\n      target[key] = current + 1;\n      return;\n    }\n    if (op === '--') {\n      const current = typeof target[key] === 'number' ? target[key] : 0;\n      target[key] = current - 1;\n      return;\n    }\n    const current = target[key];\n    const value = valueFactory();\n    switch (op) {\n      case '+=':\n        target[key] = (typeof current === 'number' ? current : 0) + value;\n        break;\n      case '-=':\n        target[key] = (typeof current === 'number' ? current : 0) - value;\n        break;\n      case '*=':\n        target[key] = (typeof current === 'number' ? current : 0) * value;\n        break;\n      case '/=':\n        target[key] = (typeof current === 'number' ? current : 0) / value;\n        break;\n      default:\n        target[key] = value;\n    }\n  }\n\n  __htmsEnsureArray(path) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (!Array.isArray(target[key])) {\n      target[key] = [];\n    }\n    return target[key];\n  }\n\n  __htmsPushState(path, valueFactory) {\n    const arr = this.__htmsEnsureArray(path);\n    arr.push(valueFactory());\n  }\n\n  __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory) {\n    const arr = this.__htmsEnsureArray(path);\n    const index = indexFactory();\n    const del = deleteFactory();\n    const values = valuesFactory();\n    arr.splice(index, del, ...values);\n  }\n\n`
     : '';
 
   return `class ${metadata.className} extends HTMLElement {
-${staticTemplateProperty}${stateHelpers}  constructor() {
+${staticTemplateProperty}${inputHelpers}${stateHelpers}  constructor() {
     super();
     this.__htmsRoot = null;
+    this.__htmsProps = Object.create(null);
+    this.__htmsConnected = false;
 ${shadowInit}
-${propsInitialization ? `${propsInitialization}\n` : ''}  }
+${inputInitialization ? `${inputInitialization}\n` : ''}  }
 
   connectedCallback() {
+    this.__htmsConnected = true;
     this.render();
   }${lifecycleSection}
+
+  disconnectedCallback() {
+    this.__htmsConnected = false;
+  }
 
   render() {
 ${renderLines.join('\n')}
@@ -385,25 +530,44 @@ function renderDirective(
   directive: DirectiveNode,
   targetVar: string,
   counter: { value: number },
-  indent: string
+  indent: string,
+  scopeVars: string[] = []
 ): string[] {
   if (directive.kind === 'statement') {
     return directive.code
       .split('\n')
-      .filter(line => line.trim().length > 0)
-      .map(line => `${indent}${line}`);
+      .filter((line) => line.trim().length > 0)
+      .map((line) => `${indent}${line}`);
   }
 
   if (directive.kind === 'loop') {
-    return renderLoopDirective(directive, targetVar, counter, indent);
+    return renderLoopDirective(
+      directive,
+      targetVar,
+      counter,
+      indent,
+      scopeVars
+    );
   }
 
   if (directive.kind === 'condition') {
-    return renderConditionDirective(directive, targetVar, counter, indent);
+    return renderConditionDirective(
+      directive,
+      targetVar,
+      counter,
+      indent,
+      scopeVars
+    );
   }
 
   if (directive.kind === 'event') {
-    return renderEventDirective(directive, targetVar, counter, indent);
+    return renderEventDirective(
+      directive,
+      targetVar,
+      counter,
+      indent,
+      scopeVars
+    );
   }
 
   if (directive.kind === 'visibility') {
@@ -411,11 +575,23 @@ function renderDirective(
   }
 
   if (directive.kind === 'switch') {
-    return renderSwitchDirective(directive, targetVar, counter, indent);
+    return renderSwitchDirective(
+      directive,
+      targetVar,
+      counter,
+      indent,
+      scopeVars
+    );
   }
 
   if (directive.kind === 'while') {
-    return renderWhileDirective(directive, targetVar, counter, indent);
+    return renderWhileDirective(
+      directive,
+      targetVar,
+      counter,
+      indent,
+      scopeVars
+    );
   }
 
   if (directive.kind === 'class') {
@@ -431,7 +607,13 @@ function renderDirective(
   }
 
   if (directive.kind === 'append') {
-    return renderAppendDirective(directive, targetVar, counter, indent);
+    return renderAppendDirective(
+      directive,
+      targetVar,
+      counter,
+      indent,
+      scopeVars
+    );
   }
 
   if (directive.kind === 'bind') {
@@ -449,32 +631,55 @@ function renderLoopDirective(
   directive: LoopDirective,
   targetVar: string,
   counter: { value: number },
-  indent: string
+  indent: string,
+  scopeVars: string[]
 ): string[] {
   const lines: string[] = [];
   const fragmentVar = `_frag${counter.value++}`;
   const innerIndent = `${indent}  `;
+  const loopScopeVars = [...scopeVars];
 
   if (directive.mode === 'array') {
+    const rawSourceVar = `_source${counter.value++}`;
+    const arraySourceVar = `_items${counter.value++}`;
+    lines.push(`${indent}const ${rawSourceVar} = ${directive.source};`);
+    lines.push(
+      `${indent}const ${arraySourceVar} = Array.isArray(${rawSourceVar}) ? ${rawSourceVar} : [];`
+    );
+
+    loopScopeVars.push(directive.itemVar);
     if (directive.indexVar) {
+      loopScopeVars.push(directive.indexVar);
       lines.push(
-        `${indent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${directive.source}.length; ${directive.indexVar}++) {`
+        `${indent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${arraySourceVar}.length; ${directive.indexVar}++) {`
       );
       lines.push(
-        `${innerIndent}const ${directive.itemVar} = ${directive.source}[${directive.indexVar}];`
+        `${innerIndent}const ${directive.itemVar} = ${arraySourceVar}[${directive.indexVar}];`
       );
     } else {
-      lines.push(`${indent}for (const ${directive.itemVar} of ${directive.source}) {`);
+      lines.push(
+        `${indent}for (const ${directive.itemVar} of ${arraySourceVar}) {`
+      );
     }
   } else {
+    loopScopeVars.push(directive.indexVar);
     lines.push(
       `${indent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${directive.count}; ${directive.indexVar}++) {`
     );
   }
 
-  lines.push(`${innerIndent}const ${fragmentVar} = document.createDocumentFragment();`);
   lines.push(
-    ...fillFragment(fragmentVar, directive.template, directive.directives, counter, innerIndent)
+    `${innerIndent}const ${fragmentVar} = document.createDocumentFragment();`
+  );
+  lines.push(
+    ...fillFragment(
+      fragmentVar,
+      directive.template,
+      directive.directives,
+      counter,
+      innerIndent,
+      loopScopeVars
+    )
   );
   lines.push(`${innerIndent}${targetVar}.appendChild(${fragmentVar});`);
   lines.push(`${indent}}`);
@@ -485,16 +690,26 @@ function renderConditionDirective(
   directive: ConditionDirective,
   targetVar: string,
   counter: { value: number },
-  indent: string
+  indent: string,
+  scopeVars: string[]
 ): string[] {
   const lines: string[] = [];
   const trueFragment = `_frag${counter.value++}`;
   const trueIndent = `${indent}  `;
 
   lines.push(`${indent}if (${directive.condition}) {`);
-  lines.push(`${trueIndent}const ${trueFragment} = document.createDocumentFragment();`);
   lines.push(
-    ...fillFragment(trueFragment, directive.whenTrue.template, directive.whenTrue.directives, counter, trueIndent)
+    `${trueIndent}const ${trueFragment} = document.createDocumentFragment();`
+  );
+  lines.push(
+    ...fillFragment(
+      trueFragment,
+      directive.whenTrue.template,
+      directive.whenTrue.directives,
+      counter,
+      trueIndent,
+      scopeVars
+    )
   );
 
   lines.push(`${trueIndent}${targetVar}.appendChild(${trueFragment});`);
@@ -503,9 +718,18 @@ function renderConditionDirective(
   if (directive.whenFalse) {
     const falseFragment = `_frag${counter.value++}`;
     lines.push(`${indent}else {`);
-    lines.push(`${trueIndent}const ${falseFragment} = document.createDocumentFragment();`);
     lines.push(
-      ...fillFragment(falseFragment, directive.whenFalse.template, directive.whenFalse.directives, counter, trueIndent)
+      `${trueIndent}const ${falseFragment} = document.createDocumentFragment();`
+    );
+    lines.push(
+      ...fillFragment(
+        falseFragment,
+        directive.whenFalse.template,
+        directive.whenFalse.directives,
+        counter,
+        trueIndent,
+        scopeVars
+      )
     );
 
     lines.push(`${trueIndent}${targetVar}.appendChild(${falseFragment});`);
@@ -519,7 +743,8 @@ function renderEventDirective(
   directive: EventDirective,
   targetVar: string,
   counter: { value: number },
-  indent: string
+  indent: string,
+  scopeVars: string[]
 ): string[] {
   const lines: string[] = [];
   const handlerVar = `_handler${counter.value++}`;
@@ -527,7 +752,9 @@ function renderEventDirective(
   const bodyIndent = `${innerIndent}    `;
 
   lines.push(`${indent}{`);
-  lines.push(`${innerIndent}const eventTargets = ${targetVar}.querySelectorAll(${JSON.stringify(directive.selector)});`);
+  lines.push(
+    `${innerIndent}const eventTargets = ${targetVar}.querySelectorAll(${JSON.stringify(directive.selector)});`
+  );
   lines.push(`${innerIndent}eventTargets.forEach(targetEl => {`);
   lines.push(`${bodyIndent}const ${handlerVar} = (event) => {`);
   if (directive.body.length > 0) {
@@ -539,14 +766,24 @@ function renderEventDirective(
   }
   if (directive.directives) {
     for (const nested of directive.directives) {
-      lines.push(...renderDirective(nested, targetVar, counter, `${bodyIndent}  `));
+      lines.push(
+        ...renderDirective(
+          nested,
+          targetVar,
+          counter,
+          `${bodyIndent}  `,
+          scopeVars
+        )
+      );
     }
   }
   if (directive.directives && containsState(directive.directives)) {
     lines.push(`${bodyIndent}  this.render();`);
   }
   lines.push(`${bodyIndent}};`);
-  lines.push(`${bodyIndent}targetEl.addEventListener(${JSON.stringify(directive.eventType)}, ${handlerVar});`);
+  lines.push(
+    `${bodyIndent}targetEl.addEventListener(${JSON.stringify(directive.eventType)}, ${handlerVar});`
+  );
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
 
@@ -565,12 +802,18 @@ function renderVisibilityDirective(
   const selector = JSON.stringify(directive.selector);
 
   lines.push(`${indent}{`);
-  lines.push(`${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`);
+  lines.push(
+    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
+  );
   lines.push(`${innerIndent}targets.forEach(node => {`);
   if (directive.mode === 'toggle') {
-    lines.push(`${innerIndent}  node.style.display = (${condition}) ? '' : 'none';`);
+    lines.push(
+      `${innerIndent}  node.style.display = (${condition}) ? '' : 'none';`
+    );
   } else {
-    lines.push(`${innerIndent}  node.style.display = (${condition}) ? '' : 'none';`);
+    lines.push(
+      `${innerIndent}  node.style.display = (${condition}) ? '' : 'none';`
+    );
   }
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
@@ -591,14 +834,16 @@ function renderAttributeDirective(
   const value = directive.value;
 
   lines.push(`${indent}{`);
-  lines.push(`${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`);
+  lines.push(
+    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
+  );
   lines.push(`${innerIndent}targets.forEach(node => {`);
   if (directive.target === 'attribute') {
     lines.push(`${innerIndent}  node.setAttribute(${name}, ${value});`);
   } else {
     if (directive.path && directive.path.length > 1) {
       const pathAccess = directive.path
-        .map(segment => `['${segment}']`)
+        .map((segment) => `['${segment}']`)
         .join('');
       lines.push(`${innerIndent}  node${pathAccess} = ${value};`);
     } else {
@@ -615,7 +860,8 @@ function renderSwitchDirective(
   directive: SwitchDirective,
   targetVar: string,
   counter: { value: number },
-  indent: string
+  indent: string,
+  scopeVars: string[]
 ): string[] {
   const lines: string[] = [];
   const switchVar = `_switch${counter.value++}`;
@@ -627,9 +873,18 @@ function renderSwitchDirective(
     const condition = `${switchVar} === ${caseBlock.value}`;
     lines.push(`${indent}${index === 0 ? 'if' : 'else if'} (${condition}) {`);
     const fragmentVar = `_frag${counter.value++}`;
-    lines.push(`${branchIndent}const ${fragmentVar} = document.createDocumentFragment();`);
     lines.push(
-      ...fillFragment(fragmentVar, caseBlock.template, caseBlock.directives, counter, branchIndent)
+      `${branchIndent}const ${fragmentVar} = document.createDocumentFragment();`
+    );
+    lines.push(
+      ...fillFragment(
+        fragmentVar,
+        caseBlock.template,
+        caseBlock.directives,
+        counter,
+        branchIndent,
+        scopeVars
+      )
     );
     lines.push(`${branchIndent}${targetVar}.appendChild(${fragmentVar});`);
     lines.push(`${indent}}`);
@@ -638,14 +893,17 @@ function renderSwitchDirective(
   if (directive.defaultCase) {
     const fragmentVar = `_frag${counter.value++}`;
     lines.push(`${indent}else {`);
-    lines.push(`${branchIndent}const ${fragmentVar} = document.createDocumentFragment();`);
+    lines.push(
+      `${branchIndent}const ${fragmentVar} = document.createDocumentFragment();`
+    );
     lines.push(
       ...fillFragment(
         fragmentVar,
         directive.defaultCase.template,
         directive.defaultCase.directives,
         counter,
-        branchIndent
+        branchIndent,
+        scopeVars
       )
     );
     lines.push(`${branchIndent}${targetVar}.appendChild(${fragmentVar});`);
@@ -659,7 +917,8 @@ function renderWhileDirective(
   directive: WhileDirective,
   targetVar: string,
   counter: { value: number },
-  indent: string
+  indent: string,
+  scopeVars: string[]
 ): string[] {
   const lines: string[] = [];
   const guardVar = `_guard${counter.value++}`;
@@ -673,9 +932,18 @@ function renderWhileDirective(
   lines.push(
     `${loopIndent}if (${guardVar}++ >= ${directive.maxIterations}) { console.warn('WHILE exceeded max iterations'); break; }`
   );
-  lines.push(`${loopIndent}const ${fragmentVar} = document.createDocumentFragment();`);
   lines.push(
-    ...fillFragment(fragmentVar, directive.template, directive.directives, counter, loopIndent)
+    `${loopIndent}const ${fragmentVar} = document.createDocumentFragment();`
+  );
+  lines.push(
+    ...fillFragment(
+      fragmentVar,
+      directive.template,
+      directive.directives,
+      counter,
+      loopIndent,
+      scopeVars
+    )
   );
   lines.push(`${loopIndent}${targetVar}.appendChild(${fragmentVar});`);
   lines.push(`${innerIndent}}`);
@@ -694,15 +962,21 @@ function renderClassDirective(
   const selector = JSON.stringify(directive.selector);
   const action = directive.action;
   const condition = directive.condition;
-  const classList = directive.classNames.map(name => JSON.stringify(name)).join(', ');
+  const classList = directive.classNames
+    .map((name) => JSON.stringify(name))
+    .join(', ');
 
   lines.push(`${indent}{`);
-  lines.push(`${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`);
+  lines.push(
+    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
+  );
   lines.push(`${innerIndent}targets.forEach(node => {`);
   lines.push(`${innerIndent}  const classes = [${classList}];`);
   lines.push(`${innerIndent}  classes.forEach(cls => {`);
   if (condition) {
-    lines.push(`${innerIndent}    node.classList.toggle(cls, !!(${condition}));`);
+    lines.push(
+      `${innerIndent}    node.classList.toggle(cls, !!(${condition}));`
+    );
   } else if (action === 'add') {
     lines.push(`${innerIndent}    node.classList.add(cls);`);
   } else if (action === 'remove') {
@@ -729,7 +1003,9 @@ function renderStyleDirective(
   const value = directive.value;
 
   lines.push(`${indent}{`);
-  lines.push(`${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`);
+  lines.push(
+    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
+  );
   lines.push(`${innerIndent}targets.forEach(node => {`);
   if (directive.mode === 'css') {
     lines.push(`${innerIndent}  node.style.setProperty(${prop}, ${value});`);
@@ -747,10 +1023,11 @@ function fillFragment(
   template: TemplateNode[],
   directives: DirectiveNode[] | undefined,
   counter: { value: number },
-  indent: string
+  indent: string,
+  scopeVars: string[] = []
 ): string[] {
   const lines: string[] = [];
-  const serialized = serializeTemplateNodes(template, fragmentVar);
+  const serialized = serializeTemplateNodes(template, fragmentVar, scopeVars);
 
   if (serialized.trim().length > 0) {
     for (const line of serialized.split('\n')) {
@@ -763,7 +1040,9 @@ function fillFragment(
 
   if (directives) {
     for (const nested of directives) {
-      lines.push(...renderDirective(nested, fragmentVar, counter, indent));
+      lines.push(
+        ...renderDirective(nested, fragmentVar, counter, indent, scopeVars)
+      );
     }
   }
 
@@ -774,7 +1053,8 @@ function renderAppendDirective(
   directive: AppendDirective,
   targetVar: string,
   counter: { value: number },
-  indent: string
+  indent: string,
+  scopeVars: string[]
 ): string[] {
   const lines: string[] = [];
   const innerIndent = `${indent}  `;
@@ -782,11 +1062,22 @@ function renderAppendDirective(
   const fragmentVar = `_frag${counter.value++}`;
 
   lines.push(`${indent}{`);
-  lines.push(`${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`);
-  lines.push(`${innerIndent}targets.forEach(node => {`);
-  lines.push(`${innerIndent}  const ${fragmentVar} = document.createDocumentFragment();`);
   lines.push(
-    ...fillFragment(fragmentVar, directive.template, directive.directives, counter, `${innerIndent}  `)
+    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
+  );
+  lines.push(`${innerIndent}targets.forEach(node => {`);
+  lines.push(
+    `${innerIndent}  const ${fragmentVar} = document.createDocumentFragment();`
+  );
+  lines.push(
+    ...fillFragment(
+      fragmentVar,
+      directive.template,
+      directive.directives,
+      counter,
+      `${innerIndent}  `,
+      scopeVars
+    )
   );
   lines.push(`${innerIndent}  node.appendChild(${fragmentVar});`);
   lines.push(`${innerIndent}});`);
@@ -808,7 +1099,9 @@ function renderBindDirective(
   const expression = directive.expression;
 
   lines.push(`${indent}{`);
-  lines.push(`${innerIndent}const nodes = ${targetVar}.querySelectorAll(${selector});`);
+  lines.push(
+    `${innerIndent}const nodes = ${targetVar}.querySelectorAll(${selector});`
+  );
   lines.push(`${innerIndent}nodes.forEach(node => {`);
   lines.push(`${innerIndent}  try {`);
   lines.push(
@@ -826,21 +1119,28 @@ function renderBindDirective(
   return lines;
 }
 
-function renderStateDirective(directive: StateDirective, indent: string): string[] {
+function renderStateDirective(
+  directive: StateDirective,
+  indent: string
+): string[] {
   const lines: string[] = [];
   const pathLiteral = JSON.stringify(directive.path);
 
   switch (directive.mode) {
     case 'init':
-      lines.push(`${indent}this.__htmsInitState(${pathLiteral}, () => ${directive.value ?? 'undefined'});`);
+      lines.push(
+        `${indent}this.__htmsInitState(${pathLiteral}, () => ${directive.value ?? 'undefined'});`
+      );
       break;
     case 'set':
       lines.push(
-        `${indent}this.__htmsSetState(${pathLiteral}, '${directive.op ?? '='}', () => ${directive.op === '++' || directive.op === '--' ? 'undefined' : directive.value ?? 'undefined'});`
+        `${indent}this.__htmsSetState(${pathLiteral}, '${directive.op ?? '='}', () => ${directive.op === '++' || directive.op === '--' ? 'undefined' : (directive.value ?? 'undefined')});`
       );
       break;
     case 'push':
-      lines.push(`${indent}this.__htmsPushState(${pathLiteral}, () => ${directive.value ?? 'undefined'});`);
+      lines.push(
+        `${indent}this.__htmsPushState(${pathLiteral}, () => ${directive.value ?? 'undefined'});`
+      );
       break;
     case 'splice':
       lines.push(

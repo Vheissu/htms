@@ -2,18 +2,18 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   extends: [
     'eslint:recommended',
-    '@typescript-eslint/recommended',
+    'plugin:@typescript-eslint/recommended',
     'plugin:security/recommended',
-    'prettier'
+    'prettier',
   ],
   plugins: ['@typescript-eslint', 'security'],
   parserOptions: {
     ecmaVersion: 2020,
-    sourceType: 'module'
+    sourceType: 'module',
   },
   env: {
     node: true,
-    jest: true
+    jest: true,
   },
   rules: {
     '@typescript-eslint/no-explicit-any': 'error',
@@ -22,6 +22,6 @@ module.exports = {
     'security/detect-object-injection': 'error',
     'security/detect-non-literal-fs-filename': 'error',
     'security/detect-eval-with-expression': 'error',
-    'no-console': 'warn'
-  }
+    'no-console': 'warn',
+  },
 };
