@@ -13,12 +13,21 @@ class HelloWorldComponent extends HTMLElement {
   constructor() {
     super();
     this.__htmsRoot = null;
+    this.__htmsProps = Object.create(null);
+    this.__htmsConnected = false;
     if (!this.__htmsRoot) {
       this.__htmsRoot = this.attachShadow({ mode: 'open' });
     }
   }
   connectedCallback() {
+    this.__htmsConnected = true;
     this.render();
+  }
+  disconnectedCallback() {
+    this.__htmsConnected = false;
+    if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
+      window.__htms.disposeEffectsFor(this);
+    }
   }
   render() {
     const root = this.__htmsRoot || this;

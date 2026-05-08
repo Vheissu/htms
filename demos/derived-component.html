@@ -1,0 +1,15 @@
+<component name="derived-box" props="labelText" observed="label-text">
+  <var name="items" value='["Alpha"]' mutable="true"></var>
+  <derive name="count" expr="this.items.length"></derive>
+  <derive name="statusText" expr="this.labelText + ': ' + this.count"></derive>
+
+  <div class="box">
+    <h2 id="status">{statusText}</h2>
+    <p id="summary" title="Count {count}">Total items: {count}</p>
+    <button id="add" type="button">Add item</button>
+  </div>
+
+  <event target="#add" type="click">
+    <push array="items" expr="'Item ' + (this.count + 1)"></push>
+  </event>
+</component>

@@ -5,7 +5,7 @@ class FormBoxComponent extends HTMLElement {
   static get __htmsTemplate() {
     if (!this.__templateCache) {
       const template = document.createElement('template');
-      template.innerHTML = '<div class="form"></div>';
+      template.innerHTML = '<div class="form"><form id="signup"><label>Name <input id="nameInput" autocomplete="off"></input></label><label>Email <input id="emailInput" type="email" autocomplete="off"></input></label><button type="submit">Save</button></form><p id="summary"></p></div>';
       this.__templateCache = template;
     }
     return this.__templateCache;
@@ -86,12 +86,21 @@ class FormBoxComponent extends HTMLElement {
   constructor() {
     super();
     this.__htmsRoot = null;
+    this.__htmsProps = Object.create(null);
+    this.__htmsConnected = false;
     if (!this.__htmsRoot) {
       this.__htmsRoot = this.attachShadow({ mode: 'open' });
     }
   }
   connectedCallback() {
+    this.__htmsConnected = true;
     this.render();
+  }
+  disconnectedCallback() {
+    this.__htmsConnected = false;
+    if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
+      window.__htms.disposeEffectsFor(this);
+    }
   }
   render() {
     const root = this.__htmsRoot || this;
@@ -102,10 +111,10 @@ class FormBoxComponent extends HTMLElement {
     while (componentRoot.firstChild) {
       componentRoot.removeChild(componentRoot.firstChild);
     }
-    const staticFragment = FormBoxComponent.__htmsTemplate.content.cloneNode(true);
-    componentRoot.appendChild(staticFragment);
     this.__htmsInitState(['name'], () => '');
     this.__htmsInitState(['email'], () => '');
+    const staticFragment = FormBoxComponent.__htmsTemplate.content.cloneNode(true);
+    componentRoot.appendChild(staticFragment);
     function preventSubmit(event) {
       try {
         event.preventDefault();

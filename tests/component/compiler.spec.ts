@@ -163,7 +163,9 @@ describe('Component compiler', () => {
     `);
 
     expect(code).toContain("this.__htmsResolvePath(['count'])");
-    expect(code).toContain('resolved.target[resolved.key] = this.items.length;');
+    expect(code).toContain(
+      'resolved.target[resolved.key] = this.items.length;'
+    );
 
     execute(code);
 

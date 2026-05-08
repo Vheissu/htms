@@ -86,12 +86,21 @@ class EffectFetchErrorDemoComponent extends HTMLElement {
   constructor() {
     super();
     this.__htmsRoot = null;
+    this.__htmsProps = Object.create(null);
+    this.__htmsConnected = false;
     if (!this.__htmsRoot) {
       this.__htmsRoot = this.attachShadow({ mode: 'open' });
     }
   }
   connectedCallback() {
+    this.__htmsConnected = true;
     this.render();
+  }
+  disconnectedCallback() {
+    this.__htmsConnected = false;
+    if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
+      window.__htms.disposeEffectsFor(this);
+    }
   }
   render() {
     const root = this.__htmsRoot || this;
@@ -102,10 +111,10 @@ class EffectFetchErrorDemoComponent extends HTMLElement {
     while (componentRoot.firstChild) {
       componentRoot.removeChild(componentRoot.firstChild);
     }
-    const staticFragment = EffectFetchErrorDemoComponent.__htmsTemplate.content.cloneNode(true);
-    componentRoot.appendChild(staticFragment);
     this.__htmsInitState(['state'], () => {
     });
+    const staticFragment = EffectFetchErrorDemoComponent.__htmsTemplate.content.cloneNode(true);
+    componentRoot.appendChild(staticFragment);
     {
       const eventTargets = componentRoot.querySelectorAll('#load');
       eventTargets.forEach(targetEl => {
@@ -403,7 +412,7 @@ class EffectFetchErrorDemoComponent extends HTMLElement {
       }
       runtime.registerEffect({
         owner: owner,
-        id: '__effect_1',
+        id: '__effect_6',
         deps: [
           function () {
             return owner && owner.state && owner.state.loading;
@@ -725,7 +734,7 @@ class EffectFetchErrorDemoComponent extends HTMLElement {
       }
       runtime.registerEffect({
         owner: owner,
-        id: '__fetch_1',
+        id: '__fetch_3',
         deps: [
           function () {
             return 'https://example.com/demo-error.json';
@@ -1114,7 +1123,7 @@ class EffectFetchErrorDemoComponent extends HTMLElement {
       }
       runtime.registerEffect({
         owner: owner,
-        id: '__effect_2',
+        id: '__effect_7',
         deps: [
           function () {
             return owner && owner.state && owner.state.loading;

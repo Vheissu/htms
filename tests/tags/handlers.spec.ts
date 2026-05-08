@@ -21,7 +21,9 @@ function createElement(markup: string): Element {
 describe('Tag handlers', () => {
   describe('CALL', () => {
     it('generates safe calls for whitelisted functions in strict mode', () => {
-      const element = createElement('<CALL function="console.log" args="\'hello\', 42"></CALL>');
+      const element = createElement(
+        '<CALL function="console.log" args="\'hello\', 42"></CALL>'
+      );
       const result = handleCallTag(element, { strictMode: true });
 
       expect(result.errors).toHaveLength(0);
@@ -32,31 +34,43 @@ describe('Tag handlers', () => {
       const element = createElement('<CALL function="evil.log"></CALL>');
       const result = handleCallTag(element, { strictMode: true });
 
-      expect(result.errors.some(error => error.type === 'security')).toBe(true);
+      expect(result.errors.some((error) => error.type === 'security')).toBe(
+        true
+      );
     });
   });
 
   describe('FUNCTION', () => {
     it('wraps user-defined functions with guarded bodies', () => {
-      const element = createElement('<FUNCTION name="helper" params="value">return value;</FUNCTION>');
+      const element = createElement(
+        '<FUNCTION name="helper" params="value">return value;</FUNCTION>'
+      );
       const result = handleFunctionTag(element, { strictMode: true });
 
       expect(result.errors).toHaveLength(0);
       expect(result.code).toContain('function helper(value)');
-      expect(result.code).toContain('console.error(\'Function helper execution error:\'');
+      expect(result.code).toContain(
+        "console.error('Function helper execution error:'"
+      );
     });
 
     it('rejects invalid parameter identifiers', () => {
-      const element = createElement('<FUNCTION name="helper" params="123bad"></FUNCTION>');
+      const element = createElement(
+        '<FUNCTION name="helper" params="123bad"></FUNCTION>'
+      );
       const result = handleFunctionTag(element, { strictMode: true });
 
-      expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+      expect(result.errors.some((error) => error.type === 'validation')).toBe(
+        true
+      );
     });
   });
 
   describe('SHOW', () => {
     it('maps SHOW directives to toggle visibility directives', () => {
-      const element = createElement('<SHOW target="#panel" when="flag"></SHOW>');
+      const element = createElement(
+        '<SHOW target="#panel" when="flag"></SHOW>'
+      );
       const result = handleShowTag(element, { parentContext: 'component' });
 
       expect(result.errors).toHaveLength(0);
@@ -66,7 +80,7 @@ describe('Tag handlers', () => {
         kind: 'visibility',
         selector: '#panel',
         condition: 'flag',
-        mode: 'toggle'
+        mode: 'toggle',
       });
     });
 
@@ -74,13 +88,17 @@ describe('Tag handlers', () => {
       const element = createElement('<SHOW when="flag"></SHOW>');
       const result = handleShowTag(element, { parentContext: 'component' });
 
-      expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+      expect(result.errors.some((error) => error.type === 'validation')).toBe(
+        true
+      );
     });
   });
 
   describe('SUBMIT', () => {
     it('creates guarded submit listeners', () => {
-      const element = createElement('<SUBMIT target="#signup"><PRINT type="log">Submitted</PRINT></SUBMIT>');
+      const element = createElement(
+        '<SUBMIT target="#signup"><PRINT type="log">Submitted</PRINT></SUBMIT>'
+      );
       const result = handleSubmitTag(element, { strictMode: false });
 
       expect(result.errors).toHaveLength(0);
@@ -92,7 +110,9 @@ describe('Tag handlers', () => {
       const element = createElement('<SUBMIT></SUBMIT>');
       const result = handleSubmitTag(element, { strictMode: false });
 
-      expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+      expect(result.errors.some((error) => error.type === 'validation')).toBe(
+        true
+      );
     });
   });
 
@@ -101,7 +121,9 @@ describe('Tag handlers', () => {
       const element = createElement('<INJECT selector="#target">Safe</INJECT>');
       const result = handleInjectTag(element, { strictMode: true });
 
-      expect(result.errors.some(error => error.type === 'security')).toBe(true);
+      expect(result.errors.some((error) => error.type === 'security')).toBe(
+        true
+      );
     });
 
     it('sanitizes content when explicitly enabled', () => {
@@ -114,7 +136,9 @@ describe('Tag handlers', () => {
       process.env.HTMS_ALLOW_INJECT_TAG = previous;
 
       expect(result.errors).toHaveLength(0);
-      expect(result.warnings.some(warning => warning.message.includes('sanitized'))).toBe(true);
+      expect(
+        result.warnings.some((warning) => warning.message.includes('sanitized'))
+      ).toBe(true);
       expect(result.code).toContain('querySelectorAll');
       expect(result.code).toContain('textContent');
     });
@@ -135,16 +159,22 @@ describe('Tag handlers', () => {
     });
 
     it('requires a single template child', () => {
-      const element = createElement('<KEYEDLIST target="#items" of="items"></KEYEDLIST>');
+      const element = createElement(
+        '<KEYEDLIST target="#items" of="items"></KEYEDLIST>'
+      );
       const result = handleKeyedListTag(element, { strictMode: false });
 
-      expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+      expect(result.errors.some((error) => error.type === 'validation')).toBe(
+        true
+      );
     });
   });
 
   describe('EFFECT', () => {
     it('registers runtime effects using run attribute', () => {
-      const element = createElement('<EFFECT run="console.log(count)"></EFFECT>');
+      const element = createElement(
+        '<EFFECT run="console.log(count)"></EFFECT>'
+      );
       const result = handleEffectTag(element, { strictMode: true });
 
       expect(result.errors).toHaveLength(0);
@@ -153,19 +183,28 @@ describe('Tag handlers', () => {
     });
 
     it('supports dependency lists and component ownership', () => {
-      const element = createElement('<EFFECT deps="user.id, token" immediate="false" once="true">cleanupFlag = true</EFFECT>');
-      const result = handleEffectTag(element, { strictMode: true, componentContext: true });
+      const element = createElement(
+        '<EFFECT deps="user.id, token" immediate="false" once="true">cleanupFlag = true</EFFECT>'
+      );
+      const result = handleEffectTag(element, {
+        strictMode: true,
+        componentContext: true,
+      });
 
       expect(result.errors).toHaveLength(0);
       expect(result.code).toContain('owner: owner');
-      expect(result.code).toContain('deps: [function(){ return user.id; }, function(){ return token; }]');
+      expect(result.code).toContain(
+        'deps: [function(){ return user.id; }, function(){ return token; }]'
+      );
       expect(result.code).toContain('immediate: false');
       expect(result.code).toContain('once: true');
       expect(result.code).toContain('cleanupFlag = true');
     });
 
     it('accepts cleanup attribute and guards invalid content', () => {
-      const element = createElement('<EFFECT run="doWork()" cleanup="tearDown()"></EFFECT>');
+      const element = createElement(
+        '<EFFECT run="doWork()" cleanup="tearDown()"></EFFECT>'
+      );
       const result = handleEffectTag(element, { strictMode: true });
 
       expect(result.errors).toHaveLength(0);
@@ -177,13 +216,17 @@ describe('Tag handlers', () => {
       const element = createElement('<EFFECT></EFFECT>');
       const result = handleEffectTag(element, { strictMode: true });
 
-      expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+      expect(result.errors.some((error) => error.type === 'validation')).toBe(
+        true
+      );
     });
   });
 
   describe('FETCH', () => {
     it('generates guarded fetch effect', () => {
-      const element = createElement('<FETCH url="buildUrl(userId)" into="state.items" loading="state.loading"></FETCH>');
+      const element = createElement(
+        '<FETCH url="buildUrl(userId)" into="state.items" loading="state.loading"></FETCH>'
+      );
       const result = handleFetchTag(element, { strictMode: true });
 
       expect(result.errors).toHaveLength(0);
@@ -196,7 +239,10 @@ describe('Tag handlers', () => {
       const element = createElement(
         '<FETCH url="this.buildUrl()" method="post" body="payload" headers="makeHeaders()" into="state.data" error="state.error" loading="state.loading" when="shouldLoad" immediate="false" once="true"></FETCH>'
       );
-      const result = handleFetchTag(element, { strictMode: true, componentContext: true });
+      const result = handleFetchTag(element, {
+        strictMode: true,
+        componentContext: true,
+      });
 
       expect(result.errors).toHaveLength(0);
       expect(result.code).toContain('})(this);');
@@ -211,14 +257,22 @@ describe('Tag handlers', () => {
       const element = createElement('<FETCH></FETCH>');
       const result = handleFetchTag(element, { strictMode: true });
 
-      expect(result.errors.some(error => error.type === 'validation')).toBe(true);
+      expect(result.errors.some((error) => error.type === 'validation')).toBe(
+        true
+      );
     });
 
     it('rejects unsupported methods', () => {
-      const element = createElement('<FETCH url="/api" method="trace"></FETCH>');
+      const element = createElement(
+        '<FETCH url="/api" method="trace"></FETCH>'
+      );
       const result = handleFetchTag(element, { strictMode: true });
 
-      expect(result.errors.some(error => error.message.includes('Unsupported HTTP method'))).toBe(true);
+      expect(
+        result.errors.some((error) =>
+          error.message.includes('Unsupported HTTP method')
+        )
+      ).toBe(true);
     });
   });
 
@@ -246,9 +300,9 @@ describe('Tag handlers', () => {
       );
 
       expect(
-        handleDeriveTag(missingExpr, { parentContext: 'component' }).errors.some(
-          (error) => error.type === 'validation'
-        )
+        handleDeriveTag(missingExpr, {
+          parentContext: 'component',
+        }).errors.some((error) => error.type === 'validation')
       ).toBe(true);
       expect(
         handleDeriveTag(badPath, { parentContext: 'component' }).errors.some(

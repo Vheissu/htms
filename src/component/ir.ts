@@ -152,6 +152,6 @@ export interface ComponentIR {
 export function createEmptyComponentIR(): ComponentIR {
   return {
     templateNodes: [],
-    directives: []
+    directives: [],
   };
 }

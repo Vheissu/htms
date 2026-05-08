@@ -6,13 +6,29 @@ if (typeof (globalThis as any).TransformStream === 'undefined') {
   (globalThis as any).TransformStream = TransformStream;
 }
 
-const HELLO_JS = path.resolve(__dirname, '../../demos/hello-world-component.js');
-const FLASH_JS = path.resolve(__dirname, '../../demos/event-toggle-component.js');
+const HELLO_JS = path.resolve(
+  __dirname,
+  '../../demos/hello-world-component.js'
+);
+const FLASH_JS = path.resolve(
+  __dirname,
+  '../../demos/event-toggle-component.js'
+);
 const BIND_JS = path.resolve(__dirname, '../../demos/bind-component.js');
 const COUNTER_JS = path.resolve(__dirname, '../../demos/counter-component.js');
-const EFFECT_FETCH_JS = path.resolve(__dirname, '../../demos/effect-fetch-component.js');
-const EFFECT_FETCH_ERROR_JS = path.resolve(__dirname, '../../demos/effect-fetch-error-component.js');
-const EFFECT_FETCH_AUTO_JS = path.resolve(__dirname, '../../demos/effect-fetch-auto-component.js');
+const DERIVED_JS = path.resolve(__dirname, '../../demos/derived-component.js');
+const EFFECT_FETCH_JS = path.resolve(
+  __dirname,
+  '../../demos/effect-fetch-component.js'
+);
+const EFFECT_FETCH_ERROR_JS = path.resolve(
+  __dirname,
+  '../../demos/effect-fetch-error-component.js'
+);
+const EFFECT_FETCH_AUTO_JS = path.resolve(
+  __dirname,
+  '../../demos/effect-fetch-auto-component.js'
+);
 
 test.describe('hello-world component', () => {
   test('renders shadow DOM content', async ({ page }) => {
@@ -90,15 +106,53 @@ test.describe('hello-world component', () => {
     await page.locator('counter-box').locator('button#increment').click();
     expect(await getCount()).toBe('1');
   });
+
+  test('derived state recomputes through the browser demo', async ({
+    page,
+  }) => {
+    await page.goto('about:blank');
+    await page.addScriptTag({ path: DERIVED_JS, type: 'module' });
+
+    await page.setContent('<derived-box label-text="Items"></derived-box>');
+
+    const component = page.locator('derived-box');
+    const readState = () =>
+      component.evaluate((el) => {
+        const shadow = el.shadowRoot;
+        const status = shadow?.querySelector('#status');
+        const summary = shadow?.querySelector('#summary');
+        return {
+          status: status?.textContent?.trim(),
+          summary: summary?.textContent?.trim(),
+          title: summary?.getAttribute('title'),
+        };
+      });
+
+    await expect.poll(readState).toEqual({
+      status: 'Items: 1',
+      summary: 'Total items: 1',
+      title: 'Count 1',
+    });
+
+    await component.locator('button#add').click();
+
+    await expect.poll(readState).toEqual({
+      status: 'Items: 2',
+      summary: 'Total items: 2',
+      title: 'Count 2',
+    });
+  });
 });
 
 test.describe('effect + fetch demo', () => {
-  test('loads remote data via FETCH tag and updates view through EFFECT', async ({ page }) => {
-    await page.route('**/demo-quote.json', route => {
+  test('loads remote data via FETCH tag and updates view through EFFECT', async ({
+    page,
+  }) => {
+    await page.route('**/demo-quote.json', (route) => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ text: 'Integration works!' })
+        body: JSON.stringify({ text: 'Integration works!' }),
       });
     });
 
@@ -111,7 +165,7 @@ test.describe('effect + fetch demo', () => {
       const el = document.querySelector('effect-fetch-demo');
       return !!el?.shadowRoot?.querySelector('#status');
     });
-    const initialStatus = await component.evaluate(el => {
+    const initialStatus = await component.evaluate((el) => {
       const shadow = el.shadowRoot;
       return shadow?.querySelector('#status')?.textContent?.trim();
     });
@@ -126,16 +180,19 @@ test.describe('effect + fetch demo', () => {
 
     const effectIds = await page.evaluate(() => {
       return Array.isArray(window.__htms?.effects)
-        ? window.__htms.effects.map(effect => effect.id)
+        ? window.__htms.effects.map((effect) => effect.id)
         : [];
     });
-    expect(effectIds).toContain('__fetch_1');
+    expect(effectIds.some((id) => id.startsWith('__fetch_'))).toBe(true);
 
     const fetchEffectState = await page.evaluate(() => {
       if (!Array.isArray(window.__htms?.effects)) {
         return null;
       }
-      const record = window.__htms.effects.find(effect => effect.id === '__fetch_1');
+      const record = window.__htms.effects.find(
+        (effect) =>
+          typeof effect.id === 'string' && effect.id.startsWith('__fetch_')
+      );
       if (!record) {
         return null;
       }
@@ -143,7 +200,7 @@ test.describe('effect + fetch demo', () => {
         dirty: record.dirty,
         initialized: record.initialized,
         skipInitial: record.skipInitial,
-        lastValues: record.lastValues
+        lastValues: record.lastValues,
       };
     });
     expect(fetchEffectState).not.toBeNull();
@@ -158,11 +215,11 @@ test.describe('effect + fetch demo', () => {
       const status = shadow?.querySelector('#status')?.textContent?.trim();
       return status === 'Status: Loaded';
     });
-    const quoteText = await component.evaluate(el => {
+    const quoteText = await component.evaluate((el) => {
       const shadow = el.shadowRoot;
       return shadow?.querySelector('#quote')?.textContent?.trim();
     });
-    const errorText = await component.evaluate(el => {
+    const errorText = await component.evaluate((el) => {
       const shadow = el.shadowRoot;
       return shadow?.querySelector('#error')?.textContent?.trim();
     });
@@ -174,17 +231,19 @@ test.describe('effect + fetch demo', () => {
 
 test.describe('effect + fetch (error) demo', () => {
   test('surfaces errors from failing fetches', async ({ page }) => {
-    await page.route('**/demo-error.json', route => {
+    await page.route('**/demo-error.json', (route) => {
       route.fulfill({
         status: 500,
         contentType: 'application/json',
-        body: JSON.stringify({ message: 'Server exploded' })
+        body: JSON.stringify({ message: 'Server exploded' }),
       });
     });
 
     await page.goto('about:blank');
     await page.addScriptTag({ path: EFFECT_FETCH_ERROR_JS, type: 'module' });
-    await page.setContent('<effect-fetch-error-demo></effect-fetch-error-demo>');
+    await page.setContent(
+      '<effect-fetch-error-demo></effect-fetch-error-demo>'
+    );
 
     const component = page.locator('effect-fetch-error-demo');
     await page.waitForFunction(() => {
@@ -201,7 +260,7 @@ test.describe('effect + fetch (error) demo', () => {
       return status === 'Status: Error';
     });
 
-    const errorText = await component.evaluate(el => {
+    const errorText = await component.evaluate((el) => {
       const shadow = el.shadowRoot;
       return shadow?.querySelector('#error')?.textContent?.trim();
     });
@@ -213,12 +272,12 @@ test.describe('effect + fetch (error) demo', () => {
 test.describe('effect + fetch (auto) demo', () => {
   test('prefetches on mount and refreshes on demand', async ({ page }) => {
     let callCount = 0;
-    await page.route('**/demo-quote.json', route => {
+    await page.route('**/demo-quote.json', (route) => {
       callCount += 1;
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ text: `Quote ${callCount}` })
+        body: JSON.stringify({ text: `Quote ${callCount}` }),
       });
     });
 

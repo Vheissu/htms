@@ -29,19 +29,82 @@ import { handleClassTag } from './tags/class';
 import { handleStyleTag } from './tags/style';
 import { handleModelTag } from './tags/model';
 import { handleDeriveTag } from './tags/derive';
-import { TagHandler, TagHandlerOptions, HandlerResult, CompilerError } from './types';
+import {
+  TagHandler,
+  TagHandlerOptions,
+  HandlerResult,
+  CompilerError,
+} from './types';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
 
 const ALLOWED_STANDARD_ELEMENTS = new Set([
-  'INPUT', 'BUTTON', 'UL', 'LI', 'DIV', 'SPAN', 'P', 'H1', 'H2', 'H3', 
-  'H4', 'H5', 'H6', 'STRONG', 'EM', 'I', 'B', 'SMALL', 'MARK', 'CODE', 'PRE',
-  'A', 'IMG', 'FORM', 'LABEL', 'SELECT', 'OPTION', 'TEXTAREA', 'FIELDSET',
-  'LEGEND', 'DATALIST', 'OUTPUT', 'PROGRESS', 'METER', 'OL', 'DL', 'DT', 'DD',
-  'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'NAV', 'HEADER', 'FOOTER', 
-  'SECTION', 'ARTICLE', 'ASIDE', 'MAIN', 'FIGURE', 'FIGCAPTION', 'AUDIO', 'VIDEO',
-  'BLOCKQUOTE', 'CITE', 'TIME', 'DETAILS', 'SUMMARY', 'CANVAS', 'HR', 'BR',
-  'STYLE', 'LINK', 'META'
+  'INPUT',
+  'BUTTON',
+  'UL',
+  'LI',
+  'DIV',
+  'SPAN',
+  'P',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'STRONG',
+  'EM',
+  'I',
+  'B',
+  'SMALL',
+  'MARK',
+  'CODE',
+  'PRE',
+  'A',
+  'IMG',
+  'FORM',
+  'LABEL',
+  'SELECT',
+  'OPTION',
+  'TEXTAREA',
+  'FIELDSET',
+  'LEGEND',
+  'DATALIST',
+  'OUTPUT',
+  'PROGRESS',
+  'METER',
+  'OL',
+  'DL',
+  'DT',
+  'DD',
+  'TABLE',
+  'THEAD',
+  'TBODY',
+  'TR',
+  'TH',
+  'TD',
+  'NAV',
+  'HEADER',
+  'FOOTER',
+  'SECTION',
+  'ARTICLE',
+  'ASIDE',
+  'MAIN',
+  'FIGURE',
+  'FIGCAPTION',
+  'AUDIO',
+  'VIDEO',
+  'BLOCKQUOTE',
+  'CITE',
+  'TIME',
+  'DETAILS',
+  'SUMMARY',
+  'CANVAS',
+  'HR',
+  'BR',
+  'STYLE',
+  'LINK',
+  'META',
 ]);
 
 const HANDLERS_MAPPING = {
@@ -86,11 +149,13 @@ export function handleElement(
     if (!element || !element.tagName) {
       return {
         code: '',
-        errors: [{
-          type: 'validation',
-          message: 'Invalid element: missing tagName'
-        }],
-        warnings: []
+        errors: [
+          {
+            type: 'validation',
+            message: 'Invalid element: missing tagName',
+          },
+        ],
+        warnings: [],
       };
     }
 
@@ -99,14 +164,17 @@ export function handleElement(
     }
 
     const tagName = element.tagName.toUpperCase();
-    
-    CompilerLogger.logDebug('Processing element', { 
-      tagName, 
+
+    CompilerLogger.logDebug('Processing element', {
+      tagName,
       hasAttributes: element.attributes.length > 0,
-      hasChildren: element.children.length > 0
+      hasChildren: element.children.length > 0,
     });
 
-    const hasHandler = Object.prototype.hasOwnProperty.call(HANDLERS_MAPPING, tagName);
+    const hasHandler = Object.prototype.hasOwnProperty.call(
+      HANDLERS_MAPPING,
+      tagName
+    );
     const preferCustom =
       tagName === 'STYLE' &&
       (element.hasAttribute('selector') ||
@@ -123,18 +191,18 @@ export function handleElement(
       const error: CompilerError = {
         type: 'validation',
         message: `Unsupported tag: ${tagName}`,
-        tag: tagName
+        tag: tagName,
       };
-      
-      CompilerLogger.logValidationError('Unsupported tag encountered', { 
+
+      CompilerLogger.logValidationError('Unsupported tag encountered', {
         tagName,
-        availableTags: Object.keys(HANDLERS_MAPPING)
+        availableTags: Object.keys(HANDLERS_MAPPING),
       });
 
       return {
         code: '',
         errors: [error],
-        warnings: []
+        warnings: [],
       };
     }
 
@@ -143,32 +211,33 @@ export function handleElement(
     if (securityErrors.length > 0) {
       CompilerLogger.logSecurityIssue('Element security validation failed', {
         tagName,
-        errors: securityErrors
+        errors: securityErrors,
       });
-      
+
       if (options.strictMode) {
         return {
           code: '',
           errors: securityErrors,
-          warnings: []
+          warnings: [],
         };
       } else {
         // In non-strict mode, log warnings but continue
         return {
           code: '',
           errors: [],
-          warnings: securityErrors.map(error => ({
+          warnings: securityErrors.map((error) => ({
             message: error.message,
-            tag: tagName
-          }))
+            tag: tagName,
+          })),
         };
       }
     }
 
     // Execute the handler
-    const handlerFunction = HANDLERS_MAPPING[tagName as keyof typeof HANDLERS_MAPPING];
+    const handlerFunction =
+      HANDLERS_MAPPING[tagName as keyof typeof HANDLERS_MAPPING];
     const result = handlerFunction(element, options);
-    
+
     // Note: Security is enforced on inputs and final AST (in parse phase).
     // Avoid content-based scanning of generated code to reduce false positives.
 
@@ -177,27 +246,26 @@ export function handleElement(
       success: result.errors.length === 0,
       codeLength: result.code.length,
       errorCount: result.errors.length,
-      warningCount: result.warnings.length
+      warningCount: result.warnings.length,
     });
 
     return result;
-    
   } catch (error) {
     const handlerError: CompilerError = {
       type: 'runtime',
       message: `Handler execution failed: ${error instanceof Error ? error.message : String(error)}`,
-      tag: element.tagName
+      tag: element.tagName,
     };
 
     CompilerLogger.logCompilerError('Handler execution error', {
       tagName: element.tagName,
-      error: handlerError.message
+      error: handlerError.message,
     });
 
     return {
       code: '',
       errors: [handlerError],
-      warnings: []
+      warnings: [],
     };
   }
 }
@@ -208,37 +276,48 @@ export function isStandardHtmlElement(element: Element): boolean {
 
 function validateElementSecurity(element: Element): CompilerError[] {
   const errors: CompilerError[] = [];
-  
+
   // Validate attributes
   for (let i = 0; i < element.attributes.length; i++) {
     const attr = element.attributes[i];
-    const attrErrors = SecurityValidator.validateHtmlAttribute(attr.name, attr.value);
+    const attrErrors = SecurityValidator.validateHtmlAttribute(
+      attr.name,
+      attr.value
+    );
     errors.push(...attrErrors);
   }
-  
+
   // Validate text content
   if (element.textContent) {
-    const contentErrors = SecurityValidator.validateContent(element.textContent);
+    const contentErrors = SecurityValidator.validateContent(
+      element.textContent
+    );
     errors.push(...contentErrors);
   }
-  
+
   // Check for dangerous nesting patterns
   if (element.children.length > 100) {
     errors.push({
       type: 'security',
       message: 'Element has too many children (potential DoS)',
-      tag: element.tagName
+      tag: element.tagName,
     });
   }
-  
+
   return errors;
 }
 
 export function getAllowedTags(): string[] {
-  return [...Object.keys(HANDLERS_MAPPING), ...Array.from(ALLOWED_STANDARD_ELEMENTS)];
+  return [
+    ...Object.keys(HANDLERS_MAPPING),
+    ...Array.from(ALLOWED_STANDARD_ELEMENTS),
+  ];
 }
 
 export function isTagSupported(tagName: string): boolean {
   const upperTagName = tagName.toUpperCase();
-  return HANDLERS_MAPPING.hasOwnProperty(upperTagName) || ALLOWED_STANDARD_ELEMENTS.has(upperTagName);
+  return (
+    HANDLERS_MAPPING.hasOwnProperty(upperTagName) ||
+    ALLOWED_STANDARD_ELEMENTS.has(upperTagName)
+  );
 }
