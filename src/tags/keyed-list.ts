@@ -8,6 +8,7 @@ import {
   elementToTemplateNode,
   isLowerCaseTag,
 } from '../component/template-utils';
+import { handleEventTag } from './event';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
@@ -41,11 +42,14 @@ function collectNestedComponentDirectives(
       continue;
     }
 
-    const { handleElement } = require('../handlers');
-    const childResult: HandlerResult = handleElement(child, {
+    if (child.tagName.toUpperCase() !== 'EVENT') {
+      continue;
+    }
+
+    const childResult: HandlerResult = handleEventTag(child, {
       ...options,
       loopVariable: itemVar,
-      parentContext: 'loop',
+      parentContext: 'component',
       componentContext: true,
     });
 

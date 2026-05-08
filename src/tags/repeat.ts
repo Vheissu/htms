@@ -34,7 +34,8 @@ function collectNestedComponentDirectives(
     const childResult: HandlerResult = handleElement(child, {
       ...options,
       loopVariable,
-      parentContext: 'loop',
+      parentContext: 'component',
+      componentContext: true,
     });
 
     if (childResult.errors.length > 0) {

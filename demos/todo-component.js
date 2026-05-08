@@ -182,6 +182,17 @@ class TodoBoxComponent extends HTMLElement {
       _el2.appendChild(document.createTextNode('\u2715'));
       _el0.appendChild(_el2);
       _frag5.appendChild(_el0);
+      {
+        const eventTargets = _frag5.querySelectorAll('.remove');
+        eventTargets.forEach(targetEl => {
+          const _handler8 = event => {
+            // No event body
+            this.__htmsSpliceState(['todos'], () => i, () => 1, () => []);
+            this.render();
+          };
+          targetEl.addEventListener('click', _handler8);
+        });
+      }
       componentRoot.appendChild(_frag5);
     }
   }

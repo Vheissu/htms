@@ -118,23 +118,47 @@ class ListBoxComponent extends HTMLElement {
     ]);
     const staticFragment = ListBoxComponent.__htmsTemplate.content.cloneNode(true);
     componentRoot.appendChild(staticFragment);
-    const _source1 = this.people;
-    const _items2 = Array.isArray(_source1) ? _source1 : [];
-    for (let i = 0; i < _items2.length; i++) {
-      const item = _items2[i];
-      const _frag0 = document.createDocumentFragment();
-      const _el0 = document.createElement('li');
-      _el0.setAttribute('class', 'person');
-      const _el1 = document.createElement('span');
-      _el1.appendChild(document.createTextNode(item == null ? '' : String(item)));
-      _el0.appendChild(_el1);
-      const _el2 = document.createElement('button');
-      _el2.setAttribute('class', 'promote');
-      _el2.setAttribute('type', 'button');
-      _el2.appendChild(document.createTextNode('Remove'));
-      _el0.appendChild(_el2);
-      _frag0.appendChild(_el0);
-      componentRoot.appendChild(_frag0);
+    {
+      const _targets0 = componentRoot.querySelectorAll('#people');
+      _targets0.forEach(container => {
+        while (container.firstChild) {
+          container.removeChild(container.firstChild);
+        }
+        const _source1 = this.people;
+        const _items2 = Array.isArray(_source1) ? _source1 : [];
+        for (let i = 0; i < _items2.length; i++) {
+          const item = _items2[i];
+          const _frag3 = document.createDocumentFragment();
+          const _el0 = document.createElement('li');
+          _el0.setAttribute('class', 'person');
+          const _el1 = document.createElement('span');
+          _el1.appendChild(document.createTextNode(item == null ? '' : String(item)));
+          _el0.appendChild(_el1);
+          const _el2 = document.createElement('button');
+          _el2.setAttribute('class', 'promote');
+          _el2.setAttribute('type', 'button');
+          _el2.appendChild(document.createTextNode('Remove'));
+          _el0.appendChild(_el2);
+          _frag3.appendChild(_el0);
+          {
+            const eventTargets = _frag3.querySelectorAll('.promote');
+            eventTargets.forEach(targetEl => {
+              const _handler6 = event => {
+                // No event body
+                this.__htmsSpliceState(['people'], () => i, () => 1, () => []);
+                this.render();
+              };
+              targetEl.addEventListener('click', _handler6);
+            });
+          }
+          const _key4 = item;
+          const _keyedNode5 = _frag3.firstElementChild;
+          if (_keyedNode5 && typeof _keyedNode5.setAttribute === 'function') {
+            _keyedNode5.setAttribute('data-key', String(_key4));
+          }
+          container.appendChild(_frag3);
+        }
+      });
     }
   }
 }
