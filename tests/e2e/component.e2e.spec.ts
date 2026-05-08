@@ -17,6 +17,7 @@ const FLASH_JS = path.resolve(
 const BIND_JS = path.resolve(__dirname, '../../demos/bind-component.js');
 const COUNTER_JS = path.resolve(__dirname, '../../demos/counter-component.js');
 const DERIVED_JS = path.resolve(__dirname, '../../demos/derived-component.js');
+const LIST_JS = path.resolve(__dirname, '../../demos/list-component.js');
 const EFFECT_FETCH_JS = path.resolve(
   __dirname,
   '../../demos/effect-fetch-component.js'
@@ -141,6 +142,40 @@ test.describe('hello-world component', () => {
       summary: 'Total items: 2',
       title: 'Count 2',
     });
+  });
+
+  test('component keyed lists render and handle item events', async ({
+    page,
+  }) => {
+    await page.goto('about:blank');
+    await page.addScriptTag({ path: LIST_JS, type: 'module' });
+
+    await page.setContent('<list-box></list-box>');
+
+    const component = page.locator('list-box');
+    const readRows = () =>
+      component.evaluate((el) => {
+        const shadow = el.shadowRoot;
+        return Array.from(shadow?.querySelectorAll('li.person') ?? []).map(
+          (row) => ({
+            text: row.textContent?.replace('Remove', '').trim(),
+            key: row.getAttribute('data-key'),
+          })
+        );
+      });
+
+    await expect.poll(readRows).toEqual([
+      { text: 'Ada', key: 'Ada' },
+      { text: 'Lin', key: 'Lin' },
+      { text: 'Ida', key: 'Ida' },
+    ]);
+
+    await component.locator('button.promote').first().click();
+
+    await expect.poll(readRows).toEqual([
+      { text: 'Lin', key: 'Lin' },
+      { text: 'Ida', key: 'Ida' },
+    ]);
   });
 });
 

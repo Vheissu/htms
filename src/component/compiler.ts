@@ -1320,7 +1320,9 @@ function renderKeyedListDirective(
     )
   );
   lines.push(`${loopIndent}const ${keyVar} = ${directive.key};`);
-  lines.push(`${loopIndent}const ${keyedNodeVar} = ${fragmentVar}.firstElementChild;`);
+  lines.push(
+    `${loopIndent}const ${keyedNodeVar} = ${fragmentVar}.firstElementChild;`
+  );
   lines.push(
     `${loopIndent}if (${keyedNodeVar} && typeof ${keyedNodeVar}.setAttribute === 'function') {`
   );

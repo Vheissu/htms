@@ -49,7 +49,11 @@ function collectNestedComponentDirectives(
     }
 
     if (childResult.component?.directives) {
-      directives.push(...childResult.component.directives);
+      directives.push(
+        ...childResult.component.directives.filter(
+          (directive) => directive.kind === 'event'
+        )
+      );
     } else if (childResult.code) {
       directives.push({ kind: 'statement', code: childResult.code });
     }

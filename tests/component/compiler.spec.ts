@@ -250,6 +250,90 @@ describe('Component compiler', () => {
     ]);
   });
 
+  it('wires nested repeat item events inside component templates', () => {
+    const code = compile(`
+      <component name="repeat-event-box">
+        <var name="items" value='["Alpha","Beta"]' mutable="true"></var>
+        <repeat variable="items" index="i">
+          <div class="row">
+            <span>{i}: {item}</span>
+            <button class="remove" type="button">Remove</button>
+            <event target=".remove" type="click">
+              <splice array="items" index="i" delete="1"></splice>
+            </event>
+          </div>
+        </repeat>
+      </component>
+    `);
+
+    execute(code);
+
+    const element = document.createElement(
+      'repeat-event-box'
+    ) as HTMLElement & {
+      shadowRoot: ShadowRoot;
+    };
+    document.body.appendChild(element);
+
+    const getRows = (): string[] =>
+      Array.from(element.shadowRoot.querySelectorAll('.row span')).map(
+        (node) => node.textContent ?? ''
+      );
+
+    expect(getRows()).toEqual(['0: Alpha', '1: Beta']);
+
+    element.shadowRoot
+      .querySelector('.remove')
+      ?.dispatchEvent(new window.Event('click', { bubbles: true }));
+
+    expect(getRows()).toEqual(['0: Beta']);
+  });
+
+  it('renders component-scoped keyed lists with item events', () => {
+    const code = compile(`
+      <component name="keyed-box">
+        <var name="items" value='["Alpha","Beta"]' mutable="true"></var>
+        <ul id="items"></ul>
+        <keyedlist target="#items" of="items" item="item" index="i" key="item">
+          <li class="row" data-name="{item}">
+            <span>{i}: {item}</span>
+            <button class="remove" type="button">Remove</button>
+            <event target=".remove" type="click">
+              <splice array="items" index="i" delete="1"></splice>
+            </event>
+          </li>
+        </keyedlist>
+      </component>
+    `);
+
+    expect(code).toContain("componentRoot.querySelectorAll('#items')");
+    expect(code).toContain("setAttribute('data-key'");
+
+    execute(code);
+
+    const element = document.createElement('keyed-box') as HTMLElement & {
+      shadowRoot: ShadowRoot;
+    };
+    document.body.appendChild(element);
+
+    const getRows = (): Array<{ text: string; key: string | null }> =>
+      Array.from(element.shadowRoot.querySelectorAll('li.row')).map((node) => ({
+        text: node.textContent?.replace('Remove', '').trim() ?? '',
+        key: node.getAttribute('data-key'),
+      }));
+
+    expect(getRows()).toEqual([
+      { text: '0: Alpha', key: 'Alpha' },
+      { text: '1: Beta', key: 'Beta' },
+    ]);
+
+    element.shadowRoot
+      .querySelector('.remove')
+      ?.dispatchEvent(new window.Event('click', { bubbles: true }));
+
+    expect(getRows()).toEqual([{ text: '0: Beta', key: 'Beta' }]);
+  });
+
   it('handles switch/case branches', () => {
     const code = compile(`
       <component name="switch-box">

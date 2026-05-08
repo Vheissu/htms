@@ -83,6 +83,7 @@ badge.labelText = 'Synced';
 ## Control Flow Translation
 
 - `<repeat>` compiles to loops that rebuild fragments under the owning element during `render()`.
+- `<keyedlist>` targets a container inside the component root, renders item templates with item/index interpolation, and scopes item events to each generated fragment.
 - `<if>` / `<else>` generate conditional blocks that toggle DOM nodes within the shadow root (no global document access).
 - `<print type="log">` and similar imperative tags run within component methods, with console access sandboxed via `SecurityValidator`.
 

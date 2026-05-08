@@ -72,7 +72,7 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
   - `<bind selector="#cnt" prop="textContent" expr="String(state.items.length)" />` — binds DOM to an expression; updates on SET/PUSH/SPLICE.
   - Native component markup can also bind directly: `<p title="Count {count}">{label}: {count}</p>`.
 - Lists (keyed)
-  - `<keyedlist target="#ul" of="state.items" item="it" index="i" key="it.id"> <li>{it.name}</li> </keyedlist>` — stable, keyed DOM updates.
+  - `<keyedlist target="#ul" of="items" item="it" index="i" key="it.id"> <li>{it.name}</li> </keyedlist>` — component-scoped keyed list rendering with item/index interpolation.
 - Events
   - `<event target="#btn" type="click"> …child tags… </event>` — handler is composed of child tags (no action string required).
   - `<submit target="#form"> …child tags… </submit>` — form submit helper (prevents default). Use child tags to update state/DOM.

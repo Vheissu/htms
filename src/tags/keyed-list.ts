@@ -15,9 +15,7 @@ import { ensureRuntime } from '../utils/runtime';
 let keyedCounter = 0;
 
 function resolveComponentSource(source: string): string {
-  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(source)
-    ? `this.${source}`
-    : source;
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(source) ? `this.${source}` : source;
 }
 
 function collectNestedComponentDirectives(
@@ -63,7 +61,11 @@ function collectNestedComponentDirectives(
     }
 
     if (childResult.component?.directives) {
-      directives.push(...childResult.component.directives);
+      directives.push(
+        ...childResult.component.directives.filter(
+          (directive) => directive.kind === 'event'
+        )
+      );
     } else if (childResult.code) {
       directives.push({ kind: 'statement', code: childResult.code });
     }
@@ -153,7 +155,8 @@ export const handleKeyedListTag: TagHandler = (
       if (!isLowerCaseTag(templateEl)) {
         errors.push({
           type: 'validation',
-          message: 'KEYEDLIST component template must be a standard HTML element',
+          message:
+            'KEYEDLIST component template must be a standard HTML element',
           tag: 'KEYEDLIST',
         });
         return { code: '', errors, warnings };
@@ -241,7 +244,10 @@ export const handleKeyedListTag: TagHandler = (
     const code = `${runtime}
       (function(){
         var __render_item_${id} = function(${itemVar}, ${indexVar}){
-${tpl.code.split('\n').map((l: string) => '          ' + l).join('\n')}
+${tpl.code
+  .split('\n')
+  .map((l: string) => '          ' + l)
+  .join('\n')}
           return ${topVar};
         };
         var __key_${id} = function(${itemVar}, ${indexVar}){ return ${keyExpr}; };
