@@ -28,6 +28,7 @@ import { handleFetchTag } from './tags/fetch';
 import { handleClassTag } from './tags/class';
 import { handleStyleTag } from './tags/style';
 import { handleModelTag } from './tags/model';
+import { handleDeriveTag } from './tags/derive';
 import { TagHandler, TagHandlerOptions, HandlerResult, CompilerError } from './types';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
@@ -73,6 +74,7 @@ const HANDLERS_MAPPING = {
   CLASS: handleClassTag,
   STYLE: handleStyleTag,
   MODEL: handleModelTag,
+  DERIVE: handleDeriveTag,
 } satisfies Record<string, TagHandler>;
 
 export function handleElement(

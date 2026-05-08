@@ -543,6 +543,12 @@ function buildComponentClass(
     }
   }
 
+  for (const directive of renderIR.directives) {
+    if (directive.kind === 'state' && directive.mode === 'derive') {
+      renderLines.push(...renderStateDirective(directive, '    '));
+    }
+  }
+
   if (hasStaticTemplate) {
     renderLines.push(
       `    const staticFragment = ${metadata.className}.__htmsTemplate.content.cloneNode(true);`
@@ -558,7 +564,10 @@ function buildComponentClass(
   const directiveCounter = { value: 0 };
   const hasStateDirectives = containsState(renderIR.directives);
   for (const directive of renderIR.directives) {
-    if (directive.kind === 'state' && directive.mode === 'init') {
+    if (
+      directive.kind === 'state' &&
+      (directive.mode === 'init' || directive.mode === 'derive')
+    ) {
       continue;
     }
     const directiveLines = renderDirective(
@@ -1251,6 +1260,16 @@ function renderStateDirective(
       lines.push(
         `${indent}this.__htmsInitState(${pathLiteral}, () => ${directive.value ?? 'undefined'});`
       );
+      break;
+    case 'derive':
+      lines.push(`${indent}{`);
+      lines.push(
+        `${indent}  const resolved = this.__htmsResolvePath(${pathLiteral});`
+      );
+      lines.push(
+        `${indent}  resolved.target[resolved.key] = ${directive.value ?? 'undefined'};`
+      );
+      lines.push(`${indent}}`);
       break;
     case 'set':
       lines.push(

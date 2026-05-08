@@ -148,6 +148,63 @@ describe('Component compiler', () => {
     expect(getButton().getAttribute('data-label')).toBe('Taps');
   });
 
+  it('recomputes derived state before rendering templates and bindings', () => {
+    const code = compile(`
+      <component name="derive-box" props="labelText">
+        <var name="items" value='["One"]' mutable="true"></var>
+        <derive name="count" expr="this.items.length"></derive>
+        <derive name="caption" expr="this.labelText + ': ' + this.count"></derive>
+        <p id="summary" title="Count {count}">{caption}</p>
+        <button id="add">Add</button>
+        <event target="#add" type="click">
+          <push array="items" expr="'Two'"></push>
+        </event>
+      </component>
+    `);
+
+    expect(code).toContain("this.__htmsResolvePath(['count'])");
+    expect(code).toContain('resolved.target[resolved.key] = this.items.length;');
+
+    execute(code);
+
+    const element = document.createElement('derive-box') as HTMLElement & {
+      labelText: string;
+      count: number;
+      caption: string;
+      shadowRoot: ShadowRoot;
+    };
+    element.labelText = 'Items';
+    document.body.appendChild(element);
+
+    const getSummary = (): HTMLParagraphElement => {
+      const summary = element.shadowRoot.querySelector('#summary');
+      if (!(summary instanceof HTMLParagraphElement)) {
+        throw new Error('summary missing');
+      }
+      return summary;
+    };
+
+    expect(element.count).toBe(1);
+    expect(element.caption).toBe('Items: 1');
+    expect(getSummary().textContent).toBe('Items: 1');
+    expect(getSummary().getAttribute('title')).toBe('Count 1');
+
+    element.shadowRoot
+      .querySelector('#add')
+      ?.dispatchEvent(new window.Event('click', { bubbles: true }));
+
+    expect(element.count).toBe(2);
+    expect(element.caption).toBe('Items: 2');
+    expect(getSummary().textContent).toBe('Items: 2');
+    expect(getSummary().getAttribute('title')).toBe('Count 2');
+
+    element.labelText = 'Todos';
+
+    expect(element.count).toBe(2);
+    expect(element.caption).toBe('Todos: 2');
+    expect(getSummary().textContent).toBe('Todos: 2');
+  });
+
   it('interpolates repeat item and index tokens in component templates', () => {
     const code = compile(`
       <component name="repeat-text-box" props="items">

@@ -7,6 +7,7 @@ import { handleInjectTag } from '../../src/tags/inject';
 import { handleKeyedListTag } from '../../src/tags/keyed-list';
 import { handleEffectTag } from '../../src/tags/effect';
 import { handleFetchTag } from '../../src/tags/fetch';
+import { handleDeriveTag } from '../../src/tags/derive';
 
 function createElement(markup: string): Element {
   const dom = new JSDOM(`<body>${markup}</body>`);
@@ -218,6 +219,42 @@ describe('Tag handlers', () => {
       const result = handleFetchTag(element, { strictMode: true });
 
       expect(result.errors.some(error => error.message.includes('Unsupported HTTP method'))).toBe(true);
+    });
+  });
+
+  describe('DERIVE', () => {
+    it('creates component derived state directives', () => {
+      const element = createElement(
+        '<DERIVE name="summary.count" expr="this.items.length"></DERIVE>'
+      );
+      const result = handleDeriveTag(element, { parentContext: 'component' });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toBe('');
+      expect(result.component?.directives?.[0]).toMatchObject({
+        kind: 'state',
+        mode: 'derive',
+        path: ['summary', 'count'],
+        value: 'this.items.length',
+      });
+    });
+
+    it('requires a valid name and expression', () => {
+      const missingExpr = createElement('<DERIVE name="count"></DERIVE>');
+      const badPath = createElement(
+        '<DERIVE name="bad-path" expr="this.items.length"></DERIVE>'
+      );
+
+      expect(
+        handleDeriveTag(missingExpr, { parentContext: 'component' }).errors.some(
+          (error) => error.type === 'validation'
+        )
+      ).toBe(true);
+      expect(
+        handleDeriveTag(badPath, { parentContext: 'component' }).errors.some(
+          (error) => error.type === 'validation'
+        )
+      ).toBe(true);
     });
   });
 });

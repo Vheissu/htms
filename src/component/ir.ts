@@ -120,7 +120,7 @@ export interface StyleDirective {
 
 export interface StateDirective {
   kind: 'state';
-  mode: 'init' | 'set' | 'push' | 'splice';
+  mode: 'init' | 'derive' | 'set' | 'push' | 'splice';
   path: string[];
   op?: string;
   value?: string;

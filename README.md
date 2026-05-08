@@ -49,6 +49,7 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
 
 - State & Arrays
   - `<var name="x" value="42" mutable="true" />` — declare `let x = 42` (accepts JSON).
+  - `<derive name="total" expr="this.items.length" />` — compute reactive state before each render.
   - `<set name="x" op="=|+=|-=|*=|/=|++|--" value="…" />` — mutate values; notifies bindings.
   - `<push array="state.list" expr="document.getElementById('txt').value" />` — push; notifies bindings.
   - `<splice array="state.list" index="0" delete="1" values='["New"]' />` — remove/insert; notifies bindings.

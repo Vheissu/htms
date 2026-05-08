@@ -70,6 +70,7 @@ badge.labelText = 'Synced';
 ### State & Reactivity
 
 - `<var>` tags with `scope="instance"` declare reactive fields. Compiler emits property definitions and update notifications.
+- `<derive name="total" expr="this.items.length">` recomputes derived fields before each render, so templates, `<bind>`, and downstream derived fields see current values.
 - `<set>`, `<push>`, `<splice>` operate on instance fields and trigger `render()` cycle (virtual method the compiler injects).
 - `render()` clones the template and applies control-flow transformations (`REPEAT`, `IF/ELSE`, etc.).
 
