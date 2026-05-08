@@ -5,7 +5,8 @@ const IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 export function serializeTemplateNodes(
   nodes: TemplateNode[],
   targetVar: string,
-  interpolationVars: string[] = []
+  interpolationVars: string[] = [],
+  componentInterpolationVars: string[] = []
 ): string {
   if (nodes.length === 0) {
     return '';
@@ -19,11 +20,22 @@ export function serializeTemplateNodes(
         node,
         targetVar,
         () => `_el${counter++}`,
-        interpolationVars
+        interpolationVars,
+        componentInterpolationVars
       )
     );
   }
   return statements.join('\n');
+}
+
+export function templateNodesHaveInterpolations(
+  nodes: TemplateNode[],
+  interpolationVars: string[] = [],
+  componentInterpolationVars: string[] = []
+): boolean {
+  return nodes.some((node) =>
+    nodeHasInterpolation(node, interpolationVars, componentInterpolationVars)
+  );
 }
 
 export function templateNodesToHTML(nodes: TemplateNode[]): string {
@@ -60,12 +72,13 @@ function serializeNode(
   node: TemplateNode,
   targetVar: string,
   idFactory: () => string,
-  interpolationVars: string[]
+  interpolationVars: string[],
+  componentInterpolationVars: string[]
 ): string[] {
   if (node.type === 'text') {
     const value = node.textContent ?? '';
     return [
-      `${targetVar}.appendChild(document.createTextNode(${serializeTextValue(value, interpolationVars)}));`,
+      `${targetVar}.appendChild(document.createTextNode(${serializeTextValue(value, interpolationVars, componentInterpolationVars)}));`,
     ];
   }
 
@@ -78,7 +91,7 @@ function serializeNode(
   if (node.attributes) {
     for (const [key, value] of Object.entries(node.attributes)) {
       statements.push(
-        `${varName}.setAttribute('${key}', ${serializeTextValue(value, interpolationVars)});`
+        `${varName}.setAttribute('${key}', ${serializeTextValue(value, interpolationVars, componentInterpolationVars)});`
       );
     }
   }
@@ -86,7 +99,13 @@ function serializeNode(
   if (node.children && node.children.length > 0) {
     for (const child of node.children) {
       statements.push(
-        ...serializeNode(child, varName, idFactory, interpolationVars)
+        ...serializeNode(
+          child,
+          varName,
+          idFactory,
+          interpolationVars,
+          componentInterpolationVars
+        )
       );
     }
   }
@@ -97,10 +116,12 @@ function serializeNode(
 
 function serializeTextValue(
   value: string,
-  interpolationVars: string[]
+  interpolationVars: string[],
+  componentInterpolationVars: string[]
 ): string {
-  const allowedRoots = new Set(interpolationVars);
-  if (allowedRoots.size === 0) {
+  const localRoots = new Set(interpolationVars);
+  const componentRoots = new Set(componentInterpolationVars);
+  if (localRoots.size === 0 && componentRoots.size === 0) {
     return JSON.stringify(value);
   }
 
@@ -119,8 +140,13 @@ function serializeTextValue(
       break;
     }
 
-    const token = value.slice(start + 1, end);
-    if (!isAllowedInterpolationToken(token, allowedRoots)) {
+    const token = value.slice(start + 1, end).trim();
+    const expression = resolveInterpolationExpression(
+      token,
+      localRoots,
+      componentRoots
+    );
+    if (!expression) {
       searchFrom = end + 1;
       continue;
     }
@@ -128,7 +154,7 @@ function serializeTextValue(
     if (start > literalStart) {
       parts.push(JSON.stringify(value.slice(literalStart, start)));
     }
-    parts.push(`(${token} == null ? '' : String(${token}))`);
+    parts.push(`(${expression} == null ? '' : String(${expression}))`);
     literalStart = end + 1;
     searchFrom = end + 1;
   }
@@ -144,14 +170,94 @@ function serializeTextValue(
   return parts.join(' + ');
 }
 
-function isAllowedInterpolationToken(
-  token: string,
-  allowedRoots: Set<string>
+function nodeHasInterpolation(
+  node: TemplateNode,
+  interpolationVars: string[],
+  componentInterpolationVars: string[]
 ): boolean {
-  const segments = token.split('.');
-  if (segments.length === 0 || !allowedRoots.has(segments[0])) {
-    return false;
+  if (node.type === 'text') {
+    return textHasInterpolation(
+      node.textContent ?? '',
+      interpolationVars,
+      componentInterpolationVars
+    );
   }
 
-  return segments.every((segment) => IDENTIFIER_PATTERN.test(segment));
+  if (node.attributes) {
+    for (const value of Object.values(node.attributes)) {
+      if (
+        textHasInterpolation(
+          value,
+          interpolationVars,
+          componentInterpolationVars
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return (node.children ?? []).some((child) =>
+    nodeHasInterpolation(child, interpolationVars, componentInterpolationVars)
+  );
+}
+
+function textHasInterpolation(
+  value: string,
+  interpolationVars: string[],
+  componentInterpolationVars: string[]
+): boolean {
+  const localRoots = new Set(interpolationVars);
+  const componentRoots = new Set(componentInterpolationVars);
+  let searchFrom = 0;
+
+  while (searchFrom < value.length) {
+    const start = value.indexOf('{', searchFrom);
+    if (start === -1) {
+      return false;
+    }
+
+    const end = value.indexOf('}', start + 1);
+    if (end === -1) {
+      return false;
+    }
+
+    const token = value.slice(start + 1, end).trim();
+    if (resolveInterpolationExpression(token, localRoots, componentRoots)) {
+      return true;
+    }
+
+    searchFrom = end + 1;
+  }
+
+  return false;
+}
+
+function resolveInterpolationExpression(
+  token: string,
+  localRoots: Set<string>,
+  componentRoots: Set<string>
+): string | null {
+  const segments = token.split('.');
+  if (segments.length === 0 || segments.some((segment) => segment === '')) {
+    return null;
+  }
+
+  if (!segments.every((segment) => IDENTIFIER_PATTERN.test(segment))) {
+    return null;
+  }
+
+  if (localRoots.has(segments[0])) {
+    return token;
+  }
+
+  if (segments[0] === 'this' && segments.length > 1) {
+    return token;
+  }
+
+  if (componentRoots.has(segments[0])) {
+    return `this.${token}`;
+  }
+
+  return null;
 }

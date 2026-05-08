@@ -19,6 +19,7 @@ import {
 } from './ir';
 import {
   serializeTemplateNodes,
+  templateNodesHaveInterpolations,
   templateNodesToHTML,
 } from './template-serializer';
 import {
@@ -92,6 +93,60 @@ function containsState(directives?: DirectiveNode[]): boolean {
     }
   }
   return false;
+}
+
+function collectStateRoots(directives?: DirectiveNode[]): string[] {
+  const roots = new Set<string>();
+
+  const visit = (items?: DirectiveNode[]): void => {
+    if (!items) return;
+
+    for (const directive of items) {
+      switch (directive.kind) {
+        case 'state':
+          if (directive.path.length > 0) {
+            roots.add(directive.path[0]);
+          }
+          break;
+        case 'loop':
+          visit(directive.directives);
+          break;
+        case 'condition':
+          visit(directive.whenTrue.directives);
+          if (directive.whenFalse) {
+            visit(directive.whenFalse.directives);
+          }
+          break;
+        case 'event':
+          visit(directive.directives);
+          break;
+        case 'append':
+          visit(directive.directives);
+          break;
+        case 'while':
+          visit(directive.directives);
+          break;
+        case 'switch':
+          for (const switchCase of directive.cases) {
+            visit(switchCase.directives);
+          }
+          if (directive.defaultCase) {
+            visit(directive.defaultCase.directives);
+          }
+          break;
+        case 'visibility':
+        case 'attribute':
+        case 'bind':
+        case 'class':
+        case 'style':
+        case 'statement':
+          break;
+      }
+    }
+  };
+
+  visit(directives);
+  return Array.from(roots);
 }
 
 export function compileComponents(
@@ -449,10 +504,27 @@ function buildComponentClass(
     lifecycleExtras.length > 0 ? `\n\n${lifecycleExtras.join('\n\n')}\n` : '\n';
 
   const templateHTML = templateNodesToHTML(renderIR.templateNodes);
-  const hasStaticTemplate = templateHTML.trim().length > 0;
+  const componentInterpolationVars = Array.from(
+    new Set([
+      ...metadata.inputs.map((input) => input.propName),
+      ...collectStateRoots(renderIR.directives),
+    ])
+  );
+  const hasDynamicTemplateValues = templateNodesHaveInterpolations(
+    renderIR.templateNodes,
+    [],
+    componentInterpolationVars
+  );
+  const hasStaticTemplate =
+    templateHTML.trim().length > 0 && !hasDynamicTemplateValues;
   const templateStatements = hasStaticTemplate
     ? ''
-    : serializeTemplateNodes(renderIR.templateNodes, renderTargetVar);
+    : serializeTemplateNodes(
+        renderIR.templateNodes,
+        renderTargetVar,
+        [],
+        componentInterpolationVars
+      );
 
   const renderLines: string[] = [
     `    const root = this.__htmsRoot || this;`,
@@ -464,6 +536,12 @@ function buildComponentClass(
     `      ${renderTargetVar}.removeChild(${renderTargetVar}.firstChild);`,
     `    }`,
   ];
+
+  for (const directive of renderIR.directives) {
+    if (directive.kind === 'state' && directive.mode === 'init') {
+      renderLines.push(...renderStateDirective(directive, '    '));
+    }
+  }
 
   if (hasStaticTemplate) {
     renderLines.push(
@@ -480,11 +558,16 @@ function buildComponentClass(
   const directiveCounter = { value: 0 };
   const hasStateDirectives = containsState(renderIR.directives);
   for (const directive of renderIR.directives) {
+    if (directive.kind === 'state' && directive.mode === 'init') {
+      continue;
+    }
     const directiveLines = renderDirective(
       directive,
       renderTargetVar,
       directiveCounter,
-      '    '
+      '    ',
+      [],
+      componentInterpolationVars
     );
     renderLines.push(...directiveLines);
   }
@@ -534,7 +617,8 @@ function renderDirective(
   targetVar: string,
   counter: { value: number },
   indent: string,
-  scopeVars: string[] = []
+  scopeVars: string[] = [],
+  componentInterpolationVars: string[] = []
 ): string[] {
   if (directive.kind === 'statement') {
     return directive.code
@@ -549,7 +633,8 @@ function renderDirective(
       targetVar,
       counter,
       indent,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     );
   }
 
@@ -559,7 +644,8 @@ function renderDirective(
       targetVar,
       counter,
       indent,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     );
   }
 
@@ -569,7 +655,8 @@ function renderDirective(
       targetVar,
       counter,
       indent,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     );
   }
 
@@ -583,7 +670,8 @@ function renderDirective(
       targetVar,
       counter,
       indent,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     );
   }
 
@@ -593,7 +681,8 @@ function renderDirective(
       targetVar,
       counter,
       indent,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     );
   }
 
@@ -615,7 +704,8 @@ function renderDirective(
       targetVar,
       counter,
       indent,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     );
   }
 
@@ -635,7 +725,8 @@ function renderLoopDirective(
   targetVar: string,
   counter: { value: number },
   indent: string,
-  scopeVars: string[]
+  scopeVars: string[],
+  componentInterpolationVars: string[]
 ): string[] {
   const lines: string[] = [];
   const fragmentVar = `_frag${counter.value++}`;
@@ -681,7 +772,8 @@ function renderLoopDirective(
       directive.directives,
       counter,
       innerIndent,
-      loopScopeVars
+      loopScopeVars,
+      componentInterpolationVars
     )
   );
   lines.push(`${innerIndent}${targetVar}.appendChild(${fragmentVar});`);
@@ -694,7 +786,8 @@ function renderConditionDirective(
   targetVar: string,
   counter: { value: number },
   indent: string,
-  scopeVars: string[]
+  scopeVars: string[],
+  componentInterpolationVars: string[]
 ): string[] {
   const lines: string[] = [];
   const trueFragment = `_frag${counter.value++}`;
@@ -711,7 +804,8 @@ function renderConditionDirective(
       directive.whenTrue.directives,
       counter,
       trueIndent,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     )
   );
 
@@ -731,7 +825,8 @@ function renderConditionDirective(
         directive.whenFalse.directives,
         counter,
         trueIndent,
-        scopeVars
+        scopeVars,
+        componentInterpolationVars
       )
     );
 
@@ -747,7 +842,8 @@ function renderEventDirective(
   targetVar: string,
   counter: { value: number },
   indent: string,
-  scopeVars: string[]
+  scopeVars: string[],
+  componentInterpolationVars: string[]
 ): string[] {
   const lines: string[] = [];
   const handlerVar = `_handler${counter.value++}`;
@@ -775,7 +871,8 @@ function renderEventDirective(
           targetVar,
           counter,
           `${bodyIndent}  `,
-          scopeVars
+          scopeVars,
+          componentInterpolationVars
         )
       );
     }
@@ -864,7 +961,8 @@ function renderSwitchDirective(
   targetVar: string,
   counter: { value: number },
   indent: string,
-  scopeVars: string[]
+  scopeVars: string[],
+  componentInterpolationVars: string[]
 ): string[] {
   const lines: string[] = [];
   const switchVar = `_switch${counter.value++}`;
@@ -886,7 +984,8 @@ function renderSwitchDirective(
         caseBlock.directives,
         counter,
         branchIndent,
-        scopeVars
+        scopeVars,
+        componentInterpolationVars
       )
     );
     lines.push(`${branchIndent}${targetVar}.appendChild(${fragmentVar});`);
@@ -906,7 +1005,8 @@ function renderSwitchDirective(
         directive.defaultCase.directives,
         counter,
         branchIndent,
-        scopeVars
+        scopeVars,
+        componentInterpolationVars
       )
     );
     lines.push(`${branchIndent}${targetVar}.appendChild(${fragmentVar});`);
@@ -921,7 +1021,8 @@ function renderWhileDirective(
   targetVar: string,
   counter: { value: number },
   indent: string,
-  scopeVars: string[]
+  scopeVars: string[],
+  componentInterpolationVars: string[]
 ): string[] {
   const lines: string[] = [];
   const guardVar = `_guard${counter.value++}`;
@@ -945,7 +1046,8 @@ function renderWhileDirective(
       directive.directives,
       counter,
       loopIndent,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     )
   );
   lines.push(`${loopIndent}${targetVar}.appendChild(${fragmentVar});`);
@@ -1027,10 +1129,16 @@ function fillFragment(
   directives: DirectiveNode[] | undefined,
   counter: { value: number },
   indent: string,
-  scopeVars: string[] = []
+  scopeVars: string[] = [],
+  componentInterpolationVars: string[] = []
 ): string[] {
   const lines: string[] = [];
-  const serialized = serializeTemplateNodes(template, fragmentVar, scopeVars);
+  const serialized = serializeTemplateNodes(
+    template,
+    fragmentVar,
+    scopeVars,
+    componentInterpolationVars
+  );
 
   if (serialized.trim().length > 0) {
     for (const line of serialized.split('\n')) {
@@ -1044,7 +1152,14 @@ function fillFragment(
   if (directives) {
     for (const nested of directives) {
       lines.push(
-        ...renderDirective(nested, fragmentVar, counter, indent, scopeVars)
+        ...renderDirective(
+          nested,
+          fragmentVar,
+          counter,
+          indent,
+          scopeVars,
+          componentInterpolationVars
+        )
       );
     }
   }
@@ -1057,7 +1172,8 @@ function renderAppendDirective(
   targetVar: string,
   counter: { value: number },
   indent: string,
-  scopeVars: string[]
+  scopeVars: string[],
+  componentInterpolationVars: string[]
 ): string[] {
   const lines: string[] = [];
   const innerIndent = `${indent}  `;
@@ -1079,7 +1195,8 @@ function renderAppendDirective(
       directive.directives,
       counter,
       `${innerIndent}  `,
-      scopeVars
+      scopeVars,
+      componentInterpolationVars
     )
   );
   lines.push(`${innerIndent}  node.appendChild(${fragmentVar});`);

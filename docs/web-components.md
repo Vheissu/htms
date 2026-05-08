@@ -54,6 +54,7 @@ badge.labelText = 'Synced';
 - Native HTML inside `<component>` becomes inert template markup (no direct `document.createElement` calls). The compiler serializes the template DOM, sanitizes with `SecurityValidator`, and stores it in a `<template>` node.
 - `<slot>` tags pass through to enable composition; arbitrary text nodes are preserved.
 - Component root defaults to `<template>` content; outer `<component>` is not emitted.
+- Text and attribute values in normal component markup can interpolate reactive component fields and props with `{count}`, `{user.name}`, and `{labelText}`. Simple names are resolved against the component instance.
 - Text and attribute values inside component-mode `<repeat>` templates can interpolate the active item, item property paths, and optional index with `{item}`, `{item.name}`, and `{indexName}` tokens.
 - Array repeats treat `null` and non-array values as empty lists so components can render safely before async data or property inputs arrive.
 

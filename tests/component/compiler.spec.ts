@@ -78,14 +78,74 @@ describe('Component compiler', () => {
   it('renders repeat loops inside render()', () => {
     const code = compile(`
       <component name="loop-box">
+        <var name="items" value='["One","Two"]' mutable="true"></var>
         <repeat variable="items" index="i">
           <div class="item">{item}</div>
         </repeat>
       </component>
     `);
     expect(code).toContain('Array.isArray');
+    expect(code).toContain('const _source');
+    expect(code).toContain('= this.items;');
     expect(code).toContain('for (let i = 0; i < _items');
     expect(code).toContain('const _frag');
+
+    execute(code);
+
+    const element = document.createElement('loop-box') as HTMLElement & {
+      shadowRoot: ShadowRoot;
+    };
+    document.body.appendChild(element);
+
+    const rows = Array.from(element.shadowRoot.querySelectorAll('.item')).map(
+      (node) => node.textContent
+    );
+    expect(rows).toEqual(['One', 'Two']);
+  });
+
+  it('interpolates component state and props in template nodes', () => {
+    const code = compile(`
+      <component name="template-state-box" props="labelText">
+        <var name="count" value="1" mutable="true"></var>
+        <button id="increment" data-label="{labelText}" title="Count {count}">{labelText}: {count}</button>
+        <event target="#increment" type="click">
+          <set name="count" op="++"></set>
+        </event>
+      </component>
+    `);
+
+    execute(code);
+
+    const element = document.createElement(
+      'template-state-box'
+    ) as HTMLElement & {
+      labelText: string;
+      shadowRoot: ShadowRoot;
+    };
+    element.labelText = 'Clicks';
+    document.body.appendChild(element);
+
+    const getButton = (): HTMLButtonElement => {
+      const button = element.shadowRoot.querySelector('#increment');
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error('button missing');
+      }
+      return button;
+    };
+
+    expect(getButton().textContent).toBe('Clicks: 1');
+    expect(getButton().getAttribute('data-label')).toBe('Clicks');
+    expect(getButton().getAttribute('title')).toBe('Count 1');
+
+    getButton().dispatchEvent(new window.Event('click', { bubbles: true }));
+
+    expect(getButton().textContent).toBe('Clicks: 2');
+    expect(getButton().getAttribute('title')).toBe('Count 2');
+
+    element.labelText = 'Taps';
+
+    expect(getButton().textContent).toBe('Taps: 2');
+    expect(getButton().getAttribute('data-label')).toBe('Taps');
   });
 
   it('interpolates repeat item and index tokens in component templates', () => {

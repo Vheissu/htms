@@ -42,6 +42,7 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
 - Parses HTMS markup with JSDOM, converts nodes to directives via tag handlers, validates with Esprima, then emits JavaScript through Escodegen.
 - A security pass rejects dangerous constructs (`eval`, inline handlers, raw `innerHTML`, path traversal, …).
 - In component mode, standard elements become cached template fragments, while control/state tags compile into instructions that mutate the component instance and re-render the shadow DOM.
+- Component text and attributes can interpolate reactive state and props with `{count}`, `{user.name}`, and `{labelText}`.
 - Component-owned runtime effects are disposed in `disconnectedCallback`, so cleanup handlers and fetch aborts run when elements leave the page.
 
 ## Tag Glossary (HTML‑first)
@@ -68,6 +69,7 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
   - `<show target="#a" when="x > 5" />` — sugar over TOGGLE.
 - Reactive Bindings
   - `<bind selector="#cnt" prop="textContent" expr="String(state.items.length)" />` — binds DOM to an expression; updates on SET/PUSH/SPLICE.
+  - Native component markup can also bind directly: `<p title="Count {count}">{label}: {count}</p>`.
 - Lists (keyed)
   - `<keyedlist target="#ul" of="state.items" item="it" index="i" key="it.id"> <li>{it.name}</li> </keyedlist>` — stable, keyed DOM updates.
 - Events
