@@ -83,11 +83,86 @@ class ListBoxComponent extends HTMLElement {
     const values = valuesFactory();
     arr.splice(index, del, ...values);
   }
+  __htmsListen(target, eventType, handler) {
+    target.addEventListener(eventType, handler);
+    this.__htmsRenderCleanups.push(() => {
+      target.removeEventListener(eventType, handler);
+    });
+  }
+  __htmsCleanupRenderListeners() {
+    const cleanups = this.__htmsRenderCleanups;
+    this.__htmsRenderCleanups = [];
+    for (const cleanup of cleanups) {
+      cleanup();
+    }
+  }
+  __htmsSnapshotKeyedLists(root, configs) {
+    const snapshots = Object.create(null);
+    for (const config of configs) {
+      snapshots[config.id] = Array.from(root.querySelectorAll(config.selector)).map(container => {
+        const keyed = new Map();
+        Array.from(container.children).forEach(child => {
+          if (typeof child.getAttribute !== 'function') {
+            return;
+          }
+          const key = child.getAttribute('data-key');
+          if (key !== null && !keyed.has(key)) {
+            keyed.set(key, child);
+          }
+        });
+        return keyed;
+      });
+    }
+    return snapshots;
+  }
+  __htmsSyncElement(target, source) {
+    Array.from(target.attributes).forEach(attr => {
+      if (!source.hasAttribute(attr.name)) {
+        target.removeAttribute(attr.name);
+      }
+    });
+    Array.from(source.attributes).forEach(attr => {
+      if (target.getAttribute(attr.name) !== attr.value) {
+        target.setAttribute(attr.name, attr.value);
+      }
+    });
+    const targetChildren = Array.from(target.childNodes);
+    const sourceChildren = Array.from(source.childNodes);
+    const childCount = Math.max(targetChildren.length, sourceChildren.length);
+    for (let i = 0; i < childCount; i++) {
+      const targetChild = targetChildren[i];
+      const sourceChild = sourceChildren[i];
+      if (!sourceChild && targetChild) {
+        target.removeChild(targetChild);
+        continue;
+      }
+      if (sourceChild && !targetChild) {
+        target.appendChild(sourceChild.cloneNode(true));
+        continue;
+      }
+      if (!sourceChild || !targetChild) {
+        continue;
+      }
+      if (targetChild.nodeType === Node.TEXT_NODE && sourceChild.nodeType === Node.TEXT_NODE) {
+        if (targetChild.textContent !== sourceChild.textContent) {
+          targetChild.textContent = sourceChild.textContent;
+        }
+        continue;
+      }
+      if (targetChild.nodeType === Node.ELEMENT_NODE && sourceChild.nodeType === Node.ELEMENT_NODE && targetChild.nodeName === sourceChild.nodeName) {
+        this.__htmsSyncElement(targetChild, sourceChild);
+        continue;
+      }
+      target.replaceChild(sourceChild.cloneNode(true), targetChild);
+    }
+  }
   constructor() {
     super();
     this.__htmsRoot = null;
     this.__htmsProps = Object.create(null);
     this.__htmsConnected = false;
+    this.__htmsRenderCleanups = [];
+    this.__htmsKeyedSnapshots = Object.create(null);
     if (!this.__htmsRoot) {
       this.__htmsRoot = this.attachShadow({ mode: 'open' });
     }
@@ -98,6 +173,7 @@ class ListBoxComponent extends HTMLElement {
   }
   disconnectedCallback() {
     this.__htmsConnected = false;
+    this.__htmsCleanupRenderListeners();
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
@@ -108,6 +184,11 @@ class ListBoxComponent extends HTMLElement {
       throw new Error('Component root not initialized');
     }
     const componentRoot = root;
+    this.__htmsCleanupRenderListeners();
+    const __htmsKeyedSnapshots = this.__htmsSnapshotKeyedLists(componentRoot, [{
+        'id': 'keyed-0',
+        'selector': '#people'
+      }]);
     while (componentRoot.firstChild) {
       componentRoot.removeChild(componentRoot.firstChild);
     }
@@ -120,15 +201,13 @@ class ListBoxComponent extends HTMLElement {
     componentRoot.appendChild(staticFragment);
     {
       const _targets0 = componentRoot.querySelectorAll('#people');
-      _targets0.forEach(container => {
-        while (container.firstChild) {
-          container.removeChild(container.firstChild);
-        }
-        const _source1 = this.people;
-        const _items2 = Array.isArray(_source1) ? _source1 : [];
-        for (let i = 0; i < _items2.length; i++) {
-          const item = _items2[i];
-          const _frag3 = document.createDocumentFragment();
+      _targets0.forEach((container, _containerIndex1) => {
+        const _previousByKey2 = __htmsKeyedSnapshots['keyed-0'] && __htmsKeyedSnapshots['keyed-0'][_containerIndex1] || new Map();
+        const _source3 = this.people;
+        const _items4 = Array.isArray(_source3) ? _source3 : [];
+        for (let i = 0; i < _items4.length; i++) {
+          const item = _items4[i];
+          const _frag5 = document.createDocumentFragment();
           const _el0 = document.createElement('li');
           _el0.setAttribute('class', 'person');
           const _el1 = document.createElement('span');
@@ -139,24 +218,38 @@ class ListBoxComponent extends HTMLElement {
           _el2.setAttribute('type', 'button');
           _el2.appendChild(document.createTextNode('Remove'));
           _el0.appendChild(_el2);
-          _frag3.appendChild(_el0);
-          {
-            const eventTargets = _frag3.querySelectorAll('.promote');
-            eventTargets.forEach(targetEl => {
-              const _handler6 = event => {
-                // No event body
-                this.__htmsSpliceState(['people'], () => i, () => 1, () => []);
-                this.render();
-              };
-              targetEl.addEventListener('click', _handler6);
-            });
+          _frag5.appendChild(_el0);
+          const _key6 = item;
+          const _keyText7 = String(_key6);
+          const _keyedNode8 = _frag5.firstElementChild;
+          if (_keyedNode8 && typeof _keyedNode8.setAttribute === 'function') {
+            _keyedNode8.setAttribute('data-key', _keyText7);
           }
-          const _key4 = item;
-          const _keyedNode5 = _frag3.firstElementChild;
-          if (_keyedNode5 && typeof _keyedNode5.setAttribute === 'function') {
-            _keyedNode5.setAttribute('data-key', String(_key4));
+          const _existingNode9 = _previousByKey2.get(_keyText7);
+          if (_existingNode9) {
+            _previousByKey2.delete(_keyText7);
           }
-          container.appendChild(_frag3);
+          let _mountedNode10 = _keyedNode8;
+          if (_existingNode9 && _keyedNode8 && _existingNode9.tagName === _keyedNode8.tagName) {
+            this.__htmsSyncElement(_existingNode9, _keyedNode8);
+            _mountedNode10 = _existingNode9;
+          }
+          if (_mountedNode10) {
+            container.appendChild(_mountedNode10);
+            {
+              const eventTargets = _mountedNode10.querySelectorAll('.promote');
+              eventTargets.forEach(targetEl => {
+                const _handler11 = event => {
+                  // No event body
+                  this.__htmsSpliceState(['people'], () => i, () => 1, () => []);
+                  this.render();
+                };
+                this.__htmsListen(targetEl, 'click', _handler11);
+              });
+            }
+          } else {
+            container.appendChild(_frag5);
+          }
         }
       });
     }

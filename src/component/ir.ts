@@ -80,6 +80,7 @@ export interface BindDirective {
 
 export interface KeyedListDirective {
   kind: 'keyed-list';
+  runtimeId?: string;
   selector: string;
   source: string;
   itemVar: string;

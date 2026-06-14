@@ -30,6 +30,7 @@ const EFFECT_FETCH_AUTO_JS = path.resolve(
   __dirname,
   '../../demos/effect-fetch-auto-component.js'
 );
+const EMIT_JS = path.resolve(__dirname, '../../demos/emit-component.js');
 
 test.describe('hello-world component', () => {
   test('renders shadow DOM content', async ({ page }) => {
@@ -170,12 +171,63 @@ test.describe('hello-world component', () => {
       { text: 'Ida', key: 'Ida' },
     ]);
 
+    await component.evaluate((el) => {
+      const row = el.shadowRoot?.querySelector('li.person[data-key="Lin"]');
+      if (row) {
+        (row as HTMLElement & { __htmsMarker?: string }).__htmsMarker =
+          'preserved';
+      }
+    });
+
     await component.locator('button.promote').first().click();
 
     await expect.poll(readRows).toEqual([
       { text: 'Lin', key: 'Lin' },
       { text: 'Ida', key: 'Ida' },
     ]);
+
+    await expect
+      .poll(() =>
+        component.evaluate((el) => {
+          const row = el.shadowRoot?.querySelector(
+            'li.person[data-key="Lin"]'
+          ) as (HTMLElement & { __htmsMarker?: string }) | null;
+          return row?.__htmsMarker;
+        })
+      )
+      .toBe('preserved');
+  });
+});
+
+test.describe('emit component', () => {
+  test('dispatches a composed custom event that crosses the shadow boundary', async ({
+    page,
+  }) => {
+    await page.goto('about:blank');
+    await page.addScriptTag({ path: EMIT_JS, type: 'module' });
+
+    await page.setContent('<emit-counter></emit-counter>');
+
+    await page.evaluate(() => {
+      (window as unknown as { __emitted: number[] }).__emitted = [];
+      document.querySelector('emit-counter')?.addEventListener(
+        'count-changed',
+        (event) => {
+          (window as unknown as { __emitted: number[] }).__emitted.push(
+            (event as CustomEvent<number>).detail
+          );
+        }
+      );
+    });
+
+    await page.locator('emit-counter').locator('button#inc').click();
+    await page.locator('emit-counter').locator('button#inc').click();
+
+    const emitted = await page.evaluate(
+      () => (window as unknown as { __emitted: number[] }).__emitted
+    );
+
+    expect(emitted).toEqual([1, 2]);
   });
 });
 

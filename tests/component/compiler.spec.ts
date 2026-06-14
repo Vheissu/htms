@@ -308,6 +308,8 @@ describe('Component compiler', () => {
 
     expect(code).toContain("componentRoot.querySelectorAll('#items')");
     expect(code).toContain("setAttribute('data-key'");
+    expect(code).toContain('__htmsSnapshotKeyedLists');
+    expect(code).toContain('__htmsSyncElement');
 
     execute(code);
 
@@ -327,11 +329,16 @@ describe('Component compiler', () => {
       { text: '1: Beta', key: 'Beta' },
     ]);
 
+    const betaRow = element.shadowRoot.querySelector('li.row[data-key="Beta"]');
+    const betaSpan = betaRow?.querySelector('span');
+
     element.shadowRoot
       .querySelector('.remove')
       ?.dispatchEvent(new window.Event('click', { bubbles: true }));
 
     expect(getRows()).toEqual([{ text: '0: Beta', key: 'Beta' }]);
+    expect(element.shadowRoot.querySelector('li.row')).toBe(betaRow);
+    expect(element.shadowRoot.querySelector('li.row span')).toBe(betaSpan);
   });
 
   it('handles switch/case branches', () => {
@@ -416,8 +423,66 @@ describe('Component compiler', () => {
         <model selector="#name" path="name"></model>
       </component>
     `);
-    expect(code).toContain("addEventListener('input'");
+    expect(code).toContain("this.__htmsListen(targetEl, 'input'");
     expect(code).toContain("this.__htmsSetState(['name']");
+  });
+
+  it('dispatches custom events from emit directives inside handlers', () => {
+    const code = compile(`
+      <component name="emit-box">
+        <var name="count" value="0" mutable="true"></var>
+        <button id="inc">Inc</button>
+        <event target="#inc" type="click">
+          <set name="count" op="++"></set>
+          <emit name="count-changed" detail="this.count"></emit>
+        </event>
+      </component>
+    `);
+
+    expect(code).toContain(
+      "this.dispatchEvent(new CustomEvent('count-changed'"
+    );
+    expect(code).toContain('detail: this.count');
+    expect(code).toContain('composed: true');
+
+    execute(code);
+
+    const element = document.createElement('emit-box') as HTMLElement & {
+      shadowRoot: ShadowRoot;
+    };
+    document.body.appendChild(element);
+
+    let received: number | undefined;
+    element.addEventListener('count-changed', (event) => {
+      received = (event as CustomEvent<number>).detail;
+    });
+
+    element.shadowRoot
+      .querySelector('#inc')
+      ?.dispatchEvent(new window.Event('click', { bubbles: true }));
+
+    expect(received).toBe(1);
+  });
+
+  it('rejects emit directives without an event name', () => {
+    const result = parseHTML(
+      `
+      <component name="bad-emit-box">
+        <button id="go">Go</button>
+        <event target="#go" type="click">
+          <emit detail="this.count"></emit>
+        </event>
+      </component>
+    `,
+      { mode: 'component' }
+    );
+
+    expect(result.success).toBe(false);
+    expect(
+      result.errors.some((error) =>
+        /EMIT requires a name attribute/.test(error.message)
+      )
+    ).toBe(true);
   });
 
   it('reflects observed attributes into reactive component properties', () => {

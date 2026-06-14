@@ -29,7 +29,7 @@ function collectNestedComponentDirectives(
   const directives: DirectiveNode[] = [];
 
   for (const child of Array.from(element.children)) {
-    if (isLowerCaseTag(child)) {
+    if (isLowerCaseTag(child as Node)) {
       directives.push(
         ...collectNestedComponentDirectives(
           child,

@@ -83,9 +83,10 @@ badge.labelText = 'Synced';
 ## Control Flow Translation
 
 - `<repeat>` compiles to loops that rebuild fragments under the owning element during `render()`.
-- `<keyedlist>` targets a container inside the component root, renders item templates with item/index interpolation, and scopes item events to each generated fragment.
+- `<keyedlist>` targets a container inside the component root, renders item templates with item/index interpolation, preserves DOM nodes for matching keys across updates, and scopes item events to each generated fragment.
 - `<if>` / `<else>` generate conditional blocks that toggle DOM nodes within the shadow root (no global document access).
 - `<print type="log">` and similar imperative tags run within component methods, with console access sandboxed via `SecurityValidator`.
+- `<emit>` compiles to `this.dispatchEvent(new CustomEvent(...))`, letting a component notify its host. It defaults to `composed: true` so the event escapes the shadow root, and runs inside the enclosing handler so it can forward freshly-updated state via `detail`.
 
 ## Compilation Phases
 

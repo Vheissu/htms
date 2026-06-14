@@ -83,11 +83,25 @@ class TodoBoxComponent extends HTMLElement {
     const values = valuesFactory();
     arr.splice(index, del, ...values);
   }
+  __htmsListen(target, eventType, handler) {
+    target.addEventListener(eventType, handler);
+    this.__htmsRenderCleanups.push(() => {
+      target.removeEventListener(eventType, handler);
+    });
+  }
+  __htmsCleanupRenderListeners() {
+    const cleanups = this.__htmsRenderCleanups;
+    this.__htmsRenderCleanups = [];
+    for (const cleanup of cleanups) {
+      cleanup();
+    }
+  }
   constructor() {
     super();
     this.__htmsRoot = null;
     this.__htmsProps = Object.create(null);
     this.__htmsConnected = false;
+    this.__htmsRenderCleanups = [];
     if (!this.__htmsRoot) {
       this.__htmsRoot = this.attachShadow({ mode: 'open' });
     }
@@ -98,6 +112,7 @@ class TodoBoxComponent extends HTMLElement {
   }
   disconnectedCallback() {
     this.__htmsConnected = false;
+    this.__htmsCleanupRenderListeners();
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
@@ -108,6 +123,7 @@ class TodoBoxComponent extends HTMLElement {
       throw new Error('Component root not initialized');
     }
     const componentRoot = root;
+    this.__htmsCleanupRenderListeners();
     while (componentRoot.firstChild) {
       componentRoot.removeChild(componentRoot.firstChild);
     }
@@ -135,7 +151,7 @@ class TodoBoxComponent extends HTMLElement {
           }
           this.render();
         };
-        targetEl.addEventListener('click', _handler0);
+        this.__htmsListen(targetEl, 'click', _handler0);
       });
     }
     {
@@ -162,7 +178,7 @@ class TodoBoxComponent extends HTMLElement {
           }
           this.render();
         };
-        targetEl.addEventListener('keypress', _handler2);
+        this.__htmsListen(targetEl, 'keypress', _handler2);
       });
     }
     const _source6 = this.todos;
@@ -190,7 +206,7 @@ class TodoBoxComponent extends HTMLElement {
             this.__htmsSpliceState(['todos'], () => i, () => 1, () => []);
             this.render();
           };
-          targetEl.addEventListener('click', _handler8);
+          this.__htmsListen(targetEl, 'click', _handler8);
         });
       }
       componentRoot.appendChild(_frag5);

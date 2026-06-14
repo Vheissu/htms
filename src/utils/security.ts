@@ -25,7 +25,10 @@ const RESERVED_WORDS = new Set([
   'if', 'import', 'in', 'instanceof', 'let', 'new', 'return', 'super', 'switch',
   'this', 'throw', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield',
   'async', 'await', 'static', 'enum', 'implements', 'interface', 'package',
-  'private', 'protected', 'public'
+  'private', 'protected', 'public',
+  // Literals that are syntactically valid against the identifier pattern but
+  // cannot be used as binding names (e.g. `const true = ...` is a syntax error).
+  'null', 'true', 'false'
 ]);
 
 export class SecurityValidator {
@@ -149,7 +152,7 @@ export class SecurityValidator {
     }
 
     const num = parseFloat(value);
-    if (num > Number.MAX_SAFE_INTEGER) {
+    if (num > Number.MAX_SAFE_INTEGER || num < Number.MIN_SAFE_INTEGER) {
       errors.push({
         type: 'validation',
         message: `Numeric value out of safe range: ${value}`

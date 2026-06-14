@@ -1,0 +1,9 @@
+<component name="emit-counter">
+  <var name="count" value="0" mutable="true"></var>
+  <button id="inc">Increment</button>
+  <p id="out">Count: {count}</p>
+  <event target="#inc" type="click">
+    <set name="count" op="++"></set>
+    <emit name="count-changed" detail="this.count"></emit>
+  </event>
+</component>

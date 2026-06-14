@@ -22,8 +22,18 @@ describe('SecurityValidator', () => {
 
     it('should reject reserved words', () => {
       const reserved = ['function', 'var', 'let', 'const', 'if', 'else', 'for', 'while'];
-      
+
       for (const word of reserved) {
+        const errors = SecurityValidator.validateJavaScriptIdentifier(word);
+        expect(errors.length).toBeGreaterThan(0);
+        expect(errors[0].message).toContain('Reserved word');
+      }
+    });
+
+    it('should reject literals that cannot be binding names', () => {
+      const literals = ['null', 'true', 'false'];
+
+      for (const word of literals) {
         const errors = SecurityValidator.validateJavaScriptIdentifier(word);
         expect(errors.length).toBeGreaterThan(0);
         expect(errors[0].message).toContain('Reserved word');
@@ -116,8 +126,11 @@ describe('SecurityValidator', () => {
     });
 
     it('should reject numbers out of safe range', () => {
-      const outOfRange = [(Number.MAX_SAFE_INTEGER + 1).toString()];
-      
+      const outOfRange = [
+        (Number.MAX_SAFE_INTEGER + 1).toString(),
+        (Number.MIN_SAFE_INTEGER - 1).toString(),
+      ];
+
       for (const num of outOfRange) {
         const errors = SecurityValidator.validateNumericValue(num);
         expect(errors.length).toBeGreaterThan(0);

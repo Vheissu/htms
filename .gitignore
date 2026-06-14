@@ -44,3 +44,6 @@ test-*.js
 
 # Cache
 .eslintcache
+# Playwright
+test-results/
+playwright-report/

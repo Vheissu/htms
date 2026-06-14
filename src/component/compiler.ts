@@ -47,6 +47,11 @@ interface ComponentInput {
   attributeName: string;
 }
 
+interface KeyedListRuntimeConfig {
+  id: string;
+  selector: string;
+}
+
 const SHADOW_MODES = new Set(['open', 'closed', 'none']);
 
 function containsState(directives?: DirectiveNode[]): boolean {
@@ -97,6 +102,115 @@ function containsState(directives?: DirectiveNode[]): boolean {
     }
   }
   return false;
+}
+
+function containsEvent(directives?: DirectiveNode[]): boolean {
+  if (!directives) return false;
+
+  for (const directive of directives) {
+    switch (directive.kind) {
+      case 'event':
+        return true;
+      case 'loop':
+        if (containsEvent(directive.directives)) return true;
+        break;
+      case 'condition':
+        if (containsEvent(directive.whenTrue.directives)) return true;
+        if (
+          directive.whenFalse &&
+          containsEvent(directive.whenFalse.directives)
+        )
+          return true;
+        break;
+      case 'keyed-list':
+        if (containsEvent(directive.directives)) return true;
+        break;
+      case 'append':
+        if (containsEvent(directive.directives)) return true;
+        break;
+      case 'while':
+        if (containsEvent(directive.directives)) return true;
+        break;
+      case 'switch':
+        if (directive.cases.some((c) => containsEvent(c.directives)))
+          return true;
+        if (
+          directive.defaultCase &&
+          containsEvent(directive.defaultCase.directives)
+        )
+          return true;
+        break;
+      case 'state':
+      case 'visibility':
+      case 'attribute':
+      case 'bind':
+      case 'class':
+      case 'style':
+      case 'statement':
+        break;
+    }
+  }
+
+  return false;
+}
+
+function assignKeyedListRuntimeIds(
+  directives?: DirectiveNode[]
+): KeyedListRuntimeConfig[] {
+  const configs: KeyedListRuntimeConfig[] = [];
+
+  const visit = (items?: DirectiveNode[]): void => {
+    if (!items) return;
+
+    for (const directive of items) {
+      switch (directive.kind) {
+        case 'keyed-list': {
+          const id = `keyed-${configs.length}`;
+          directive.runtimeId = id;
+          configs.push({ id, selector: directive.selector });
+          visit(directive.directives);
+          break;
+        }
+        case 'loop':
+          visit(directive.directives);
+          break;
+        case 'condition':
+          visit(directive.whenTrue.directives);
+          if (directive.whenFalse) {
+            visit(directive.whenFalse.directives);
+          }
+          break;
+        case 'event':
+          visit(directive.directives);
+          break;
+        case 'append':
+          visit(directive.directives);
+          break;
+        case 'while':
+          visit(directive.directives);
+          break;
+        case 'switch':
+          for (const switchCase of directive.cases) {
+            visit(switchCase.directives);
+          }
+          if (directive.defaultCase) {
+            visit(directive.defaultCase.directives);
+          }
+          break;
+        case 'state':
+        case 'visibility':
+        case 'attribute':
+        case 'bind':
+        case 'class':
+        case 'style':
+        case 'statement':
+          break;
+      }
+    }
+  };
+
+  visit(directives);
+  return configs;
 }
 
 function collectStateRoots(directives?: DirectiveNode[]): string[] {
@@ -524,6 +638,9 @@ function buildComponentClass(
   );
   const hasStaticTemplate =
     templateHTML.trim().length > 0 && !hasDynamicTemplateValues;
+  const keyedListConfigs = assignKeyedListRuntimeIds(renderIR.directives);
+  const hasKeyedLists = keyedListConfigs.length > 0;
+  const hasEventDirectives = containsEvent(renderIR.directives);
   const templateStatements = hasStaticTemplate
     ? ''
     : serializeTemplateNodes(
@@ -539,10 +656,23 @@ function buildComponentClass(
     `      throw new Error('Component root not initialized');`,
     `    }`,
     `    const ${renderTargetVar} = root;`,
+  ];
+
+  if (hasEventDirectives) {
+    renderLines.push(`    this.__htmsCleanupRenderListeners();`);
+  }
+
+  if (hasKeyedLists) {
+    renderLines.push(
+      `    const __htmsKeyedSnapshots = this.__htmsSnapshotKeyedLists(${renderTargetVar}, ${JSON.stringify(keyedListConfigs)});`
+    );
+  }
+
+  renderLines.push(
     `    while (${renderTargetVar}.firstChild) {`,
     `      ${renderTargetVar}.removeChild(${renderTargetVar}.firstChild);`,
-    `    }`,
-  ];
+    `    }`
+  );
 
   for (const directive of renderIR.directives) {
     if (directive.kind === 'state' && directive.mode === 'init') {
@@ -601,12 +731,21 @@ function buildComponentClass(
     ? `  __htmsResolvePath(path) {\n    if (!Array.isArray(path) || path.length === 0) {\n      throw new Error('Invalid state path');\n    }\n    let ref = this;\n    for (let i = 0; i < path.length - 1; i++) {\n      const key = path[i];\n      const next = ref[key];\n      if (next === undefined || next === null || typeof next !== 'object') {\n        ref[key] = {};\n      }\n      ref = ref[key];\n    }\n    return { target: ref, key: path[path.length - 1] };\n  }\n\n  __htmsInitState(path, initializer) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (!Object.prototype.hasOwnProperty.call(target, key)) {\n      target[key] = initializer();\n    }\n  }\n\n  __htmsSetState(path, op, valueFactory) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (op === '++') {\n      const current = typeof target[key] === 'number' ? target[key] : 0;\n      target[key] = current + 1;\n      return;\n    }\n    if (op === '--') {\n      const current = typeof target[key] === 'number' ? target[key] : 0;\n      target[key] = current - 1;\n      return;\n    }\n    const current = target[key];\n    const value = valueFactory();\n    switch (op) {\n      case '+=':\n        target[key] = (typeof current === 'number' ? current : 0) + value;\n        break;\n      case '-=':\n        target[key] = (typeof current === 'number' ? current : 0) - value;\n        break;\n      case '*=':\n        target[key] = (typeof current === 'number' ? current : 0) * value;\n        break;\n      case '/=':\n        target[key] = (typeof current === 'number' ? current : 0) / value;\n        break;\n      default:\n        target[key] = value;\n    }\n  }\n\n  __htmsEnsureArray(path) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (!Array.isArray(target[key])) {\n      target[key] = [];\n    }\n    return target[key];\n  }\n\n  __htmsPushState(path, valueFactory) {\n    const arr = this.__htmsEnsureArray(path);\n    arr.push(valueFactory());\n  }\n\n  __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory) {\n    const arr = this.__htmsEnsureArray(path);\n    const index = indexFactory();\n    const del = deleteFactory();\n    const values = valuesFactory();\n    arr.splice(index, del, ...values);\n  }\n\n`
     : '';
 
+  const eventHelpers = hasEventDirectives
+    ? `  __htmsListen(target, eventType, handler) {\n    target.addEventListener(eventType, handler);\n    this.__htmsRenderCleanups.push(() => {\n      target.removeEventListener(eventType, handler);\n    });\n  }\n\n  __htmsCleanupRenderListeners() {\n    const cleanups = this.__htmsRenderCleanups;\n    this.__htmsRenderCleanups = [];\n    for (const cleanup of cleanups) {\n      cleanup();\n    }\n  }\n\n`
+    : '';
+
+  const keyedListHelpers = hasKeyedLists
+    ? `  __htmsSnapshotKeyedLists(root, configs) {\n    const snapshots = Object.create(null);\n    for (const config of configs) {\n      snapshots[config.id] = Array.from(root.querySelectorAll(config.selector)).map(container => {\n        const keyed = new Map();\n        Array.from(container.children).forEach(child => {\n          if (typeof child.getAttribute !== 'function') {\n            return;\n          }\n          const key = child.getAttribute('data-key');\n          if (key !== null && !keyed.has(key)) {\n            keyed.set(key, child);\n          }\n        });\n        return keyed;\n      });\n    }\n    return snapshots;\n  }\n\n  __htmsSyncElement(target, source) {\n    Array.from(target.attributes).forEach(attr => {\n      if (!source.hasAttribute(attr.name)) {\n        target.removeAttribute(attr.name);\n      }\n    });\n    Array.from(source.attributes).forEach(attr => {\n      if (target.getAttribute(attr.name) !== attr.value) {\n        target.setAttribute(attr.name, attr.value);\n      }\n    });\n\n    const targetChildren = Array.from(target.childNodes);\n    const sourceChildren = Array.from(source.childNodes);\n    const childCount = Math.max(targetChildren.length, sourceChildren.length);\n    for (let i = 0; i < childCount; i++) {\n      const targetChild = targetChildren[i];\n      const sourceChild = sourceChildren[i];\n      if (!sourceChild && targetChild) {\n        target.removeChild(targetChild);\n        continue;\n      }\n      if (sourceChild && !targetChild) {\n        target.appendChild(sourceChild.cloneNode(true));\n        continue;\n      }\n      if (!sourceChild || !targetChild) {\n        continue;\n      }\n      if (targetChild.nodeType === Node.TEXT_NODE && sourceChild.nodeType === Node.TEXT_NODE) {\n        if (targetChild.textContent !== sourceChild.textContent) {\n          targetChild.textContent = sourceChild.textContent;\n        }\n        continue;\n      }\n      if (targetChild.nodeType === Node.ELEMENT_NODE && sourceChild.nodeType === Node.ELEMENT_NODE && targetChild.nodeName === sourceChild.nodeName) {\n        this.__htmsSyncElement(targetChild, sourceChild);\n        continue;\n      }\n      target.replaceChild(sourceChild.cloneNode(true), targetChild);\n    }\n  }\n\n`
+    : '';
+
   return `class ${metadata.className} extends HTMLElement {
-${staticTemplateProperty}${inputHelpers}${stateHelpers}  constructor() {
+${staticTemplateProperty}${inputHelpers}${stateHelpers}${eventHelpers}${keyedListHelpers}  constructor() {
     super();
     this.__htmsRoot = null;
     this.__htmsProps = Object.create(null);
     this.__htmsConnected = false;
+${hasEventDirectives ? `    this.__htmsRenderCleanups = [];\n` : ''}${hasKeyedLists ? `    this.__htmsKeyedSnapshots = Object.create(null);\n` : ''}
 ${shadowInit}
 ${inputInitialization ? `${inputInitialization}\n` : ''}  }
 
@@ -617,6 +756,7 @@ ${inputInitialization ? `${inputInitialization}\n` : ''}  }
 
   disconnectedCallback() {
     this.__htmsConnected = false;
+${hasEventDirectives ? `    this.__htmsCleanupRenderListeners();\n` : ''}
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
@@ -909,7 +1049,7 @@ function renderEventDirective(
   }
   lines.push(`${bodyIndent}};`);
   lines.push(
-    `${bodyIndent}targetEl.addEventListener(${JSON.stringify(directive.eventType)}, ${handlerVar});`
+    `${bodyIndent}this.__htmsListen(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar});`
   );
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
@@ -1279,22 +1419,30 @@ function renderKeyedListDirective(
   const bodyIndent = `${innerIndent}  `;
   const loopIndent = `${bodyIndent}  `;
   const selector = JSON.stringify(directive.selector);
+  const runtimeId = JSON.stringify(directive.runtimeId ?? 'keyed-list');
   const targetsVar = `_targets${counter.value++}`;
+  const containerIndexVar = `_containerIndex${counter.value++}`;
+  const previousByKeyVar = `_previousByKey${counter.value++}`;
   const rawSourceVar = `_source${counter.value++}`;
   const arraySourceVar = `_items${counter.value++}`;
   const fragmentVar = `_frag${counter.value++}`;
   const keyVar = `_key${counter.value++}`;
+  const keyTextVar = `_keyText${counter.value++}`;
   const keyedNodeVar = `_keyedNode${counter.value++}`;
+  const existingNodeVar = `_existingNode${counter.value++}`;
+  const mountedNodeVar = `_mountedNode${counter.value++}`;
   const loopScopeVars = [...scopeVars, directive.itemVar, directive.indexVar];
 
   lines.push(`${indent}{`);
   lines.push(
     `${innerIndent}const ${targetsVar} = ${targetVar}.querySelectorAll(${selector});`
   );
-  lines.push(`${innerIndent}${targetsVar}.forEach(container => {`);
-  lines.push(`${bodyIndent}while (container.firstChild) {`);
-  lines.push(`${loopIndent}container.removeChild(container.firstChild);`);
-  lines.push(`${bodyIndent}}`);
+  lines.push(
+    `${innerIndent}${targetsVar}.forEach((container, ${containerIndexVar}) => {`
+  );
+  lines.push(
+    `${bodyIndent}const ${previousByKeyVar} = (__htmsKeyedSnapshots[${runtimeId}] && __htmsKeyedSnapshots[${runtimeId}][${containerIndexVar}]) || new Map();`
+  );
   lines.push(`${bodyIndent}const ${rawSourceVar} = ${directive.source};`);
   lines.push(
     `${bodyIndent}const ${arraySourceVar} = Array.isArray(${rawSourceVar}) ? ${rawSourceVar} : [];`
@@ -1312,7 +1460,7 @@ function renderKeyedListDirective(
     ...fillFragment(
       fragmentVar,
       directive.template,
-      directive.directives,
+      undefined,
       counter,
       loopIndent,
       loopScopeVars,
@@ -1320,6 +1468,7 @@ function renderKeyedListDirective(
     )
   );
   lines.push(`${loopIndent}const ${keyVar} = ${directive.key};`);
+  lines.push(`${loopIndent}const ${keyTextVar} = String(${keyVar});`);
   lines.push(
     `${loopIndent}const ${keyedNodeVar} = ${fragmentVar}.firstElementChild;`
   );
@@ -1327,10 +1476,43 @@ function renderKeyedListDirective(
     `${loopIndent}if (${keyedNodeVar} && typeof ${keyedNodeVar}.setAttribute === 'function') {`
   );
   lines.push(
-    `${loopIndent}  ${keyedNodeVar}.setAttribute('data-key', String(${keyVar}));`
+    `${loopIndent}  ${keyedNodeVar}.setAttribute('data-key', ${keyTextVar});`
   );
   lines.push(`${loopIndent}}`);
-  lines.push(`${loopIndent}container.appendChild(${fragmentVar});`);
+  lines.push(
+    `${loopIndent}const ${existingNodeVar} = ${previousByKeyVar}.get(${keyTextVar});`
+  );
+  lines.push(`${loopIndent}if (${existingNodeVar}) {`);
+  lines.push(`${loopIndent}  ${previousByKeyVar}.delete(${keyTextVar});`);
+  lines.push(`${loopIndent}}`);
+  lines.push(`${loopIndent}let ${mountedNodeVar} = ${keyedNodeVar};`);
+  lines.push(
+    `${loopIndent}if (${existingNodeVar} && ${keyedNodeVar} && ${existingNodeVar}.tagName === ${keyedNodeVar}.tagName) {`
+  );
+  lines.push(
+    `${loopIndent}  this.__htmsSyncElement(${existingNodeVar}, ${keyedNodeVar});`
+  );
+  lines.push(`${loopIndent}  ${mountedNodeVar} = ${existingNodeVar};`);
+  lines.push(`${loopIndent}}`);
+  lines.push(`${loopIndent}if (${mountedNodeVar}) {`);
+  lines.push(`${loopIndent}  container.appendChild(${mountedNodeVar});`);
+  if (directive.directives && directive.directives.length > 0) {
+    for (const nested of directive.directives) {
+      lines.push(
+        ...renderDirective(
+          nested,
+          mountedNodeVar,
+          counter,
+          `${loopIndent}  `,
+          loopScopeVars,
+          componentInterpolationVars
+        )
+      );
+    }
+  }
+  lines.push(`${loopIndent}} else {`);
+  lines.push(`${loopIndent}  container.appendChild(${fragmentVar});`);
+  lines.push(`${loopIndent}}`);
   lines.push(`${bodyIndent}}`);
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);

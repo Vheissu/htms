@@ -4,6 +4,7 @@ import {
   isLowerCaseTag,
 } from '../component/template-utils';
 import { DirectiveNode, TemplateNode } from '../component/ir';
+import { handleEventTag } from './event';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
@@ -17,7 +18,7 @@ function collectNestedComponentDirectives(
   const directives: DirectiveNode[] = [];
 
   for (const child of Array.from(element.children)) {
-    if (isLowerCaseTag(child)) {
+    if (isLowerCaseTag(child as Node)) {
       directives.push(
         ...collectNestedComponentDirectives(
           child,
@@ -30,8 +31,11 @@ function collectNestedComponentDirectives(
       continue;
     }
 
-    const { handleElement } = require('../handlers');
-    const childResult: HandlerResult = handleElement(child, {
+    if (child.tagName.toUpperCase() !== 'EVENT') {
+      continue;
+    }
+
+    const childResult: HandlerResult = handleEventTag(child, {
       ...options,
       loopVariable,
       parentContext: 'component',

@@ -29,6 +29,7 @@ import { handleClassTag } from './tags/class';
 import { handleStyleTag } from './tags/style';
 import { handleModelTag } from './tags/model';
 import { handleDeriveTag } from './tags/derive';
+import { handleEmitTag } from './tags/emit';
 import {
   TagHandler,
   TagHandlerOptions,
@@ -138,6 +139,7 @@ const HANDLERS_MAPPING = {
   STYLE: handleStyleTag,
   MODEL: handleModelTag,
   DERIVE: handleDeriveTag,
+  EMIT: handleEmitTag,
 } satisfies Record<string, TagHandler>;
 
 export function handleElement(
