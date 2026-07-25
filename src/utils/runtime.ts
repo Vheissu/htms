@@ -190,7 +190,7 @@ export function ensureRuntime(): string {
             record.cleanupFactory = typeof spec.cleanup === 'function' ? spec.cleanup : record.cleanupFactory;
             record.once = !!spec.once;
             record.disposed = false;
-            if (spec.immediate !== false && !record.initialized) {
+            if (spec.immediate !== false) {
               record.dirty = true;
             }
             if (spec.immediate === false && !record.initialized) {

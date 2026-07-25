@@ -5,8 +5,16 @@ module.exports = {
   // Run repository tests under `tests/**` and legacy suites under `src/tests/**`.
   testMatch: [
     '<rootDir>/tests/**/*.(spec|test).ts',
-    '<rootDir>/src/tests/**/*.(spec|test).ts'
+    '<rootDir>/src/tests/**/*.(spec|test).ts',
   ],
   testPathIgnorePatterns: ['/node_modules/', '/dist/', '<rootDir>/tests/e2e/'],
   setupFiles: ['<rootDir>/tests/jest.setup.ts'],
+  coverageThreshold: {
+    global: {
+      branches: 50,
+      functions: 60,
+      lines: 65,
+      statements: 65,
+    },
+  },
 };

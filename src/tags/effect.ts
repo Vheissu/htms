@@ -2,14 +2,15 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
+import { handleElement } from '../handlers';
 
 let effectCounter = 0;
 
 function splitStatements(source: string): string[] {
   return source
     .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0);
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 function ensureTerminated(statement: string): string {
@@ -36,7 +37,7 @@ export const handleEffectTag: TagHandler = (
 
     const bodyStatements: string[] = [];
 
-    const collectCode = (code: string) => {
+    const collectCode = (code: string): void => {
       for (const line of splitStatements(code)) {
         bodyStatements.push(line);
       }
@@ -51,7 +52,9 @@ export const handleEffectTag: TagHandler = (
         }
         const textErrors = SecurityValidator.validateContent(text);
         if (textErrors.length > 0) {
-          errors.push(...textErrors.map(error => ({ ...error, tag: 'EFFECT' })));
+          errors.push(
+            ...textErrors.map((error) => ({ ...error, tag: 'EFFECT' }))
+          );
           if (options.strictMode) {
             return { code: '', errors, warnings };
           }
@@ -59,20 +62,26 @@ export const handleEffectTag: TagHandler = (
         collectCode(text);
       } else if (node.nodeType === 1) {
         const child = node as Element;
-        const { handleElement } = require('../handlers');
         const childOptions: TagHandlerOptions = {
           ...options,
-          parentContext: 'effect'
+          parentContext: 'effect',
         };
         const childResult: HandlerResult = handleElement(child, childOptions);
         if (childResult.errors.length > 0) {
-          errors.push(...childResult.errors.map(error => ({ ...error, tag: 'EFFECT' })));
+          errors.push(
+            ...childResult.errors.map((error) => ({ ...error, tag: 'EFFECT' }))
+          );
           if (options.strictMode) {
             return { code: '', errors, warnings };
           }
         }
         if (childResult.warnings.length > 0) {
-          warnings.push(...childResult.warnings.map(warning => ({ ...warning, tag: warning.tag ?? 'EFFECT' })));
+          warnings.push(
+            ...childResult.warnings.map((warning) => ({
+              ...warning,
+              tag: warning.tag ?? 'EFFECT',
+            }))
+          );
         }
         if (childResult.code) {
           collectCode(childResult.code);
@@ -83,7 +92,7 @@ export const handleEffectTag: TagHandler = (
     if (runAttr) {
       const runErrors = SecurityValidator.validateContent(runAttr);
       if (runErrors.length > 0) {
-        errors.push(...runErrors.map(error => ({ ...error, tag: 'EFFECT' })));
+        errors.push(...runErrors.map((error) => ({ ...error, tag: 'EFFECT' })));
         return { code: '', errors, warnings };
       }
       collectCode(ensureTerminated(runAttr));
@@ -92,8 +101,9 @@ export const handleEffectTag: TagHandler = (
     if (bodyStatements.length === 0) {
       errors.push({
         type: 'validation',
-        message: 'EFFECT requires body content via run attribute, text, or child tags',
-        tag: 'EFFECT'
+        message:
+          'EFFECT requires body content via run attribute, text, or child tags',
+        tag: 'EFFECT',
       });
       return { code: '', errors, warnings };
     }
@@ -101,7 +111,9 @@ export const handleEffectTag: TagHandler = (
     if (cleanupAttr) {
       const cleanupErrors = SecurityValidator.validateContent(cleanupAttr);
       if (cleanupErrors.length > 0) {
-        errors.push(...cleanupErrors.map(error => ({ ...error, tag: 'EFFECT' })));
+        errors.push(
+          ...cleanupErrors.map((error) => ({ ...error, tag: 'EFFECT' }))
+        );
         return { code: '', errors, warnings };
       }
     }
@@ -115,14 +127,22 @@ export const handleEffectTag: TagHandler = (
         }
         const depErrors = SecurityValidator.validateContent(dep);
         if (depErrors.length > 0) {
-          errors.push(...depErrors.map(error => ({ ...error, tag: 'EFFECT', message: `Invalid dependency expression: ${dep}` })));
+          errors.push(
+            ...depErrors.map((error) => ({
+              ...error,
+              tag: 'EFFECT',
+              message: `Invalid dependency expression: ${dep}`,
+            }))
+          );
           return { code: '', errors, warnings };
         }
         dependencies.push(dep);
       }
     }
 
-    const immediate = immediateAttr ? immediateAttr.toLowerCase() !== 'false' : true;
+    const immediate = immediateAttr
+      ? immediateAttr.toLowerCase() !== 'false'
+      : true;
     const once = onceAttr ? onceAttr.toLowerCase() === 'true' : false;
     const effectId = `__effect_${++effectCounter}`;
     const runtime = ensureRuntime();
@@ -130,11 +150,11 @@ export const handleEffectTag: TagHandler = (
 
     const depsCode =
       dependencies.length > 0
-        ? `[${dependencies.map(dep => `function(){ return ${dep}; }`).join(', ')}]`
+        ? `[${dependencies.map((dep) => `function(){ return ${dep}; }`).join(', ')}]`
         : '[]';
 
     const runBody = bodyStatements
-      .map(line => `            ${line}`)
+      .map((line) => `            ${line}`)
       .join('\n');
 
     const cleanupBlock = cleanupAttr
@@ -148,8 +168,8 @@ export const handleEffectTag: TagHandler = (
           },`
       : '';
 
-    const code = `${runtime}
-      (function(owner){
+    const registrationCode = `(function(owner){
+        if (typeof window !== 'undefined' && window.__HTMS_SSR__) { return; }
         var runtime = typeof window !== 'undefined' ? window.__htms : null;
         if (!runtime) { return; }
         runtime.registerEffect({
@@ -167,24 +187,37 @@ ${runBody}
           },${cleanupBlock ? `\n${cleanupBlock.slice(1)}` : '\n'}
         });
       })(${ownerExpr});`;
+    const code = `${runtime}
+      ${registrationCode}`;
 
     CompilerLogger.logDebug('Generated effect', {
       id: effectId,
       dependencies: dependencies.length,
       immediate,
-      once
+      once,
     });
 
     return {
       code,
       errors,
-      warnings
+      warnings,
+      component: options.componentContext
+        ? {
+            directives: [
+              {
+                kind: 'statement',
+                code: registrationCode,
+                requiresRuntime: true,
+              },
+            ],
+          }
+        : undefined,
     };
   } catch (error) {
     return {
       code: '',
       errors: [{ type: 'runtime', message: String(error), tag: 'EFFECT' }],
-      warnings
+      warnings,
     };
   }
 };

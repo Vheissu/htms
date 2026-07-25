@@ -1,25 +1,427 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>HTMS Component Demos</title>
-<style>
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 48px; max-width: 640px; }
-  h1 { font-size: 28px; margin-bottom: 12px; }
-  p { color: #475569; }
-  ul { padding-left: 20px; line-height: 1.6; }
-</style>
-<h1>HTMS Component Demos</h1>
-<p>Each link opens a standalone page that registers the compiled custom element and mounts it once.</p>
-<ul>
-    <li><a href="./bind-component.preview.html">Bind</a></li>
-    <li><a href="./counter-component.preview.html">Counter</a></li>
-    <li><a href="./derived-component.preview.html">Derived</a></li>
-    <li><a href="./effect-fetch-auto-component.preview.html">Effect Fetch Auto</a></li>
-    <li><a href="./effect-fetch-component.preview.html">Effect Fetch</a></li>
-    <li><a href="./effect-fetch-error-component.preview.html">Effect Fetch Error</a></li>
-    <li><a href="./emit-component.preview.html">Emit</a></li>
-    <li><a href="./event-toggle-component.preview.html">Event Toggle</a></li>
-    <li><a href="./form-component.preview.html">Form</a></li>
-    <li><a href="./hello-world-component.preview.html">Hello World</a></li>
-    <li><a href="./list-component.preview.html">List</a></li>
-    <li><a href="./todo-component.preview.html">Todo</a></li>
-</ul>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
+  <title>HTMS Component Demos</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #f6f7fb;
+      --surface: #ffffff;
+      --surface-strong: #172033;
+      --ink: #172033;
+      --muted: #5d687a;
+      --line: #dfe3ec;
+      --accent: #d94828;
+      --accent-ink: #ffffff;
+      font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100dvh;
+      margin: 0;
+      color: var(--ink);
+      background: var(--page);
+    }
+
+    .shell {
+      width: min(100% - 2rem, 78rem);
+      margin: auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 4.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .wordmark {
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .tagline {
+      color: var(--muted);
+      font: 0.8125rem/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
+      gap: clamp(2rem, 7vw, 7rem);
+      align-items: end;
+      padding: clamp(4rem, 10vw, 8rem) 0 clamp(3rem, 8vw, 6rem);
+    }
+
+    .eyebrow {
+      margin: 0 0 1rem;
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 11ch;
+      margin: 0;
+      font-size: clamp(3.25rem, 8vw, 7.5rem);
+      line-height: 0.9;
+      letter-spacing: -0.075em;
+    }
+
+    .intro {
+      max-width: 30rem;
+      padding-bottom: 0.5rem;
+    }
+
+    .intro p {
+      margin: 0 0 1.5rem;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.6vw, 1.2rem);
+      line-height: 1.65;
+    }
+
+    .primary-link {
+      display: inline-flex;
+      min-height: 3rem;
+      align-items: center;
+      padding: 0.75rem 1.1rem;
+      border-radius: 0.75rem;
+      color: var(--accent-ink);
+      background: var(--accent);
+      font-weight: 800;
+      text-decoration: none;
+      transition:
+        transform 180ms ease,
+        background-color 180ms ease;
+    }
+
+    .primary-link:hover {
+      background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+      transform: translateY(-2px);
+    }
+
+    .primary-link:active {
+      transform: translateY(1px);
+    }
+
+    .gallery {
+      padding: 0 0 6rem;
+    }
+
+    .gallery-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(1.75rem, 4vw, 3rem);
+      letter-spacing: -0.045em;
+    }
+
+    .count {
+      color: var(--muted);
+      font: 0.8125rem/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    ul {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.8rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li.featured {
+      grid-column: 1 / -1;
+    }
+
+    li a {
+      display: flex;
+      min-height: 8.5rem;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.25rem;
+      border: 1px solid var(--line);
+      border-radius: 0.9rem;
+      color: var(--ink);
+      background: var(--surface);
+      text-decoration: none;
+      box-shadow: 0 0.8rem 2rem rgb(44 53 72 / 5%);
+      transition:
+        border-color 180ms ease,
+        box-shadow 180ms ease,
+        transform 180ms ease;
+    }
+
+    li.featured a {
+      min-height: 11rem;
+      color: #f4f6fb;
+      background: var(--surface-strong);
+    }
+
+    li a:hover {
+      border-color: var(--accent);
+      box-shadow: 0 1rem 2.5rem rgb(44 53 72 / 10%);
+      transform: translateY(-3px);
+    }
+
+    li a:active {
+      transform: translateY(1px);
+    }
+
+    li span {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    li strong {
+      font-size: 1.1rem;
+    }
+
+    li code {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    li.featured code {
+      color: #b9c1d1;
+    }
+
+    li b {
+      flex: 0 0 auto;
+      color: var(--accent);
+      font-size: 0.78rem;
+    }
+
+    footer {
+      padding: 1.5rem 0 2rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.8125rem;
+    }
+
+    :focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 70%, transparent);
+      outline-offset: 4px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #11151d;
+        --surface: #191f2a;
+        --surface-strong: #252d3b;
+        --ink: #edf0f6;
+        --muted: #a7b0c1;
+        --line: #323b4a;
+        --accent: #ff7657;
+        --accent-ink: #18100e;
+      }
+
+      li a {
+        box-shadow: 0 0.8rem 2rem rgb(5 8 13 / 14%);
+      }
+    }
+
+    @media (max-width: 48rem) {
+      .tagline { display: none; }
+
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+        padding: 4rem 0;
+      }
+
+      h1 {
+        max-width: 9ch;
+        font-size: clamp(3.4rem, 16vw, 5.75rem);
+      }
+
+      ul {
+        grid-template-columns: 1fr;
+      }
+
+      li.featured {
+        grid-column: auto;
+      }
+
+      li.featured a {
+        min-height: 8.5rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .primary-link,
+      li a {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="shell">
+    <span class="wordmark">HTMS</span>
+    <span class="tagline">HTML in. JavaScript out.</span>
+  </header>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Component playground</p>
+        <h1>Make HTML do things.</h1>
+      </div>
+      <div class="intro">
+        <p>Open a working component, try the interaction, then read the HTML that made it happen.</p>
+        <a class="primary-link" href="./counter-component.preview.html">Start with the counter</a>
+      </div>
+    </section>
+    <section class="gallery" aria-labelledby="gallery-heading">
+      <div class="gallery-heading">
+        <h2 id="gallery-heading">Try every component</h2>
+        <span class="count">14 working examples</span>
+      </div>
+      <ul>
+      <li>
+        <a href="./bind-component.preview.html">
+          <span>
+            <strong>Bind</strong>
+            <code>&lt;bind-box&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./composition-component.preview.html">
+          <span>
+            <strong>Composition</strong>
+            <code>&lt;composition-demo&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li class="featured">
+        <a href="./counter-component.preview.html">
+          <span>
+            <strong>Counter</strong>
+            <code>&lt;counter-box&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./derived-component.preview.html">
+          <span>
+            <strong>Derived</strong>
+            <code>&lt;derived-box&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./effect-fetch-auto-component.preview.html">
+          <span>
+            <strong>Effect Fetch Auto</strong>
+            <code>&lt;effect-fetch-auto-demo&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./effect-fetch-component.preview.html">
+          <span>
+            <strong>Effect Fetch</strong>
+            <code>&lt;effect-fetch-demo&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./effect-fetch-error-component.preview.html">
+          <span>
+            <strong>Effect Fetch Error</strong>
+            <code>&lt;effect-fetch-error-demo&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./emit-component.preview.html">
+          <span>
+            <strong>Emit</strong>
+            <code>&lt;emit-counter&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./event-toggle-component.preview.html">
+          <span>
+            <strong>Event Toggle</strong>
+            <code>&lt;flash-box&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./form-component.preview.html">
+          <span>
+            <strong>Form</strong>
+            <code>&lt;form-box&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./hello-world-component.preview.html">
+          <span>
+            <strong>Hello World</strong>
+            <code>&lt;hello-world&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./list-component.preview.html">
+          <span>
+            <strong>List</strong>
+            <code>&lt;list-box&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./ssr-card-component.preview.html">
+          <span>
+            <strong>Ssr Card</strong>
+            <code>&lt;ssr-card&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      <li>
+        <a href="./todo-component.preview.html">
+          <span>
+            <strong>Todo</strong>
+            <code>&lt;todo-box&gt;</code>
+          </span>
+          <b>Open demo</b>
+        </a>
+      </li>
+      </ul>
+    </section>
+  </main>
+  <footer class="shell">Each page runs the compiled custom element in isolation.</footer>
+</body>
+</html>

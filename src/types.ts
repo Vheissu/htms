@@ -22,6 +22,8 @@ export interface CompilerError {
   line?: number;
   column?: number;
   tag?: string;
+  hint?: string;
+  source?: 'input' | 'generated';
 }
 
 export interface CompilerWarning {
@@ -29,6 +31,8 @@ export interface CompilerWarning {
   line?: number;
   column?: number;
   tag?: string;
+  hint?: string;
+  source?: 'input' | 'generated';
 }
 
 export interface TagHandler {
@@ -62,10 +66,25 @@ export interface ComponentCompileResult {
   warnings: CompilerWarning[];
 }
 
+export type ComponentInputType = 'string' | 'number' | 'boolean' | 'json';
+
+export interface ComponentInputArtifact {
+  propName: string;
+  attributeName: string;
+  type: ComponentInputType;
+}
+
+export interface ComponentEventArtifact {
+  name: string;
+}
+
 export interface ComponentArtifact {
   name: string;
   className: string;
   tagName: string;
+  shadowMode: 'open' | 'closed' | 'none';
+  inputs: ComponentInputArtifact[];
+  events: ComponentEventArtifact[];
   code: string;
 }
 

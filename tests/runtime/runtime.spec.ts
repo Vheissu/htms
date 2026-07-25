@@ -1,21 +1,42 @@
 import { ensureRuntime } from '../../src/utils/runtime';
 
+interface EffectRegistration {
+  owner: unknown;
+  id: string;
+  deps: Array<() => unknown>;
+  run: () => void | (() => void);
+}
+
+interface HtmsRuntime {
+  bind: (selector: string, property: string, getter: () => unknown) => void;
+  notify: () => void;
+  registerEffect: (effect: EffectRegistration) => void;
+  disposeEffectsFor: (owner: unknown) => void;
+}
+
 declare global {
   interface Window {
-    __htms?: any;
+    __htms?: HtmsRuntime;
   }
 }
 
 function applyRuntime(): void {
-  delete (window as any).__htms;
+  delete window.__htms;
   const runtimeScript = ensureRuntime();
   // Execute generated bootstrap script in the current window context
   Function(runtimeScript)();
 }
 
+function getRuntime(): HtmsRuntime {
+  if (!window.__htms) {
+    throw new Error('HTMS runtime was not installed');
+  }
+  return window.__htms;
+}
+
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('HTMS runtime', () => {
@@ -25,7 +46,7 @@ describe('HTMS runtime', () => {
   });
 
   afterEach(() => {
-    delete (window as any).__htms;
+    delete window.__htms;
   });
 
   it('updates bound nodes when notify is triggered', async () => {
@@ -34,11 +55,11 @@ describe('HTMS runtime', () => {
     document.body.appendChild(container);
 
     let value = 'first';
-    window.__htms.bind('#out', 'textContent', () => value);
+    getRuntime().bind('#out', 'textContent', () => value);
     expect(container.textContent).toBe('first');
 
     value = 'second';
-    window.__htms.notify();
+    getRuntime().notify();
     await flushMicrotasks();
     expect(container.textContent).toBe('second');
   });
@@ -47,20 +68,20 @@ describe('HTMS runtime', () => {
     let dep = 0;
     let calls = 0;
 
-    window.__htms.registerEffect({
+    getRuntime().registerEffect({
       owner: null,
       id: 'effect:test',
-      deps: [() => dep],
-      run: () => {
+      deps: [(): number => dep],
+      run: (): void => {
         calls += 1;
-      }
+      },
     });
 
     await flushMicrotasks();
     expect(calls).toBe(1);
 
     dep = 1;
-    window.__htms.notify();
+    getRuntime().notify();
     await flushMicrotasks();
     expect(calls).toBe(2);
   });
@@ -70,22 +91,44 @@ describe('HTMS runtime', () => {
     document.body.appendChild(owner);
     let cleanupCount = 0;
 
-    window.__htms.registerEffect({
+    getRuntime().registerEffect({
       owner,
       id: 'effect:cleanup',
       deps: [],
-      run: () => {
-        return () => {
+      run: (): (() => void) => {
+        return (): void => {
           cleanupCount += 1;
         };
-      }
+      },
     });
 
     await flushMicrotasks();
     expect(cleanupCount).toBe(0);
 
-    window.__htms.disposeEffectsFor(owner);
+    getRuntime().disposeEffectsFor(owner);
     await flushMicrotasks();
     expect(cleanupCount).toBe(1);
+  });
+
+  it('re-runs an immediate effect when a render registers it again', async () => {
+    let calls = 0;
+    const register = (): void => {
+      getRuntime().registerEffect({
+        owner: null,
+        id: 'effect:render',
+        deps: [],
+        run: (): void => {
+          calls += 1;
+        },
+      });
+    };
+
+    register();
+    await flushMicrotasks();
+    expect(calls).toBe(1);
+
+    register();
+    await flushMicrotasks();
+    expect(calls).toBe(2);
   });
 });

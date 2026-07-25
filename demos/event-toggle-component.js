@@ -10,11 +10,92 @@ class FlashBoxComponent extends HTMLElement {
     }
     return this.__templateCache;
   }
+  get updateComplete() {
+    return this.__htmsUpdatePromise;
+  }
+  get renderError() {
+    return this.__htmsLastError;
+  }
+  requestUpdate() {
+    return this.__htmsRequestRender();
+  }
+  __htmsRequestRender() {
+    if (!this.__htmsConnected || this.__htmsRenderScheduled) {
+      return this.__htmsUpdatePromise;
+    }
+    this.__htmsRenderScheduled = true;
+    this.__htmsUpdatePromise = new Promise(resolve => {
+      this.__htmsResolveUpdate = resolve;
+    });
+    queueMicrotask(() => {
+      if (!this.__htmsRenderScheduled) {
+        return;
+      }
+      this.__htmsRenderScheduled = false;
+      if (this.__htmsConnected) {
+        this.render();
+      } else {
+        this.__htmsFinishUpdate();
+      }
+    });
+    return this.__htmsUpdatePromise;
+  }
+  __htmsFinishUpdate() {
+    const resolve = this.__htmsResolveUpdate;
+    this.__htmsResolveUpdate = null;
+    if (resolve) {
+      resolve();
+    }
+  }
+  __htmsReportRenderError(error) {
+    this.__htmsLastError = error;
+    const errorEvent = new CustomEvent('htms-error', {
+      detail: {
+        error,
+        component: this
+      },
+      bubbles: true,
+      composed: true,
+      cancelable: true
+    });
+    const shouldLog = this.dispatchEvent(errorEvent);
+    if (shouldLog) {
+      console.error('HTMS component render failed:', error);
+    }
+  }
+  __htmsMarkListener(target, eventType, handler) {
+    if (!target.__htmsListeners) {
+      target.__htmsListeners = [];
+    }
+    target.__htmsListeners.push({
+      eventType,
+      handler
+    });
+  }
   __htmsListen(target, eventType, handler) {
     target.addEventListener(eventType, handler);
     this.__htmsRenderCleanups.push(() => {
       target.removeEventListener(eventType, handler);
     });
+  }
+  __htmsActivateListeners(target, source) {
+    const listeners = source.__htmsListeners || [];
+    for (const listener of listeners) {
+      this.__htmsListen(target, listener.eventType, listener.handler);
+    }
+  }
+  __htmsResolveEventRoot(currentTarget, sourceScope) {
+    if (sourceScope && sourceScope.__htmsMountedNode) {
+      return sourceScope.__htmsMountedNode;
+    }
+    if (sourceScope && sourceScope.nodeType === Node.ELEMENT_NODE && sourceScope.isConnected) {
+      return sourceScope;
+    }
+    const eventRoot = currentTarget && typeof currentTarget.getRootNode === 'function' ? currentTarget.getRootNode() : null;
+    if (eventRoot && eventRoot !== document) {
+      return eventRoot;
+    }
+    return this.__htmsRoot || this;
   }
   __htmsCleanupRenderListeners() {
     const cleanups = this.__htmsRenderCleanups;
@@ -23,63 +104,223 @@ class FlashBoxComponent extends HTMLElement {
       cleanup();
     }
   }
+  __htmsMarkProperty(target, path, value) {
+    if (!target.__htmsProperties) {
+      target.__htmsProperties = [];
+    }
+    target.__htmsProperties.push({
+      path,
+      value
+    });
+  }
+  __htmsApplyProperties(target, source) {
+    const properties = source.__htmsProperties || [];
+    for (const property of properties) {
+      let receiver = target;
+      for (const segment of property.path.slice(0, -1)) {
+        if (receiver[segment] == null) {
+          receiver[segment] = {};
+        }
+        receiver = receiver[segment];
+      }
+      receiver[property.path[property.path.length - 1]] = property.value;
+    }
+  }
+  __htmsNodesMatch(target, source) {
+    if (!target || target.nodeType !== source.nodeType || target.nodeName !== source.nodeName || target.namespaceURI !== source.namespaceURI) {
+      return false;
+    }
+    if (source.nodeType !== Node.ELEMENT_NODE) {
+      return true;
+    }
+    const sourceKey = source.getAttribute('data-key');
+    const targetKey = target.getAttribute('data-key');
+    return sourceKey === null && targetKey === null ? true : sourceKey === targetKey;
+  }
+  __htmsFindMatchingNode(reference, source, keyedTargets, idTargets) {
+    if (source.nodeType === Node.ELEMENT_NODE) {
+      const key = source.getAttribute('data-key');
+      const id = source.id;
+      if (key !== null) {
+        const candidate = keyedTargets.get(key);
+        if (this.__htmsNodesMatch(candidate, source)) {
+          keyedTargets.delete(key);
+          return candidate;
+        }
+      } else if (id) {
+        const candidate = idTargets.get(id);
+        if (this.__htmsNodesMatch(candidate, source)) {
+          idTargets.delete(id);
+          return candidate;
+        }
+      }
+    }
+    return this.__htmsNodesMatch(reference, source) ? reference : null;
+  }
+  __htmsSyncAttributes(target, source) {
+    Array.from(target.attributes).forEach(attr => {
+      if (!source.hasAttribute(attr.name)) {
+        target.removeAttribute(attr.name);
+      }
+    });
+    Array.from(source.attributes).forEach(attr => {
+      if (target.getAttribute(attr.name) !== attr.value) {
+        target.setAttribute(attr.name, attr.value);
+      }
+    });
+  }
+  __htmsActivateTree(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    this.__htmsActivateListeners(node, node);
+    Array.from(node.querySelectorAll('*')).forEach(child => {
+      this.__htmsActivateListeners(child, child);
+    });
+  }
+  __htmsSyncNode(target, source) {
+    source.__htmsMountedNode = target;
+    if (source.nodeType === Node.TEXT_NODE || source.nodeType === Node.COMMENT_NODE) {
+      if (target.nodeValue !== source.nodeValue) {
+        target.nodeValue = source.nodeValue;
+      }
+      return;
+    }
+    if (source.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    this.__htmsSyncAttributes(target, source);
+    this.__htmsApplyProperties(target, source);
+    this.__htmsActivateListeners(target, source);
+    if (source.localName === 'template' && target.content && source.content) {
+      this.__htmsReconcileChildren(target.content, source.content);
+      return;
+    }
+    this.__htmsReconcileChildren(target, source);
+  }
+  __htmsReconcileChildren(targetParent, sourceParent) {
+    const sourceChildren = Array.from(sourceParent.childNodes);
+    const keyedTargets = new Map();
+    const idTargets = new Map();
+    Array.from(targetParent.children || []).forEach(child => {
+      const key = child.getAttribute('data-key');
+      if (key !== null && !keyedTargets.has(key)) {
+        keyedTargets.set(key, child);
+      }
+      if (child.id && !idTargets.has(child.id)) {
+        idTargets.set(child.id, child);
+      }
+    });
+    let reference = targetParent.firstChild;
+    for (const source of sourceChildren) {
+      const match = this.__htmsFindMatchingNode(reference, source, keyedTargets, idTargets);
+      if (!match) {
+        targetParent.insertBefore(source, reference);
+        source.__htmsMountedNode = source;
+        this.__htmsActivateTree(source);
+        reference = source.nextSibling;
+        continue;
+      }
+      if (match !== reference) {
+        targetParent.insertBefore(match, reference);
+      }
+      this.__htmsSyncNode(match, source);
+      reference = match.nextSibling;
+    }
+    while (reference) {
+      const next = reference.nextSibling;
+      targetParent.removeChild(reference);
+      reference = next;
+    }
+  }
+  __htmsEnsureRenderRoot() {
+    if (this.__htmsRoot) {
+      return this.__htmsRoot;
+    }
+    const declarativeTemplate = Array.from(this.children).find(child => child.localName === 'template' && child.hasAttribute('shadowrootmode'));
+    const existingRoot = this.shadowRoot;
+    const root = existingRoot || this.attachShadow({ mode: 'open' });
+    if (declarativeTemplate) {
+      root.appendChild(declarativeTemplate.content);
+      declarativeTemplate.remove();
+    }
+    this.__htmsRoot = root;
+    return root;
+  }
   constructor() {
     super();
     this.__htmsRoot = null;
     this.__htmsProps = Object.create(null);
+    this.__htmsState = Object.create(null);
     this.__htmsConnected = false;
+    this.__htmsRendering = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsResolveUpdate = null;
+    this.__htmsUpdatePromise = Promise.resolve();
+    this.__htmsLastError = null;
     this.__htmsRenderCleanups = [];
-    if (!this.__htmsRoot) {
-      this.__htmsRoot = this.attachShadow({ mode: 'open' });
-    }
   }
   connectedCallback() {
+    this.__htmsEnsureRenderRoot();
     this.__htmsConnected = true;
     this.render();
   }
   disconnectedCallback() {
     this.__htmsConnected = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsFinishUpdate();
     this.__htmsCleanupRenderListeners();
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
   }
   render() {
-    const root = this.__htmsRoot || this;
-    if (!root) {
-      throw new Error('Component root not initialized');
-    }
-    const componentRoot = root;
-    this.__htmsCleanupRenderListeners();
-    while (componentRoot.firstChild) {
-      componentRoot.removeChild(componentRoot.firstChild);
-    }
-    const staticFragment = FlashBoxComponent.__htmsTemplate.content.cloneNode(true);
-    componentRoot.appendChild(staticFragment);
-    {
-      const eventTargets = componentRoot.querySelectorAll('#activate');
-      eventTargets.forEach(targetEl => {
-        const _handler0 = event => {
-          // No event body
-          {
-            const targets = componentRoot.querySelectorAll('#panel');
-            targets.forEach(node => {
-              node.setAttribute('data-state', 'active');
-            });
-          }
-          {
-            const targets = componentRoot.querySelectorAll('#panel');
-            targets.forEach(node => {
-              node.style.display = true ? '' : 'none';
-            });
-          }
-        };
-        this.__htmsListen(targetEl, 'click', _handler0);
-      });
+    this.__htmsRenderScheduled = false;
+    this.__htmsRendering = true;
+    this.__htmsLastError = null;
+    try {
+      const root = this.__htmsRoot || this;
+      if (!root) {
+        throw new Error('Component root not initialized');
+      }
+      const componentRoot = document.createDocumentFragment();
+      this.__htmsCleanupRenderListeners();
+      const staticFragment = FlashBoxComponent.__htmsTemplate.content.cloneNode(true);
+      componentRoot.appendChild(staticFragment);
+      {
+        const eventTargets = componentRoot.querySelectorAll('#activate');
+        eventTargets.forEach(targetEl => {
+          const _handler0 = event => {
+            const _eventRoot1 = this.__htmsResolveEventRoot(event.currentTarget, componentRoot);
+            // No event body
+            {
+              const targets = _eventRoot1.querySelectorAll('#panel');
+              targets.forEach(node => {
+                node.setAttribute('data-state', 'active');
+              });
+            }
+            {
+              const targets = _eventRoot1.querySelectorAll('#panel');
+              targets.forEach(node => {
+                node.style.display = true ? '' : 'none';
+              });
+            }
+          };
+          this.__htmsMarkListener(targetEl, 'click', _handler0);
+        });
+      }
+      this.__htmsReconcileChildren(root, componentRoot);
+    } catch (error) {
+      this.__htmsReportRenderError(error);
+    } finally {
+      this.__htmsRendering = false;
+      this.__htmsFinishUpdate();
     }
   }
 }
-customElements.define('flash-box', FlashBoxComponent);
+if (!customElements.get('flash-box')) {
+  customElements.define('flash-box', FlashBoxComponent);
+}
 export {
   FlashBoxComponent
 };

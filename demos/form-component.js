@@ -10,6 +10,36 @@ class FormBoxComponent extends HTMLElement {
     }
     return this.__templateCache;
   }
+  __htmsDefineStateProperty(propName) {
+    const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
+    const ownValue = hadOwnValue ? this[propName] : undefined;
+    if (hadOwnValue) {
+      delete this[propName];
+    }
+    Object.defineProperty(this, propName, {
+      configurable: true,
+      enumerable: true,
+      get: () => this.__htmsState[propName],
+      set: value => {
+        const previous = this.__htmsState[propName];
+        if (Object.is(previous, value)) {
+          return;
+        }
+        this.__htmsState[propName] = value;
+        if (!this.__htmsRendering) {
+          this.__htmsRequestRender();
+        }
+      }
+    });
+    if (hadOwnValue) {
+      this.__htmsState[propName] = ownValue;
+    }
+  }
+  __htmsNotifyStateChange() {
+    if (!this.__htmsRendering) {
+      this.__htmsRequestRender();
+    }
+  }
   __htmsResolvePath(path) {
     if (!Array.isArray(path) || path.length === 0) {
       throw new Error('Invalid state path');
@@ -30,7 +60,8 @@ class FormBoxComponent extends HTMLElement {
   }
   __htmsInitState(path, initializer) {
     const {target, key} = this.__htmsResolvePath(path);
-    if (!Object.prototype.hasOwnProperty.call(target, key)) {
+    const storage = target === this ? this.__htmsState : target;
+    if (!Object.prototype.hasOwnProperty.call(storage, key)) {
       target[key] = initializer();
     }
   }
@@ -39,11 +70,13 @@ class FormBoxComponent extends HTMLElement {
     if (op === '++') {
       const current = typeof target[key] === 'number' ? target[key] : 0;
       target[key] = current + 1;
+      this.__htmsNotifyStateChange();
       return;
     }
     if (op === '--') {
       const current = typeof target[key] === 'number' ? target[key] : 0;
       target[key] = current - 1;
+      this.__htmsNotifyStateChange();
       return;
     }
     const current = target[key];
@@ -64,6 +97,7 @@ class FormBoxComponent extends HTMLElement {
     default:
       target[key] = value;
     }
+    this.__htmsNotifyStateChange();
   }
   __htmsEnsureArray(path) {
     const {target, key} = this.__htmsResolvePath(path);
@@ -75,6 +109,7 @@ class FormBoxComponent extends HTMLElement {
   __htmsPushState(path, valueFactory) {
     const arr = this.__htmsEnsureArray(path);
     arr.push(valueFactory());
+    this.__htmsNotifyStateChange();
   }
   __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory) {
     const arr = this.__htmsEnsureArray(path);
@@ -82,95 +117,368 @@ class FormBoxComponent extends HTMLElement {
     const del = deleteFactory();
     const values = valuesFactory();
     arr.splice(index, del, ...values);
+    this.__htmsNotifyStateChange();
   }
-  __htmsListen(target, eventType, handler) {
-    target.addEventListener(eventType, handler);
-    this.__htmsRenderCleanups.push(() => {
-      target.removeEventListener(eventType, handler);
+  get updateComplete() {
+    return this.__htmsUpdatePromise;
+  }
+  get renderError() {
+    return this.__htmsLastError;
+  }
+  requestUpdate() {
+    return this.__htmsRequestRender();
+  }
+  __htmsRequestRender() {
+    if (!this.__htmsConnected || this.__htmsRenderScheduled) {
+      return this.__htmsUpdatePromise;
+    }
+    this.__htmsRenderScheduled = true;
+    this.__htmsUpdatePromise = new Promise(resolve => {
+      this.__htmsResolveUpdate = resolve;
+    });
+    queueMicrotask(() => {
+      if (!this.__htmsRenderScheduled) {
+        return;
+      }
+      this.__htmsRenderScheduled = false;
+      if (this.__htmsConnected) {
+        this.render();
+      } else {
+        this.__htmsFinishUpdate();
+      }
+    });
+    return this.__htmsUpdatePromise;
+  }
+  __htmsFinishUpdate() {
+    const resolve = this.__htmsResolveUpdate;
+    this.__htmsResolveUpdate = null;
+    if (resolve) {
+      resolve();
+    }
+  }
+  __htmsReportRenderError(error) {
+    this.__htmsLastError = error;
+    const errorEvent = new CustomEvent('htms-error', {
+      detail: {
+        error,
+        component: this
+      },
+      bubbles: true,
+      composed: true,
+      cancelable: true
+    });
+    const shouldLog = this.dispatchEvent(errorEvent);
+    if (shouldLog) {
+      console.error('HTMS component render failed:', error);
+    }
+  }
+  __htmsMarkProperty(target, path, value) {
+    if (!target.__htmsProperties) {
+      target.__htmsProperties = [];
+    }
+    target.__htmsProperties.push({
+      path,
+      value
     });
   }
-  __htmsCleanupRenderListeners() {
-    const cleanups = this.__htmsRenderCleanups;
-    this.__htmsRenderCleanups = [];
-    for (const cleanup of cleanups) {
-      cleanup();
+  __htmsApplyProperties(target, source) {
+    const properties = source.__htmsProperties || [];
+    for (const property of properties) {
+      let receiver = target;
+      for (const segment of property.path.slice(0, -1)) {
+        if (receiver[segment] == null) {
+          receiver[segment] = {};
+        }
+        receiver = receiver[segment];
+      }
+      receiver[property.path[property.path.length - 1]] = property.value;
     }
+  }
+  __htmsNodesMatch(target, source) {
+    if (!target || target.nodeType !== source.nodeType || target.nodeName !== source.nodeName || target.namespaceURI !== source.namespaceURI) {
+      return false;
+    }
+    if (source.nodeType !== Node.ELEMENT_NODE) {
+      return true;
+    }
+    const sourceKey = source.getAttribute('data-key');
+    const targetKey = target.getAttribute('data-key');
+    return sourceKey === null && targetKey === null ? true : sourceKey === targetKey;
+  }
+  __htmsFindMatchingNode(reference, source, keyedTargets, idTargets) {
+    if (source.nodeType === Node.ELEMENT_NODE) {
+      const key = source.getAttribute('data-key');
+      const id = source.id;
+      if (key !== null) {
+        const candidate = keyedTargets.get(key);
+        if (this.__htmsNodesMatch(candidate, source)) {
+          keyedTargets.delete(key);
+          return candidate;
+        }
+      } else if (id) {
+        const candidate = idTargets.get(id);
+        if (this.__htmsNodesMatch(candidate, source)) {
+          idTargets.delete(id);
+          return candidate;
+        }
+      }
+    }
+    return this.__htmsNodesMatch(reference, source) ? reference : null;
+  }
+  __htmsSyncAttributes(target, source) {
+    Array.from(target.attributes).forEach(attr => {
+      if (!source.hasAttribute(attr.name)) {
+        target.removeAttribute(attr.name);
+      }
+    });
+    Array.from(source.attributes).forEach(attr => {
+      if (target.getAttribute(attr.name) !== attr.value) {
+        target.setAttribute(attr.name, attr.value);
+      }
+    });
+  }
+  __htmsActivateTree(node) {
+    return;
+  }
+  __htmsSyncNode(target, source) {
+    source.__htmsMountedNode = target;
+    if (source.nodeType === Node.TEXT_NODE || source.nodeType === Node.COMMENT_NODE) {
+      if (target.nodeValue !== source.nodeValue) {
+        target.nodeValue = source.nodeValue;
+      }
+      return;
+    }
+    if (source.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    this.__htmsSyncAttributes(target, source);
+    this.__htmsApplyProperties(target, source);
+    if (source.localName === 'template' && target.content && source.content) {
+      this.__htmsReconcileChildren(target.content, source.content);
+      return;
+    }
+    this.__htmsReconcileChildren(target, source);
+  }
+  __htmsReconcileChildren(targetParent, sourceParent) {
+    const sourceChildren = Array.from(sourceParent.childNodes);
+    const keyedTargets = new Map();
+    const idTargets = new Map();
+    Array.from(targetParent.children || []).forEach(child => {
+      const key = child.getAttribute('data-key');
+      if (key !== null && !keyedTargets.has(key)) {
+        keyedTargets.set(key, child);
+      }
+      if (child.id && !idTargets.has(child.id)) {
+        idTargets.set(child.id, child);
+      }
+    });
+    let reference = targetParent.firstChild;
+    for (const source of sourceChildren) {
+      const match = this.__htmsFindMatchingNode(reference, source, keyedTargets, idTargets);
+      if (!match) {
+        targetParent.insertBefore(source, reference);
+        source.__htmsMountedNode = source;
+        this.__htmsActivateTree(source);
+        reference = source.nextSibling;
+        continue;
+      }
+      if (match !== reference) {
+        targetParent.insertBefore(match, reference);
+      }
+      this.__htmsSyncNode(match, source);
+      reference = match.nextSibling;
+    }
+    while (reference) {
+      const next = reference.nextSibling;
+      targetParent.removeChild(reference);
+      reference = next;
+    }
+  }
+  __htmsEnsureRenderRoot() {
+    if (this.__htmsRoot) {
+      return this.__htmsRoot;
+    }
+    const declarativeTemplate = Array.from(this.children).find(child => child.localName === 'template' && child.hasAttribute('shadowrootmode'));
+    const existingRoot = this.shadowRoot;
+    const root = existingRoot || this.attachShadow({ mode: 'open' });
+    if (declarativeTemplate) {
+      root.appendChild(declarativeTemplate.content);
+      declarativeTemplate.remove();
+    }
+    this.__htmsRoot = root;
+    return root;
+  }
+  __htmsSnapshotFocus(root, controlledSelectors) {
+    const documentActive = typeof document !== 'undefined' ? document.activeElement : null;
+    const candidate = root.activeElement || (documentActive && root.contains(documentActive) ? documentActive : null);
+    if (!candidate || candidate === root) {
+      return null;
+    }
+    const path = [];
+    let current = candidate;
+    while (current && current !== root) {
+      const parent = current.parentNode;
+      if (!parent) {
+        return null;
+      }
+      path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
+      current = parent;
+    }
+    if (current !== root) {
+      return null;
+    }
+    let controlled = false;
+    if (typeof candidate.matches === 'function') {
+      for (const selector of controlledSelectors) {
+        try {
+          if (candidate.matches(selector)) {
+            controlled = true;
+            break;
+          }
+        } catch (error) {
+          console.warn('HTMS ignored invalid controlled selector:', selector, error);
+        }
+      }
+    }
+    return {
+      path,
+      id: candidate.id || null,
+      nodeName: candidate.nodeName,
+      value: !controlled && 'value' in candidate ? candidate.value : undefined,
+      checked: !controlled && 'checked' in candidate ? candidate.checked : undefined,
+      selectionStart: typeof candidate.selectionStart === 'number' ? candidate.selectionStart : null,
+      selectionEnd: typeof candidate.selectionEnd === 'number' ? candidate.selectionEnd : null,
+      selectionDirection: candidate.selectionDirection || 'none',
+      scrollTop: candidate.scrollTop,
+      scrollLeft: candidate.scrollLeft
+    };
+  }
+  __htmsRestoreFocus(root, snapshot) {
+    if (!snapshot) {
+      return;
+    }
+    let candidate = null;
+    if (snapshot.id) {
+      candidate = Array.from(root.querySelectorAll('[id]')).find(node => node.id === snapshot.id) || null;
+    }
+    if (!candidate) {
+      candidate = root;
+      for (const index of snapshot.path) {
+        candidate = candidate && candidate.childNodes ? candidate.childNodes[index] : null;
+        if (!candidate) {
+          return;
+        }
+      }
+    }
+    if (!candidate || candidate.nodeName !== snapshot.nodeName || typeof candidate.focus !== 'function') {
+      return;
+    }
+    if (snapshot.value !== undefined && 'value' in candidate) {
+      candidate.value = snapshot.value;
+    }
+    if (snapshot.checked !== undefined && 'checked' in candidate) {
+      candidate.checked = snapshot.checked;
+    }
+    try {
+      candidate.focus({ preventScroll: true });
+    } catch (error) {
+      candidate.focus();
+    }
+    if (snapshot.selectionStart !== null && snapshot.selectionEnd !== null && typeof candidate.setSelectionRange === 'function') {
+      try {
+        candidate.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd, snapshot.selectionDirection);
+      } catch (error) {
+      }
+    }
+    candidate.scrollTop = snapshot.scrollTop;
+    candidate.scrollLeft = snapshot.scrollLeft;
   }
   constructor() {
     super();
     this.__htmsRoot = null;
     this.__htmsProps = Object.create(null);
+    this.__htmsState = Object.create(null);
     this.__htmsConnected = false;
-    this.__htmsRenderCleanups = [];
-    if (!this.__htmsRoot) {
-      this.__htmsRoot = this.attachShadow({ mode: 'open' });
-    }
+    this.__htmsRendering = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsResolveUpdate = null;
+    this.__htmsUpdatePromise = Promise.resolve();
+    this.__htmsLastError = null;
+    this.__htmsDefineStateProperty('name');
+    this.__htmsDefineStateProperty('email');
   }
   connectedCallback() {
+    this.__htmsEnsureRenderRoot();
     this.__htmsConnected = true;
     this.render();
   }
   disconnectedCallback() {
     this.__htmsConnected = false;
-    this.__htmsCleanupRenderListeners();
+    this.__htmsRenderScheduled = false;
+    this.__htmsFinishUpdate();
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
   }
   render() {
-    const root = this.__htmsRoot || this;
-    if (!root) {
-      throw new Error('Component root not initialized');
-    }
-    const componentRoot = root;
-    this.__htmsCleanupRenderListeners();
-    while (componentRoot.firstChild) {
-      componentRoot.removeChild(componentRoot.firstChild);
-    }
-    this.__htmsInitState(['name'], () => '');
-    this.__htmsInitState(['email'], () => '');
-    const staticFragment = FormBoxComponent.__htmsTemplate.content.cloneNode(true);
-    componentRoot.appendChild(staticFragment);
-    function preventSubmit(event) {
-      try {
-        event.preventDefault();
-        return;
-      } catch (error) {
-        console.error('Function preventSubmit execution error:', error);
+    this.__htmsRenderScheduled = false;
+    this.__htmsRendering = true;
+    this.__htmsLastError = null;
+    try {
+      const root = this.__htmsRoot || this;
+      if (!root) {
+        throw new Error('Component root not initialized');
       }
-    }
-    {
-      const eventTargets = componentRoot.querySelectorAll('#signup');
-      eventTargets.forEach(targetEl => {
-        const _handler0 = event => {
-          try {
-            preventSubmit(event);
-          } catch (error) {
-            console.error('Function call failed: preventSubmit', error);
-          }
-          this.__htmsSetState(['name'], '=', () => this.__htmsRoot.querySelector('#nameInput').value.trim());
-          this.__htmsSetState(['email'], '=', () => this.__htmsRoot.querySelector('#emailInput').value.trim());
-          this.render();
-        };
-        this.__htmsListen(targetEl, 'submit', _handler0);
-      });
-    }
-    {
-      const nodes = componentRoot.querySelectorAll('#summary');
-      nodes.forEach(node => {
-        try {
-          const value = function () {
-            return this.name && this.email ? `Saved ${ this.name } <${ this.email }>` : 'Fill out the form';
-          }.call(this);
-          node['textContent'] = value;
-        } catch (error) {
-          console.error('BIND evaluation failed for #summary', error);
+      const componentRoot = document.createDocumentFragment();
+      const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, ['#summary']);
+      this.__htmsInitState(['name'], () => '');
+      this.__htmsInitState(['email'], () => '');
+      const staticFragment = FormBoxComponent.__htmsTemplate.content.cloneNode(true);
+      componentRoot.appendChild(staticFragment);
+      try {
+        const forms = document.querySelectorAll(`#signup`);
+        if (forms.length === 0) {
+          console.warn('No elements found for submit target: #signup');
         }
-      });
+        forms.forEach(function (element) {
+          element.addEventListener('submit', function (event) {
+            try {
+              event.preventDefault && event.preventDefault();
+            } catch (error) {
+              console.error('Submit handler error:', error);
+            }
+          });
+        });
+      } catch (error) {
+        console.error('Submit setup failed:', error);
+      }
+      {
+        const nodes = componentRoot.querySelectorAll('#summary');
+        nodes.forEach(node => {
+          try {
+            const value = function () {
+              return this.name && this.email ? `Saved ${ this.name } <${ this.email }>` : 'Fill out the form';
+            }.call(this);
+            node['textContent'] = value;
+            this.__htmsMarkProperty(node, ['textContent'], value);
+          } catch (error) {
+            console.error('BIND evaluation failed for #summary', error);
+          }
+        });
+      }
+      this.__htmsReconcileChildren(root, componentRoot);
+      this.__htmsRestoreFocus(root, __htmsFocusSnapshot);
+    } catch (error) {
+      this.__htmsReportRenderError(error);
+    } finally {
+      this.__htmsRendering = false;
+      this.__htmsFinishUpdate();
     }
   }
 }
-customElements.define('form-box', FormBoxComponent);
+if (!customElements.get('form-box')) {
+  customElements.define('form-box', FormBoxComponent);
+}
 export {
   FormBoxComponent
 };

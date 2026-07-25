@@ -8,6 +8,11 @@ import { handleKeyedListTag } from '../../src/tags/keyed-list';
 import { handleEffectTag } from '../../src/tags/effect';
 import { handleFetchTag } from '../../src/tags/fetch';
 import { handleDeriveTag } from '../../src/tags/derive';
+import { handleArrayTag } from '../../src/tags/array';
+import { handleObjectTag } from '../../src/tags/object';
+import { handleSetAttrTag } from '../../src/tags/setattr';
+import { handleSetPropTag } from '../../src/tags/setprop';
+import { handleCommentTag } from '../../src/tags/comment';
 
 function createElement(markup: string): Element {
   const dom = new JSDOM(`<body>${markup}</body>`);
@@ -19,6 +24,154 @@ function createElement(markup: string): Element {
 }
 
 describe('Tag handlers', () => {
+  describe('ARRAY', () => {
+    it('serializes primitive values and reports ignored children', () => {
+      const element = createElement(`
+        <ARRAY name="values">
+          <VALUE>42</VALUE>
+          <VALUE>true</VALUE>
+          <VALUE>null</VALUE>
+          <VALUE>hello</VALUE>
+          <VALUE></VALUE>
+          <OTHER>ignored</OTHER>
+        </ARRAY>
+      `);
+      const result = handleArrayTag(element, { strictMode: true });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toBe('const values = [42, true, null, "hello"];');
+      expect(result.warnings).toHaveLength(2);
+    });
+
+    it('rejects missing and invalid names', () => {
+      expect(
+        handleArrayTag(createElement('<ARRAY></ARRAY>')).errors
+      ).not.toHaveLength(0);
+      expect(
+        handleArrayTag(createElement('<ARRAY name="123bad"></ARRAY>')).errors
+      ).not.toHaveLength(0);
+    });
+  });
+
+  describe('OBJECT', () => {
+    it('serializes primitives, JSON values, and references', () => {
+      const element = createElement(`
+        <OBJECT name="config">
+          <PROPERTY name="count" value="2"></PROPERTY>
+          <PROPERTY name="enabled" value="true"></PROPERTY>
+          <PROPERTY name="empty" value="null"></PROPERTY>
+          <PROPERTY name="items" value='["one",2]'></PROPERTY>
+          <PROPERTY name="nested" value='{"ready":true}'></PROPERTY>
+          <PROPERTY name="source" value="otherValue"></PROPERTY>
+          <PROPERTY name="label">hello world</PROPERTY>
+        </OBJECT>
+      `);
+      const result = handleObjectTag(element, { strictMode: true });
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).toContain('count: 2');
+      expect(result.code).toContain('items: ["one",2]');
+      expect(result.code).toContain('nested: {"ready":true}');
+      expect(result.code).toContain('source: otherValue');
+      expect(result.code).toContain('label: "hello world"');
+    });
+
+    it('rejects malformed JSON values', () => {
+      const result = handleObjectTag(
+        createElement(
+          '<OBJECT name="config"><PROPERTY name="items" value="[broken]"></PROPERTY></OBJECT>'
+        ),
+        { strictMode: true }
+      );
+
+      expect(result.errors[0].message).toContain('Invalid JSON array');
+    });
+  });
+
+  describe('SETATTR and SETPROP', () => {
+    it('creates component-scoped attribute and property directives', () => {
+      const attributeResult = handleSetAttrTag(
+        createElement(
+          '<SETATTR selector="#panel" name="aria-label" value="Open"></SETATTR>'
+        ),
+        { parentContext: 'component' }
+      );
+      const propertyResult = handleSetPropTag(
+        createElement(
+          '<SETPROP selector="#field" prop="style.color" expr="theme.color"></SETPROP>'
+        ),
+        { parentContext: 'component' }
+      );
+
+      expect(attributeResult.errors).toHaveLength(0);
+      expect(attributeResult.component?.directives?.[0]).toMatchObject({
+        kind: 'attribute',
+        target: 'attribute',
+        name: 'aria-label',
+      });
+      expect(propertyResult.errors).toHaveLength(0);
+      expect(propertyResult.component?.directives?.[0]).toMatchObject({
+        kind: 'attribute',
+        target: 'property',
+        path: ['style', 'color'],
+        value: 'theme.color',
+      });
+    });
+
+    it('rejects event attributes and executable URL attributes', () => {
+      const eventResult = handleSetAttrTag(
+        createElement(
+          '<SETATTR selector="#panel" name="onclick" value="run()"></SETATTR>'
+        )
+      );
+      const urlResult = handleSetAttrTag(
+        createElement(
+          '<SETATTR selector="#link" name="href" value="javascript:run()"></SETATTR>'
+        )
+      );
+
+      expect(eventResult.errors[0].type).toBe('security');
+      expect(urlResult.errors[0].type).toBe('security');
+    });
+
+    it('rejects executable property sinks and dangerous expressions', () => {
+      const sinkResult = handleSetPropTag(
+        createElement(
+          '<SETPROP selector="#panel" prop="innerHTML" value="markup"></SETPROP>'
+        )
+      );
+      const expressionResult = handleSetPropTag(
+        createElement(
+          '<SETPROP selector="#link" prop="href" expr="\'javascript:run()\'"></SETPROP>'
+        )
+      );
+
+      expect(sinkResult.errors[0].type).toBe('security');
+      expect(expressionResult.errors[0].type).toBe('security');
+    });
+  });
+
+  describe('COMMENT', () => {
+    it('sanitizes multiline comment text and prevents comment breakouts', () => {
+      const result = handleCommentTag(
+        createElement('<COMMENT>first */ line\nsecond &amp; line</COMMENT>'),
+        { strictMode: true }
+      );
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.code).not.toContain('*/');
+      expect(result.code).toContain('\n// ');
+      expect(result.warnings).not.toHaveLength(0);
+    });
+
+    it('warns about empty comments', () => {
+      const result = handleCommentTag(createElement('<COMMENT></COMMENT>'));
+
+      expect(result.code).toBe('// Empty comment');
+      expect(result.warnings).toHaveLength(1);
+    });
+  });
+
   describe('CALL', () => {
     it('generates safe calls for whitelisted functions in strict mode', () => {
       const element = createElement(

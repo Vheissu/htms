@@ -84,9 +84,19 @@ function serializeNode(
 
   const statements: string[] = [];
   const varName = idFactory();
-  statements.push(
-    `const ${varName} = document.createElement('${node.tagName}');`
-  );
+  if (node.namespace === 'svg') {
+    statements.push(
+      `const ${varName} = document.createElementNS('http://www.w3.org/2000/svg', '${node.tagName}');`
+    );
+  } else if (node.namespace === 'mathml') {
+    statements.push(
+      `const ${varName} = document.createElementNS('http://www.w3.org/1998/Math/MathML', '${node.tagName}');`
+    );
+  } else {
+    statements.push(
+      `const ${varName} = document.createElement('${node.tagName}');`
+    );
+  }
 
   if (node.attributes) {
     for (const [key, value] of Object.entries(node.attributes)) {
@@ -97,11 +107,15 @@ function serializeNode(
   }
 
   if (node.children && node.children.length > 0) {
+    const childTarget =
+      node.namespace === 'html' && node.tagName === 'template'
+        ? `${varName}.content`
+        : varName;
     for (const child of node.children) {
       statements.push(
         ...serializeNode(
           child,
-          varName,
+          childTarget,
           idFactory,
           interpolationVars,
           componentInterpolationVars

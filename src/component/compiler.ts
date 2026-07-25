@@ -29,30 +29,109 @@ import {
   ParseOptions,
   ComponentCompileResult,
   ComponentArtifact,
+  ComponentInputType,
 } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { ensureRuntime } from '../utils/runtime';
+import {
+  addNodeLocation,
+  addNodeLocations,
+  registerNodeLocation,
+} from '../diagnostics';
 
 interface ComponentMetadata {
   tagName: string;
   className: string;
   shadowMode: 'open' | 'closed' | 'none';
-  props: string[];
+  props: ComponentProperty[];
   observedAttributes: string[];
   inputs: ComponentInput[];
+}
+
+interface ComponentProperty {
+  propName: string;
+  type: ComponentInputType;
+}
+
+function collectEmittedEventNames(directives?: DirectiveNode[]): string[] {
+  const names = new Set<string>();
+
+  const visit = (items?: DirectiveNode[]): void => {
+    if (!items) return;
+
+    for (const directive of items) {
+      switch (directive.kind) {
+        case 'statement':
+          if (directive.emittedEventName) {
+            names.add(directive.emittedEventName);
+          }
+          break;
+        case 'loop':
+        case 'event':
+        case 'keyed-list':
+        case 'append':
+        case 'while':
+          visit(directive.directives);
+          break;
+        case 'condition':
+          visit(directive.whenTrue.directives);
+          visit(directive.whenFalse?.directives);
+          break;
+        case 'switch':
+          directive.cases.forEach((switchCase) => visit(switchCase.directives));
+          visit(directive.defaultCase?.directives);
+          break;
+        case 'state':
+        case 'visibility':
+        case 'attribute':
+        case 'bind':
+        case 'class':
+        case 'style':
+          break;
+      }
+    }
+  };
+
+  visit(directives);
+  return Array.from(names);
 }
 
 interface ComponentInput {
   propName: string;
   attributeName: string;
-}
-
-interface KeyedListRuntimeConfig {
-  id: string;
-  selector: string;
+  type: ComponentInputType;
 }
 
 const SHADOW_MODES = new Set(['open', 'closed', 'none']);
+const COMPONENT_INPUT_TYPES = new Set<ComponentInputType>([
+  'string',
+  'number',
+  'boolean',
+  'json',
+]);
+const VALID_CUSTOM_ELEMENT_NAME = /^[a-z][a-z0-9._-]*-[a-z0-9._-]*$/;
+const RESERVED_COMPONENT_PROPERTIES = new Set([
+  '__proto__',
+  'attributeChangedCallback',
+  'connectedCallback',
+  'constructor',
+  'disconnectedCallback',
+  'prototype',
+  'render',
+  'renderError',
+  'requestUpdate',
+  'shadowRoot',
+  'updateComplete',
+]);
+
+function isReservedComponentProperty(name: string): boolean {
+  return name.startsWith('__htms') || RESERVED_COMPONENT_PROPERTIES.has(name);
+}
+
+function isNativeElementProperty(element: Element, name: string): boolean {
+  return name in element;
+}
 
 function containsState(directives?: DirectiveNode[]): boolean {
   if (!directives) return false;
@@ -154,53 +233,92 @@ function containsEvent(directives?: DirectiveNode[]): boolean {
   return false;
 }
 
-function assignKeyedListRuntimeIds(
-  directives?: DirectiveNode[]
-): KeyedListRuntimeConfig[] {
-  const configs: KeyedListRuntimeConfig[] = [];
+function containsRuntimeDependency(directives?: DirectiveNode[]): boolean {
+  if (!directives) return false;
+
+  for (const directive of directives) {
+    switch (directive.kind) {
+      case 'statement':
+        if (directive.requiresRuntime) return true;
+        break;
+      case 'loop':
+      case 'event':
+      case 'keyed-list':
+      case 'append':
+      case 'while':
+        if (containsRuntimeDependency(directive.directives)) return true;
+        break;
+      case 'condition':
+        if (containsRuntimeDependency(directive.whenTrue.directives))
+          return true;
+        if (
+          directive.whenFalse &&
+          containsRuntimeDependency(directive.whenFalse.directives)
+        ) {
+          return true;
+        }
+        break;
+      case 'switch':
+        if (
+          directive.cases.some((switchCase) =>
+            containsRuntimeDependency(switchCase.directives)
+          )
+        ) {
+          return true;
+        }
+        if (
+          directive.defaultCase &&
+          containsRuntimeDependency(directive.defaultCase.directives)
+        ) {
+          return true;
+        }
+        break;
+      case 'state':
+      case 'visibility':
+      case 'attribute':
+      case 'bind':
+      case 'class':
+      case 'style':
+        break;
+    }
+  }
+
+  return false;
+}
+
+function collectControlledSelectors(directives?: DirectiveNode[]): string[] {
+  const selectors = new Set<string>();
 
   const visit = (items?: DirectiveNode[]): void => {
     if (!items) return;
 
     for (const directive of items) {
       switch (directive.kind) {
-        case 'keyed-list': {
-          const id = `keyed-${configs.length}`;
-          directive.runtimeId = id;
-          configs.push({ id, selector: directive.selector });
-          visit(directive.directives);
+        case 'bind':
+          selectors.add(directive.selector);
           break;
-        }
+        case 'attribute':
+          if (directive.target === 'property') {
+            selectors.add(directive.selector);
+          }
+          break;
         case 'loop':
+        case 'event':
+        case 'keyed-list':
+        case 'append':
+        case 'while':
           visit(directive.directives);
           break;
         case 'condition':
           visit(directive.whenTrue.directives);
-          if (directive.whenFalse) {
-            visit(directive.whenFalse.directives);
-          }
-          break;
-        case 'event':
-          visit(directive.directives);
-          break;
-        case 'append':
-          visit(directive.directives);
-          break;
-        case 'while':
-          visit(directive.directives);
+          visit(directive.whenFalse?.directives);
           break;
         case 'switch':
-          for (const switchCase of directive.cases) {
-            visit(switchCase.directives);
-          }
-          if (directive.defaultCase) {
-            visit(directive.defaultCase.directives);
-          }
+          directive.cases.forEach((switchCase) => visit(switchCase.directives));
+          visit(directive.defaultCase?.directives);
           break;
         case 'state':
         case 'visibility':
-        case 'attribute':
-        case 'bind':
         case 'class':
         case 'style':
         case 'statement':
@@ -210,7 +328,7 @@ function assignKeyedListRuntimeIds(
   };
 
   visit(directives);
-  return configs;
+  return Array.from(selectors);
 }
 
 function collectStateRoots(directives?: DirectiveNode[]): string[] {
@@ -270,16 +388,70 @@ function collectStateRoots(directives?: DirectiveNode[]): string[] {
   return Array.from(roots);
 }
 
+function collectInitialStateRoots(directives?: DirectiveNode[]): string[] {
+  const roots = new Set<string>();
+
+  const visit = (items?: DirectiveNode[]): void => {
+    if (!items) return;
+
+    for (const directive of items) {
+      switch (directive.kind) {
+        case 'state':
+          if (directive.mode === 'init' && directive.path.length > 0) {
+            roots.add(directive.path[0]);
+          }
+          break;
+        case 'loop':
+        case 'event':
+        case 'keyed-list':
+        case 'append':
+        case 'while':
+          visit(directive.directives);
+          break;
+        case 'condition':
+          visit(directive.whenTrue.directives);
+          visit(directive.whenFalse?.directives);
+          break;
+        case 'switch':
+          for (const switchCase of directive.cases) {
+            visit(switchCase.directives);
+          }
+          visit(directive.defaultCase?.directives);
+          break;
+        case 'visibility':
+        case 'attribute':
+        case 'bind':
+        case 'class':
+        case 'style':
+        case 'statement':
+          break;
+      }
+    }
+  };
+
+  visit(directives);
+  return Array.from(roots);
+}
+
 export function compileComponents(
   htmlContent: string,
   options: ParseOptions = {}
 ): ComponentCompileResult {
-  const dom = new JSDOM(htmlContent);
+  const dom = new JSDOM(htmlContent, { includeNodeLocations: true });
+  for (const element of Array.from(dom.window.document.querySelectorAll('*'))) {
+    const location = dom.nodeLocation(element);
+    if (location) {
+      registerNodeLocation(element, location.startLine, location.startCol);
+    }
+  }
   const bodyChildren = Array.from(dom.window.document.body.children);
   const componentSnippets: string[] = [];
   const errors: CompilerError[] = [];
   const warnings: CompilerWarning[] = [];
   const artifacts: ComponentArtifact[] = [];
+  const componentNames = new Set<string>();
+  const componentClassNames = new Set<string>();
+  let requiresRuntime = false;
 
   if (bodyChildren.length === 0) {
     errors.push({
@@ -292,25 +464,66 @@ export function compileComponents(
 
   for (const child of bodyChildren) {
     if (child.tagName.toLowerCase() !== 'component') {
-      errors.push({
+      const error: CompilerError = {
         type: 'validation',
         message: `Root element <${child.tagName.toLowerCase()}> is not allowed. Wrap markup in a <component> root.`,
         tag: child.tagName,
-      });
+        hint: 'Every HTMS file starts with a <component name="my-element"> root.',
+      };
+      errors.push(addNodeLocation(error, child));
       continue;
     }
 
     const compileResult = compileComponentElement(child, options);
-    componentSnippets.push(...compileResult.codeSnippets);
-    if (compileResult.artifact) {
-      artifacts.push(compileResult.artifact);
-    }
+    requiresRuntime ||= compileResult.requiresRuntime;
     errors.push(...compileResult.errors);
     warnings.push(...compileResult.warnings);
+    if (compileResult.artifact) {
+      if (componentNames.has(compileResult.artifact.tagName)) {
+        const error: CompilerError = {
+          type: 'validation',
+          message: `Duplicate component name "${compileResult.artifact.tagName}"`,
+          tag: 'COMPONENT',
+          hint: 'Give each component in the file a unique custom element name.',
+        };
+        errors.push(addNodeLocation(error, child));
+        continue;
+      }
+      if (componentClassNames.has(compileResult.artifact.className)) {
+        const error: CompilerError = {
+          type: 'validation',
+          message: `Component name "${compileResult.artifact.tagName}" generates duplicate class name "${compileResult.artifact.className}"`,
+          tag: 'COMPONENT',
+          hint: 'Choose names that remain different when converted to PascalCase.',
+        };
+        errors.push(addNodeLocation(error, child));
+        continue;
+      }
+      componentNames.add(compileResult.artifact.tagName);
+      componentClassNames.add(compileResult.artifact.className);
+      artifacts.push(compileResult.artifact);
+    }
+    componentSnippets.push(...compileResult.codeSnippets);
   }
 
   if (errors.length > 0 && options.strictMode) {
     return { success: false, errors, warnings, components: [] };
+  }
+
+  if (requiresRuntime) {
+    componentSnippets.unshift(ensureRuntime());
+  }
+
+  const classNames = artifacts.map((artifact) => artifact.className);
+  const format = options.outputFormat ?? 'esm';
+  if (format === 'esm') {
+    componentSnippets.push(`export { ${classNames.join(', ')} };`);
+  } else if (format === 'cjs') {
+    componentSnippets.push(`module.exports = { ${classNames.join(', ')} };`);
+  } else {
+    componentSnippets.push(
+      `globalThis.HTMSComponents = Object.assign(globalThis.HTMSComponents || {}, { ${classNames.join(', ')} });`
+    );
   }
 
   const joinedCode = componentSnippets.join('\n\n');
@@ -335,6 +548,7 @@ interface ComponentCompileInternalResult {
   codeSnippets: string[];
   errors: CompilerError[];
   warnings: CompilerWarning[];
+  requiresRuntime: boolean;
   artifact?: ComponentArtifact;
 }
 
@@ -346,8 +560,10 @@ function compileComponentElement(
   const warnings: CompilerWarning[] = [];
 
   const metadata = readComponentMetadata(element, errors, warnings);
+  addNodeLocations(errors, element);
+  addNodeLocations(warnings, element);
   if (!metadata) {
-    return { codeSnippets: [], errors, warnings };
+    return { codeSnippets: [], errors, warnings, requiresRuntime: false };
   }
 
   const renderTargetVar = 'componentRoot';
@@ -360,13 +576,37 @@ function compileComponentElement(
   errors.push(...renderErrors);
   warnings.push(...renderWarnings);
 
-  if (options.strictMode && renderErrors.length > 0) {
-    return { codeSnippets: [], errors, warnings };
+  const inputNames = new Set(metadata.inputs.map((input) => input.propName));
+  for (const stateName of collectInitialStateRoots(renderIR.directives)) {
+    if (
+      isReservedComponentProperty(stateName) ||
+      isNativeElementProperty(element, stateName)
+    ) {
+      errors.push({
+        type: 'validation',
+        message: `Component state "${stateName}" conflicts with the custom element runtime`,
+        tag: 'COMPONENT',
+      });
+      continue;
+    }
+    if (inputNames.has(stateName)) {
+      errors.push({
+        type: 'validation',
+        message: `Component field "${stateName}" cannot be both a prop and local state`,
+        tag: 'COMPONENT',
+      });
+    }
+  }
+
+  addNodeLocations(errors, element);
+  addNodeLocations(warnings, element);
+
+  if (options.strictMode && errors.length > 0) {
+    return { codeSnippets: [], errors, warnings, requiresRuntime: false };
   }
 
   const classCode = buildComponentClass(metadata, renderIR, renderTargetVar);
-  const registrationCode = `customElements.define('${metadata.tagName}', ${metadata.className});`;
-  const exportCode = `export { ${metadata.className} };`;
+  const registrationCode = `if (!customElements.get('${metadata.tagName}')) {\n  customElements.define('${metadata.tagName}', ${metadata.className});\n}`;
 
   CompilerLogger.logInfo('Component compiled', {
     component: metadata.tagName,
@@ -375,14 +615,20 @@ function compileComponentElement(
   });
 
   return {
-    codeSnippets: [classCode, registrationCode, exportCode],
+    codeSnippets: [classCode, registrationCode],
     errors,
     warnings,
+    requiresRuntime: containsRuntimeDependency(renderIR.directives),
     artifact: {
       name: metadata.tagName,
       className: metadata.className,
       tagName: metadata.tagName,
-      code: [classCode, registrationCode, exportCode].join('\n\n'),
+      shadowMode: metadata.shadowMode,
+      inputs: metadata.inputs.map((input) => ({ ...input })),
+      events: collectEmittedEventNames(renderIR.directives).map((name) => ({
+        name,
+      })),
+      code: [classCode, registrationCode].join('\n\n'),
     },
   };
 }
@@ -397,15 +643,17 @@ function readComponentMetadata(
     errors.push({
       type: 'validation',
       message: '<component> requires a "name" attribute',
+      hint: 'Add a custom element name such as name="click-counter".',
     });
     return null;
   }
 
   const tagName = nameAttr.trim().toLowerCase();
-  if (!tagName.includes('-')) {
+  if (!VALID_CUSTOM_ELEMENT_NAME.test(tagName)) {
     errors.push({
       type: 'validation',
-      message: `Component name "${tagName}" must include a hyphen`,
+      message: `Component name "${tagName}" must include a hyphen and be a valid custom element name`,
+      hint: 'Custom element names need a hyphen, for example "click-counter".',
     });
     return null;
   }
@@ -432,16 +680,27 @@ function readComponentMetadata(
     ? (shadowAttr as 'open' | 'closed' | 'none')
     : 'open';
 
-  const props = parseNameList(
+  const props = parseComponentProps(
     element.getAttribute('props'),
-    errors,
-    'property'
+    element,
+    errors
   );
-  const observedAttributes = parseAttributeList(
+  const explicitObservedAttributes = parseAttributeList(
     element.getAttribute('observed'),
     errors
   );
-  const inputs = resolveComponentInputs(props, observedAttributes, errors);
+  const inputs = resolveComponentInputs(
+    props,
+    explicitObservedAttributes,
+    element,
+    errors
+  );
+  const observedAttributes = Array.from(
+    new Set([
+      ...explicitObservedAttributes,
+      ...props.map((prop) => toAttributeName(prop.propName)),
+    ])
+  );
 
   return {
     tagName,
@@ -461,29 +720,70 @@ function toClassName(tagName: string): string {
   return `${pascal || 'Component'}Component`;
 }
 
-function parseNameList(
+function parseComponentProps(
   value: string | null,
-  errors: CompilerError[],
-  descriptor: 'property' | 'field'
-): string[] {
+  element: Element,
+  errors: CompilerError[]
+): ComponentProperty[] {
   if (!value) return [];
-  const identifiers: string[] = [];
+  const properties: ComponentProperty[] = [];
+  const seen = new Set<string>();
+
   for (const raw of value.split(',')) {
     const trimmed = raw.trim();
     if (!trimmed) continue;
-    const idErrors = SecurityValidator.validateJavaScriptIdentifier(trimmed);
+    const [rawName, rawType = 'string', ...extra] = trimmed.split(':');
+    const propName = rawName.trim();
+    const type = rawType.trim().toLowerCase();
+    const idErrors = SecurityValidator.validateJavaScriptIdentifier(propName);
     if (idErrors.length > 0) {
       errors.push(
         ...idErrors.map((error) => ({
           ...error,
-          message: `${descriptor} "${trimmed}" is invalid: ${error.message}`,
+          message: `property "${propName}" is invalid: ${error.message}`,
         }))
       );
       continue;
     }
-    identifiers.push(trimmed);
+
+    if (
+      isReservedComponentProperty(propName) ||
+      isNativeElementProperty(element, propName)
+    ) {
+      errors.push({
+        type: 'validation',
+        message: `Property "${propName}" conflicts with the component runtime`,
+        tag: 'COMPONENT',
+      });
+      continue;
+    }
+
+    if (
+      extra.length > 0 ||
+      !COMPONENT_INPUT_TYPES.has(type as ComponentInputType)
+    ) {
+      errors.push({
+        type: 'validation',
+        message: `Property "${propName}" has unsupported type "${type}". Expected string, number, boolean, or json`,
+        tag: 'COMPONENT',
+      });
+      continue;
+    }
+
+    if (seen.has(propName)) {
+      errors.push({
+        type: 'validation',
+        message: `Duplicate component property "${propName}"`,
+        tag: 'COMPONENT',
+      });
+      continue;
+    }
+
+    seen.add(propName);
+    properties.push({ propName, type: type as ComponentInputType });
   }
-  return identifiers;
+
+  return properties;
 }
 
 function parseAttributeList(
@@ -524,25 +824,28 @@ function toPropertyName(attributeName: string): string {
 }
 
 function resolveComponentInputs(
-  props: string[],
+  props: ComponentProperty[],
   observedAttributes: string[],
+  element: Element,
   errors: CompilerError[]
 ): ComponentInput[] {
   const inputs = new Map<string, ComponentInput>();
 
-  for (const propName of props) {
-    inputs.set(propName, {
-      propName,
-      attributeName: toAttributeName(propName),
+  for (const prop of props) {
+    inputs.set(prop.propName, {
+      propName: prop.propName,
+      attributeName: toAttributeName(prop.propName),
+      type: prop.type,
     });
   }
 
   for (const attributeName of observedAttributes) {
     const matchingProp = props.find(
       (prop) =>
-        prop === attributeName || toAttributeName(prop) === attributeName
+        prop.propName === attributeName ||
+        toAttributeName(prop.propName) === attributeName
     );
-    const propName = matchingProp ?? toPropertyName(attributeName);
+    const propName = matchingProp?.propName ?? toPropertyName(attributeName);
     const propErrors = SecurityValidator.validateJavaScriptIdentifier(propName);
 
     if (propErrors.length > 0) {
@@ -555,10 +858,23 @@ function resolveComponentInputs(
       continue;
     }
 
+    if (
+      isReservedComponentProperty(propName) ||
+      isNativeElementProperty(element, propName)
+    ) {
+      errors.push({
+        type: 'validation',
+        message: `Observed attribute "${attributeName}" maps to reserved property "${propName}"`,
+        tag: 'COMPONENT',
+      });
+      continue;
+    }
+
     if (!inputs.has(propName)) {
       inputs.set(propName, {
         propName,
         attributeName,
+        type: 'string',
       });
       continue;
     }
@@ -587,23 +903,46 @@ function buildComponentClass(
       ? metadata.inputs
           .map(
             (input) =>
-              `    this.__htmsDefineInputProperty(${JSON.stringify(input.propName)}, ${JSON.stringify(input.attributeName)});`
+              `    this.__htmsDefineInputProperty(${JSON.stringify(input.propName)}, ${JSON.stringify(input.attributeName)}, ${JSON.stringify(input.type)});`
           )
           .join('\n')
       : '';
 
   const inputMap =
     metadata.inputs.length > 0
-      ? metadata.inputs.reduce<Record<string, string>>((map, input) => {
-          map[input.attributeName] = input.propName;
-          return map;
-        }, {})
+      ? Object.fromEntries(
+          metadata.inputs.map((input) => [
+            input.attributeName,
+            { propName: input.propName, type: input.type },
+          ])
+        )
       : {};
 
   const shadowInit =
+    metadata.shadowMode === 'none' ? `    this.__htmsRoot = this;` : '';
+
+  const renderRootHelper =
     metadata.shadowMode === 'none'
-      ? `    this.__htmsRoot = this;`
-      : `    if (!this.__htmsRoot) {\n      this.__htmsRoot = this.attachShadow({ mode: '${metadata.shadowMode}' });\n    }`;
+      ? ''
+      : `  __htmsEnsureRenderRoot() {
+    if (this.__htmsRoot) {
+      return this.__htmsRoot;
+    }
+
+    const declarativeTemplate = Array.from(this.children).find(child =>
+      child.localName === 'template' && child.hasAttribute('shadowrootmode')
+    );
+    const existingRoot = this.shadowRoot;
+    const root = existingRoot || this.attachShadow({ mode: '${metadata.shadowMode}' });
+    if (declarativeTemplate) {
+      root.appendChild(declarativeTemplate.content);
+      declarativeTemplate.remove();
+    }
+    this.__htmsRoot = root;
+    return root;
+  }
+
+`;
 
   const attributeChanged =
     metadata.observedAttributes.length > 0
@@ -613,7 +952,7 @@ function buildComponentClass(
     }
     const reflected = this.__htmsSetInputFromAttribute(name, newValue);
     if (!reflected && this.__htmsConnected) {
-      this.render();
+      this.requestUpdate();
     }
   }`
       : '';
@@ -631,6 +970,10 @@ function buildComponentClass(
       ...collectStateRoots(renderIR.directives),
     ])
   );
+  const inputNames = new Set(metadata.inputs.map((input) => input.propName));
+  const reactiveStateRoots = collectInitialStateRoots(
+    renderIR.directives
+  ).filter((name) => !inputNames.has(name));
   const hasDynamicTemplateValues = templateNodesHaveInterpolations(
     renderIR.templateNodes,
     [],
@@ -638,9 +981,10 @@ function buildComponentClass(
   );
   const hasStaticTemplate =
     templateHTML.trim().length > 0 && !hasDynamicTemplateValues;
-  const keyedListConfigs = assignKeyedListRuntimeIds(renderIR.directives);
-  const hasKeyedLists = keyedListConfigs.length > 0;
   const hasEventDirectives = containsEvent(renderIR.directives);
+  const hasStateDirectives = containsState(renderIR.directives);
+  const preservesFocus = metadata.inputs.length > 0 || hasStateDirectives;
+  const controlledSelectors = collectControlledSelectors(renderIR.directives);
   const templateStatements = hasStaticTemplate
     ? ''
     : serializeTemplateNodes(
@@ -655,24 +999,18 @@ function buildComponentClass(
     `    if (!root) {`,
     `      throw new Error('Component root not initialized');`,
     `    }`,
-    `    const ${renderTargetVar} = root;`,
+    `    const ${renderTargetVar} = document.createDocumentFragment();`,
   ];
+
+  if (preservesFocus) {
+    renderLines.push(
+      `    const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, ${JSON.stringify(controlledSelectors)});`
+    );
+  }
 
   if (hasEventDirectives) {
     renderLines.push(`    this.__htmsCleanupRenderListeners();`);
   }
-
-  if (hasKeyedLists) {
-    renderLines.push(
-      `    const __htmsKeyedSnapshots = this.__htmsSnapshotKeyedLists(${renderTargetVar}, ${JSON.stringify(keyedListConfigs)});`
-    );
-  }
-
-  renderLines.push(
-    `    while (${renderTargetVar}.firstChild) {`,
-    `      ${renderTargetVar}.removeChild(${renderTargetVar}.firstChild);`,
-    `    }`
-  );
 
   for (const directive of renderIR.directives) {
     if (directive.kind === 'state' && directive.mode === 'init') {
@@ -699,7 +1037,6 @@ function buildComponentClass(
   }
 
   const directiveCounter = { value: 0 };
-  const hasStateDirectives = containsState(renderIR.directives);
   for (const directive of renderIR.directives) {
     if (
       directive.kind === 'state' &&
@@ -718,44 +1055,626 @@ function buildComponentClass(
     renderLines.push(...directiveLines);
   }
 
+  renderLines.push(
+    `    this.__htmsReconcileChildren(root, ${renderTargetVar});`
+  );
+
+  if (preservesFocus) {
+    renderLines.push(`    this.__htmsRestoreFocus(root, __htmsFocusSnapshot);`);
+  }
+
   const staticTemplateProperty = hasStaticTemplate
     ? `  static get __htmsTemplate() {\n    if (!this.__templateCache) {\n      const template = document.createElement('template');\n      template.innerHTML = ${JSON.stringify(templateHTML)};\n      this.__templateCache = template;\n    }\n    return this.__templateCache;\n  }\n\n`
     : '';
 
   const inputHelpers =
     metadata.inputs.length > 0
-      ? `  static get __htmsInputMap() {\n    return ${JSON.stringify(inputMap)};\n  }\n\n  __htmsDefineInputProperty(propName, attributeName) {\n    const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);\n    const ownValue = hadOwnValue ? this[propName] : undefined;\n    if (hadOwnValue) {\n      delete this[propName];\n    }\n\n    Object.defineProperty(this, propName, {\n      configurable: true,\n      enumerable: true,\n      get: () => this.__htmsProps[propName],\n      set: value => {\n        const previous = this.__htmsProps[propName];\n        if (Object.is(previous, value)) {\n          return;\n        }\n        this.__htmsProps[propName] = value;\n        if (this.__htmsConnected) {\n          this.render();\n        }\n      }\n    });\n\n    if (hadOwnValue) {\n      this.__htmsProps[propName] = ownValue;\n      return;\n    }\n\n    if (this.hasAttribute(attributeName)) {\n      this.__htmsProps[propName] = this.getAttribute(attributeName);\n      return;\n    }\n\n    this.__htmsProps[propName] = null;\n  }\n\n  __htmsSetInputFromAttribute(name, value) {\n    const propName = this.constructor.__htmsInputMap[name];\n    if (!propName) {\n      return false;\n    }\n    this[propName] = value;\n    return true;\n  }\n\n`
+      ? `  static get __htmsInputMap() {
+    return ${JSON.stringify(inputMap)};
+  }
+
+  __htmsDeserializeAttribute(type, value) {
+    if (type === 'boolean') {
+      return value !== null;
+    }
+    if (value === null) {
+      return null;
+    }
+    if (type === 'number') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (type === 'json') {
+      try {
+        return JSON.parse(value);
+      } catch (error) {
+        return null;
+      }
+    }
+    return value;
+  }
+
+  __htmsDefineInputProperty(propName, attributeName, type) {
+    const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
+    const ownValue = hadOwnValue ? this[propName] : undefined;
+    if (hadOwnValue) {
+      delete this[propName];
+    }
+
+    Object.defineProperty(this, propName, {
+      configurable: true,
+      enumerable: true,
+      get: () => this.__htmsProps[propName],
+      set: value => {
+        const previous = this.__htmsProps[propName];
+        if (Object.is(previous, value)) {
+          return;
+        }
+        this.__htmsProps[propName] = value;
+        this.__htmsRequestRender();
+      }
+    });
+
+    if (hadOwnValue) {
+      this.__htmsProps[propName] = ownValue;
+      return;
+    }
+
+    if (this.hasAttribute(attributeName)) {
+      this.__htmsProps[propName] = this.__htmsDeserializeAttribute(
+        type,
+        this.getAttribute(attributeName)
+      );
+      return;
+    }
+
+    this.__htmsProps[propName] = type === 'boolean' ? false : null;
+  }
+
+  __htmsSetInputFromAttribute(name, value) {
+    const input = this.constructor.__htmsInputMap[name];
+    if (!input) {
+      return false;
+    }
+    this[input.propName] = this.__htmsDeserializeAttribute(input.type, value);
+    return true;
+  }
+
+`
       : '';
 
   const stateHelpers = hasStateDirectives
-    ? `  __htmsResolvePath(path) {\n    if (!Array.isArray(path) || path.length === 0) {\n      throw new Error('Invalid state path');\n    }\n    let ref = this;\n    for (let i = 0; i < path.length - 1; i++) {\n      const key = path[i];\n      const next = ref[key];\n      if (next === undefined || next === null || typeof next !== 'object') {\n        ref[key] = {};\n      }\n      ref = ref[key];\n    }\n    return { target: ref, key: path[path.length - 1] };\n  }\n\n  __htmsInitState(path, initializer) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (!Object.prototype.hasOwnProperty.call(target, key)) {\n      target[key] = initializer();\n    }\n  }\n\n  __htmsSetState(path, op, valueFactory) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (op === '++') {\n      const current = typeof target[key] === 'number' ? target[key] : 0;\n      target[key] = current + 1;\n      return;\n    }\n    if (op === '--') {\n      const current = typeof target[key] === 'number' ? target[key] : 0;\n      target[key] = current - 1;\n      return;\n    }\n    const current = target[key];\n    const value = valueFactory();\n    switch (op) {\n      case '+=':\n        target[key] = (typeof current === 'number' ? current : 0) + value;\n        break;\n      case '-=':\n        target[key] = (typeof current === 'number' ? current : 0) - value;\n        break;\n      case '*=':\n        target[key] = (typeof current === 'number' ? current : 0) * value;\n        break;\n      case '/=':\n        target[key] = (typeof current === 'number' ? current : 0) / value;\n        break;\n      default:\n        target[key] = value;\n    }\n  }\n\n  __htmsEnsureArray(path) {\n    const { target, key } = this.__htmsResolvePath(path);\n    if (!Array.isArray(target[key])) {\n      target[key] = [];\n    }\n    return target[key];\n  }\n\n  __htmsPushState(path, valueFactory) {\n    const arr = this.__htmsEnsureArray(path);\n    arr.push(valueFactory());\n  }\n\n  __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory) {\n    const arr = this.__htmsEnsureArray(path);\n    const index = indexFactory();\n    const del = deleteFactory();\n    const values = valuesFactory();\n    arr.splice(index, del, ...values);\n  }\n\n`
+    ? `  __htmsDefineStateProperty(propName) {
+    const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
+    const ownValue = hadOwnValue ? this[propName] : undefined;
+    if (hadOwnValue) {
+      delete this[propName];
+    }
+
+    Object.defineProperty(this, propName, {
+      configurable: true,
+      enumerable: true,
+      get: () => this.__htmsState[propName],
+      set: value => {
+        const previous = this.__htmsState[propName];
+        if (Object.is(previous, value)) {
+          return;
+        }
+        this.__htmsState[propName] = value;
+        if (!this.__htmsRendering) {
+          this.__htmsRequestRender();
+        }
+      }
+    });
+
+    if (hadOwnValue) {
+      this.__htmsState[propName] = ownValue;
+    }
+  }
+
+  __htmsNotifyStateChange() {
+    if (!this.__htmsRendering) {
+      this.__htmsRequestRender();
+    }
+  }
+
+  __htmsResolvePath(path) {
+    if (!Array.isArray(path) || path.length === 0) {
+      throw new Error('Invalid state path');
+    }
+    let ref = this;
+    for (let i = 0; i < path.length - 1; i++) {
+      const key = path[i];
+      const next = ref[key];
+      if (next === undefined || next === null || typeof next !== 'object') {
+        ref[key] = {};
+      }
+      ref = ref[key];
+    }
+    return { target: ref, key: path[path.length - 1] };
+  }
+
+  __htmsInitState(path, initializer) {
+    const { target, key } = this.__htmsResolvePath(path);
+    const storage = target === this ? this.__htmsState : target;
+    if (!Object.prototype.hasOwnProperty.call(storage, key)) {
+      target[key] = initializer();
+    }
+  }
+
+  __htmsSetState(path, op, valueFactory) {
+    const { target, key } = this.__htmsResolvePath(path);
+    if (op === '++') {
+      const current = typeof target[key] === 'number' ? target[key] : 0;
+      target[key] = current + 1;
+      this.__htmsNotifyStateChange();
+      return;
+    }
+    if (op === '--') {
+      const current = typeof target[key] === 'number' ? target[key] : 0;
+      target[key] = current - 1;
+      this.__htmsNotifyStateChange();
+      return;
+    }
+    const current = target[key];
+    const value = valueFactory();
+    switch (op) {
+      case '+=':
+        target[key] = (typeof current === 'number' ? current : 0) + value;
+        break;
+      case '-=':
+        target[key] = (typeof current === 'number' ? current : 0) - value;
+        break;
+      case '*=':
+        target[key] = (typeof current === 'number' ? current : 0) * value;
+        break;
+      case '/=':
+        target[key] = (typeof current === 'number' ? current : 0) / value;
+        break;
+      default:
+        target[key] = value;
+    }
+    this.__htmsNotifyStateChange();
+  }
+
+  __htmsEnsureArray(path) {
+    const { target, key } = this.__htmsResolvePath(path);
+    if (!Array.isArray(target[key])) {
+      target[key] = [];
+    }
+    return target[key];
+  }
+
+  __htmsPushState(path, valueFactory) {
+    const arr = this.__htmsEnsureArray(path);
+    arr.push(valueFactory());
+    this.__htmsNotifyStateChange();
+  }
+
+  __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory) {
+    const arr = this.__htmsEnsureArray(path);
+    const index = indexFactory();
+    const del = deleteFactory();
+    const values = valuesFactory();
+    arr.splice(index, del, ...values);
+    this.__htmsNotifyStateChange();
+  }
+
+`
     : '';
+
+  const updateHelpers = `  get updateComplete() {
+    return this.__htmsUpdatePromise;
+  }
+
+  get renderError() {
+    return this.__htmsLastError;
+  }
+
+  requestUpdate() {
+    return this.__htmsRequestRender();
+  }
+
+  __htmsRequestRender() {
+    if (!this.__htmsConnected || this.__htmsRenderScheduled) {
+      return this.__htmsUpdatePromise;
+    }
+
+    this.__htmsRenderScheduled = true;
+    this.__htmsUpdatePromise = new Promise(resolve => {
+      this.__htmsResolveUpdate = resolve;
+    });
+
+    queueMicrotask(() => {
+      if (!this.__htmsRenderScheduled) {
+        return;
+      }
+      this.__htmsRenderScheduled = false;
+      if (this.__htmsConnected) {
+        this.render();
+      } else {
+        this.__htmsFinishUpdate();
+      }
+    });
+
+    return this.__htmsUpdatePromise;
+  }
+
+  __htmsFinishUpdate() {
+    const resolve = this.__htmsResolveUpdate;
+    this.__htmsResolveUpdate = null;
+    if (resolve) {
+      resolve();
+    }
+  }
+
+  __htmsReportRenderError(error) {
+    this.__htmsLastError = error;
+    const errorEvent = new CustomEvent('htms-error', {
+      detail: { error, component: this },
+      bubbles: true,
+      composed: true,
+      cancelable: true
+    });
+    const shouldLog = this.dispatchEvent(errorEvent);
+    if (shouldLog) {
+      console.error('HTMS component render failed:', error);
+    }
+  }
+
+`;
 
   const eventHelpers = hasEventDirectives
-    ? `  __htmsListen(target, eventType, handler) {\n    target.addEventListener(eventType, handler);\n    this.__htmsRenderCleanups.push(() => {\n      target.removeEventListener(eventType, handler);\n    });\n  }\n\n  __htmsCleanupRenderListeners() {\n    const cleanups = this.__htmsRenderCleanups;\n    this.__htmsRenderCleanups = [];\n    for (const cleanup of cleanups) {\n      cleanup();\n    }\n  }\n\n`
+    ? `  __htmsMarkListener(target, eventType, handler) {
+    if (!target.__htmsListeners) {
+      target.__htmsListeners = [];
+    }
+    target.__htmsListeners.push({ eventType, handler });
+  }
+
+  __htmsListen(target, eventType, handler) {
+    target.addEventListener(eventType, handler);
+    this.__htmsRenderCleanups.push(() => {
+      target.removeEventListener(eventType, handler);
+    });
+  }
+
+  __htmsActivateListeners(target, source) {
+    const listeners = source.__htmsListeners || [];
+    for (const listener of listeners) {
+      this.__htmsListen(target, listener.eventType, listener.handler);
+    }
+  }
+
+  __htmsResolveEventRoot(currentTarget, sourceScope) {
+    if (sourceScope && sourceScope.__htmsMountedNode) {
+      return sourceScope.__htmsMountedNode;
+    }
+    if (sourceScope && sourceScope.nodeType === Node.ELEMENT_NODE && sourceScope.isConnected) {
+      return sourceScope;
+    }
+    const eventRoot = currentTarget && typeof currentTarget.getRootNode === 'function'
+      ? currentTarget.getRootNode()
+      : null;
+    if (eventRoot && eventRoot !== document) {
+      return eventRoot;
+    }
+    return this.__htmsRoot || this;
+  }
+
+  __htmsCleanupRenderListeners() {
+    const cleanups = this.__htmsRenderCleanups;
+    this.__htmsRenderCleanups = [];
+    for (const cleanup of cleanups) {
+      cleanup();
+    }
+  }
+
+`
     : '';
 
-  const keyedListHelpers = hasKeyedLists
-    ? `  __htmsSnapshotKeyedLists(root, configs) {\n    const snapshots = Object.create(null);\n    for (const config of configs) {\n      snapshots[config.id] = Array.from(root.querySelectorAll(config.selector)).map(container => {\n        const keyed = new Map();\n        Array.from(container.children).forEach(child => {\n          if (typeof child.getAttribute !== 'function') {\n            return;\n          }\n          const key = child.getAttribute('data-key');\n          if (key !== null && !keyed.has(key)) {\n            keyed.set(key, child);\n          }\n        });\n        return keyed;\n      });\n    }\n    return snapshots;\n  }\n\n  __htmsSyncElement(target, source) {\n    Array.from(target.attributes).forEach(attr => {\n      if (!source.hasAttribute(attr.name)) {\n        target.removeAttribute(attr.name);\n      }\n    });\n    Array.from(source.attributes).forEach(attr => {\n      if (target.getAttribute(attr.name) !== attr.value) {\n        target.setAttribute(attr.name, attr.value);\n      }\n    });\n\n    const targetChildren = Array.from(target.childNodes);\n    const sourceChildren = Array.from(source.childNodes);\n    const childCount = Math.max(targetChildren.length, sourceChildren.length);\n    for (let i = 0; i < childCount; i++) {\n      const targetChild = targetChildren[i];\n      const sourceChild = sourceChildren[i];\n      if (!sourceChild && targetChild) {\n        target.removeChild(targetChild);\n        continue;\n      }\n      if (sourceChild && !targetChild) {\n        target.appendChild(sourceChild.cloneNode(true));\n        continue;\n      }\n      if (!sourceChild || !targetChild) {\n        continue;\n      }\n      if (targetChild.nodeType === Node.TEXT_NODE && sourceChild.nodeType === Node.TEXT_NODE) {\n        if (targetChild.textContent !== sourceChild.textContent) {\n          targetChild.textContent = sourceChild.textContent;\n        }\n        continue;\n      }\n      if (targetChild.nodeType === Node.ELEMENT_NODE && sourceChild.nodeType === Node.ELEMENT_NODE && targetChild.nodeName === sourceChild.nodeName) {\n        this.__htmsSyncElement(targetChild, sourceChild);\n        continue;\n      }\n      target.replaceChild(sourceChild.cloneNode(true), targetChild);\n    }\n  }\n\n`
+  const reconciliationHelpers = `  __htmsMarkProperty(target, path, value) {
+    if (!target.__htmsProperties) {
+      target.__htmsProperties = [];
+    }
+    target.__htmsProperties.push({ path, value });
+  }
+
+  __htmsApplyProperties(target, source) {
+    const properties = source.__htmsProperties || [];
+    for (const property of properties) {
+      let receiver = target;
+      for (const segment of property.path.slice(0, -1)) {
+        if (receiver[segment] == null) {
+          receiver[segment] = {};
+        }
+        receiver = receiver[segment];
+      }
+      receiver[property.path[property.path.length - 1]] = property.value;
+    }
+  }
+
+  __htmsNodesMatch(target, source) {
+    if (
+      !target ||
+      target.nodeType !== source.nodeType ||
+      target.nodeName !== source.nodeName ||
+      target.namespaceURI !== source.namespaceURI
+    ) {
+      return false;
+    }
+    if (source.nodeType !== Node.ELEMENT_NODE) {
+      return true;
+    }
+    const sourceKey = source.getAttribute('data-key');
+    const targetKey = target.getAttribute('data-key');
+    return sourceKey === null && targetKey === null
+      ? true
+      : sourceKey === targetKey;
+  }
+
+  __htmsFindMatchingNode(reference, source, keyedTargets, idTargets) {
+    if (source.nodeType === Node.ELEMENT_NODE) {
+      const key = source.getAttribute('data-key');
+      const id = source.id;
+      if (key !== null) {
+        const candidate = keyedTargets.get(key);
+        if (this.__htmsNodesMatch(candidate, source)) {
+          keyedTargets.delete(key);
+          return candidate;
+        }
+      } else if (id) {
+        const candidate = idTargets.get(id);
+        if (this.__htmsNodesMatch(candidate, source)) {
+          idTargets.delete(id);
+          return candidate;
+        }
+      }
+    }
+    return this.__htmsNodesMatch(reference, source) ? reference : null;
+  }
+
+  __htmsSyncAttributes(target, source) {
+    Array.from(target.attributes).forEach(attr => {
+      if (!source.hasAttribute(attr.name)) {
+        target.removeAttribute(attr.name);
+      }
+    });
+    Array.from(source.attributes).forEach(attr => {
+      if (target.getAttribute(attr.name) !== attr.value) {
+        target.setAttribute(attr.name, attr.value);
+      }
+    });
+  }
+
+  __htmsActivateTree(node) {
+${
+  hasEventDirectives
+    ? `    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    this.__htmsActivateListeners(node, node);
+    Array.from(node.querySelectorAll('*')).forEach(child => {
+      this.__htmsActivateListeners(child, child);
+    });
+`
+    : `    return;
+`
+}  }
+
+  __htmsSyncNode(target, source) {
+    source.__htmsMountedNode = target;
+    if (
+      source.nodeType === Node.TEXT_NODE ||
+      source.nodeType === Node.COMMENT_NODE
+    ) {
+      if (target.nodeValue !== source.nodeValue) {
+        target.nodeValue = source.nodeValue;
+      }
+      return;
+    }
+    if (source.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    this.__htmsSyncAttributes(target, source);
+    this.__htmsApplyProperties(target, source);
+${
+  hasEventDirectives
+    ? `    this.__htmsActivateListeners(target, source);
+`
+    : ''
+}    if (source.localName === 'template' && target.content && source.content) {
+      this.__htmsReconcileChildren(target.content, source.content);
+      return;
+    }
+    this.__htmsReconcileChildren(target, source);
+  }
+
+  __htmsReconcileChildren(targetParent, sourceParent) {
+    const sourceChildren = Array.from(sourceParent.childNodes);
+    const keyedTargets = new Map();
+    const idTargets = new Map();
+    Array.from(targetParent.children || []).forEach(child => {
+      const key = child.getAttribute('data-key');
+      if (key !== null && !keyedTargets.has(key)) {
+        keyedTargets.set(key, child);
+      }
+      if (child.id && !idTargets.has(child.id)) {
+        idTargets.set(child.id, child);
+      }
+    });
+    let reference = targetParent.firstChild;
+
+    for (const source of sourceChildren) {
+      const match = this.__htmsFindMatchingNode(
+        reference,
+        source,
+        keyedTargets,
+        idTargets
+      );
+      if (!match) {
+        targetParent.insertBefore(source, reference);
+        source.__htmsMountedNode = source;
+        this.__htmsActivateTree(source);
+        reference = source.nextSibling;
+        continue;
+      }
+
+      if (match !== reference) {
+        targetParent.insertBefore(match, reference);
+      }
+      this.__htmsSyncNode(match, source);
+      reference = match.nextSibling;
+    }
+
+    while (reference) {
+      const next = reference.nextSibling;
+      targetParent.removeChild(reference);
+      reference = next;
+    }
+  }
+
+`;
+
+  const focusHelpers = preservesFocus
+    ? `  __htmsSnapshotFocus(root, controlledSelectors) {
+    const documentActive = typeof document !== 'undefined' ? document.activeElement : null;
+    const candidate = root.activeElement || (documentActive && root.contains(documentActive) ? documentActive : null);
+    if (!candidate || candidate === root) {
+      return null;
+    }
+
+    const path = [];
+    let current = candidate;
+    while (current && current !== root) {
+      const parent = current.parentNode;
+      if (!parent) {
+        return null;
+      }
+      path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
+      current = parent;
+    }
+    if (current !== root) {
+      return null;
+    }
+
+    let controlled = false;
+    if (typeof candidate.matches === 'function') {
+      for (const selector of controlledSelectors) {
+        try {
+          if (candidate.matches(selector)) {
+            controlled = true;
+            break;
+          }
+        } catch (error) {
+          console.warn('HTMS ignored invalid controlled selector:', selector, error);
+        }
+      }
+    }
+
+    return {
+      path,
+      id: candidate.id || null,
+      nodeName: candidate.nodeName,
+      value: !controlled && 'value' in candidate ? candidate.value : undefined,
+      checked: !controlled && 'checked' in candidate ? candidate.checked : undefined,
+      selectionStart: typeof candidate.selectionStart === 'number' ? candidate.selectionStart : null,
+      selectionEnd: typeof candidate.selectionEnd === 'number' ? candidate.selectionEnd : null,
+      selectionDirection: candidate.selectionDirection || 'none',
+      scrollTop: candidate.scrollTop,
+      scrollLeft: candidate.scrollLeft
+    };
+  }
+
+  __htmsRestoreFocus(root, snapshot) {
+    if (!snapshot) {
+      return;
+    }
+
+    let candidate = null;
+    if (snapshot.id) {
+      candidate = Array.from(root.querySelectorAll('[id]')).find(node => node.id === snapshot.id) || null;
+    }
+    if (!candidate) {
+      candidate = root;
+      for (const index of snapshot.path) {
+        candidate = candidate && candidate.childNodes ? candidate.childNodes[index] : null;
+        if (!candidate) {
+          return;
+        }
+      }
+    }
+    if (!candidate || candidate.nodeName !== snapshot.nodeName || typeof candidate.focus !== 'function') {
+      return;
+    }
+
+    if (snapshot.value !== undefined && 'value' in candidate) {
+      candidate.value = snapshot.value;
+    }
+    if (snapshot.checked !== undefined && 'checked' in candidate) {
+      candidate.checked = snapshot.checked;
+    }
+    try {
+      candidate.focus({ preventScroll: true });
+    } catch (error) {
+      candidate.focus();
+    }
+    if (
+      snapshot.selectionStart !== null &&
+      snapshot.selectionEnd !== null &&
+      typeof candidate.setSelectionRange === 'function'
+    ) {
+      try {
+        candidate.setSelectionRange(
+          snapshot.selectionStart,
+          snapshot.selectionEnd,
+          snapshot.selectionDirection
+        );
+      } catch (error) {
+        // Some input types do not expose a selectable text range.
+      }
+    }
+    candidate.scrollTop = snapshot.scrollTop;
+    candidate.scrollLeft = snapshot.scrollLeft;
+  }
+
+`
     : '';
+
+  const statePropertyInitialization = reactiveStateRoots
+    .map(
+      (stateName) =>
+        `    this.__htmsDefineStateProperty(${JSON.stringify(stateName)});`
+    )
+    .join('\n');
+  const renderBody = renderLines.map((line) => `  ${line}`).join('\n');
 
   return `class ${metadata.className} extends HTMLElement {
-${staticTemplateProperty}${inputHelpers}${stateHelpers}${eventHelpers}${keyedListHelpers}  constructor() {
+${staticTemplateProperty}${inputHelpers}${stateHelpers}${updateHelpers}${eventHelpers}${reconciliationHelpers}${renderRootHelper}${focusHelpers}  constructor() {
     super();
     this.__htmsRoot = null;
     this.__htmsProps = Object.create(null);
+    this.__htmsState = Object.create(null);
     this.__htmsConnected = false;
-${hasEventDirectives ? `    this.__htmsRenderCleanups = [];\n` : ''}${hasKeyedLists ? `    this.__htmsKeyedSnapshots = Object.create(null);\n` : ''}
+    this.__htmsRendering = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsResolveUpdate = null;
+    this.__htmsUpdatePromise = Promise.resolve();
+    this.__htmsLastError = null;
+${hasEventDirectives ? `    this.__htmsRenderCleanups = [];\n` : ''}
 ${shadowInit}
-${inputInitialization ? `${inputInitialization}\n` : ''}  }
+${statePropertyInitialization ? `${statePropertyInitialization}\n` : ''}${inputInitialization ? `${inputInitialization}\n` : ''}  }
 
   connectedCallback() {
-    this.__htmsConnected = true;
+${metadata.shadowMode === 'none' ? '' : `    this.__htmsEnsureRenderRoot();\n`}    this.__htmsConnected = true;
     this.render();
   }${lifecycleSection}
 
   disconnectedCallback() {
     this.__htmsConnected = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsFinishUpdate();
 ${hasEventDirectives ? `    this.__htmsCleanupRenderListeners();\n` : ''}
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
@@ -763,7 +1682,17 @@ ${hasEventDirectives ? `    this.__htmsCleanupRenderListeners();\n` : ''}
   }
 
   render() {
-${renderLines.join('\n')}
+    this.__htmsRenderScheduled = false;
+    this.__htmsRendering = true;
+    this.__htmsLastError = null;
+    try {
+${renderBody}
+    } catch (error) {
+      this.__htmsReportRenderError(error);
+    } finally {
+      this.__htmsRendering = false;
+      this.__htmsFinishUpdate();
+    }
   }
 }`;
 }
@@ -1014,6 +1943,7 @@ function renderEventDirective(
 ): string[] {
   const lines: string[] = [];
   const handlerVar = `_handler${counter.value++}`;
+  const eventRootVar = `_eventRoot${counter.value++}`;
   const innerIndent = `${indent}  `;
   const bodyIndent = `${innerIndent}    `;
 
@@ -1023,6 +1953,9 @@ function renderEventDirective(
   );
   lines.push(`${innerIndent}eventTargets.forEach(targetEl => {`);
   lines.push(`${bodyIndent}const ${handlerVar} = (event) => {`);
+  lines.push(
+    `${bodyIndent}  const ${eventRootVar} = this.__htmsResolveEventRoot(event.currentTarget, ${targetVar});`
+  );
   if (directive.body.length > 0) {
     for (const line of directive.body) {
       lines.push(`${bodyIndent}  ${line}`);
@@ -1035,7 +1968,7 @@ function renderEventDirective(
       lines.push(
         ...renderDirective(
           nested,
-          targetVar,
+          eventRootVar,
           counter,
           `${bodyIndent}  `,
           scopeVars,
@@ -1045,11 +1978,11 @@ function renderEventDirective(
     }
   }
   if (directive.directives && containsState(directive.directives)) {
-    lines.push(`${bodyIndent}  this.render();`);
+    lines.push(`${bodyIndent}  this.requestUpdate();`);
   }
   lines.push(`${bodyIndent}};`);
   lines.push(
-    `${bodyIndent}this.__htmsListen(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar});`
+    `${bodyIndent}this.__htmsMarkListener(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar});`
   );
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
@@ -1108,14 +2041,18 @@ function renderAttributeDirective(
   if (directive.target === 'attribute') {
     lines.push(`${innerIndent}  node.setAttribute(${name}, ${value});`);
   } else {
+    lines.push(`${innerIndent}  const propertyValue = ${value};`);
     if (directive.path && directive.path.length > 1) {
       const pathAccess = directive.path
         .map((segment) => `['${segment}']`)
         .join('');
-      lines.push(`${innerIndent}  node${pathAccess} = ${value};`);
+      lines.push(`${innerIndent}  node${pathAccess} = propertyValue;`);
     } else {
-      lines.push(`${innerIndent}  node[${name}] = ${value};`);
+      lines.push(`${innerIndent}  node[${name}] = propertyValue;`);
     }
+    lines.push(
+      `${innerIndent}  this.__htmsMarkProperty(node, ${JSON.stringify(directive.path ?? [directive.name])}, propertyValue);`
+    );
   }
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
@@ -1395,6 +2332,9 @@ function renderBindDirective(
     `${innerIndent}    const value = (function() { return ${expression}; }).call(this);`
   );
   lines.push(`${innerIndent}    node[${property}] = value;`);
+  lines.push(
+    `${innerIndent}    this.__htmsMarkProperty(node, [${property}], value);`
+  );
   lines.push(`${innerIndent}  } catch (error) {`);
   lines.push(
     `${innerIndent}    console.error('BIND evaluation failed for ${directive.selector}', error);`
@@ -1419,30 +2359,20 @@ function renderKeyedListDirective(
   const bodyIndent = `${innerIndent}  `;
   const loopIndent = `${bodyIndent}  `;
   const selector = JSON.stringify(directive.selector);
-  const runtimeId = JSON.stringify(directive.runtimeId ?? 'keyed-list');
   const targetsVar = `_targets${counter.value++}`;
-  const containerIndexVar = `_containerIndex${counter.value++}`;
-  const previousByKeyVar = `_previousByKey${counter.value++}`;
   const rawSourceVar = `_source${counter.value++}`;
   const arraySourceVar = `_items${counter.value++}`;
   const fragmentVar = `_frag${counter.value++}`;
   const keyVar = `_key${counter.value++}`;
   const keyTextVar = `_keyText${counter.value++}`;
   const keyedNodeVar = `_keyedNode${counter.value++}`;
-  const existingNodeVar = `_existingNode${counter.value++}`;
-  const mountedNodeVar = `_mountedNode${counter.value++}`;
   const loopScopeVars = [...scopeVars, directive.itemVar, directive.indexVar];
 
   lines.push(`${indent}{`);
   lines.push(
     `${innerIndent}const ${targetsVar} = ${targetVar}.querySelectorAll(${selector});`
   );
-  lines.push(
-    `${innerIndent}${targetsVar}.forEach((container, ${containerIndexVar}) => {`
-  );
-  lines.push(
-    `${bodyIndent}const ${previousByKeyVar} = (__htmsKeyedSnapshots[${runtimeId}] && __htmsKeyedSnapshots[${runtimeId}][${containerIndexVar}]) || new Map();`
-  );
+  lines.push(`${innerIndent}${targetsVar}.forEach(container => {`);
   lines.push(`${bodyIndent}const ${rawSourceVar} = ${directive.source};`);
   lines.push(
     `${bodyIndent}const ${arraySourceVar} = Array.isArray(${rawSourceVar}) ? ${rawSourceVar} : [];`
@@ -1479,29 +2409,14 @@ function renderKeyedListDirective(
     `${loopIndent}  ${keyedNodeVar}.setAttribute('data-key', ${keyTextVar});`
   );
   lines.push(`${loopIndent}}`);
-  lines.push(
-    `${loopIndent}const ${existingNodeVar} = ${previousByKeyVar}.get(${keyTextVar});`
-  );
-  lines.push(`${loopIndent}if (${existingNodeVar}) {`);
-  lines.push(`${loopIndent}  ${previousByKeyVar}.delete(${keyTextVar});`);
-  lines.push(`${loopIndent}}`);
-  lines.push(`${loopIndent}let ${mountedNodeVar} = ${keyedNodeVar};`);
-  lines.push(
-    `${loopIndent}if (${existingNodeVar} && ${keyedNodeVar} && ${existingNodeVar}.tagName === ${keyedNodeVar}.tagName) {`
-  );
-  lines.push(
-    `${loopIndent}  this.__htmsSyncElement(${existingNodeVar}, ${keyedNodeVar});`
-  );
-  lines.push(`${loopIndent}  ${mountedNodeVar} = ${existingNodeVar};`);
-  lines.push(`${loopIndent}}`);
-  lines.push(`${loopIndent}if (${mountedNodeVar}) {`);
-  lines.push(`${loopIndent}  container.appendChild(${mountedNodeVar});`);
+  lines.push(`${loopIndent}if (${keyedNodeVar}) {`);
+  lines.push(`${loopIndent}  container.appendChild(${keyedNodeVar});`);
   if (directive.directives && directive.directives.length > 0) {
     for (const nested of directive.directives) {
       lines.push(
         ...renderDirective(
           nested,
-          mountedNodeVar,
+          keyedNodeVar,
           counter,
           `${loopIndent}  `,
           loopScopeVars,

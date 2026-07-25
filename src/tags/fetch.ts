@@ -4,7 +4,13 @@ import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const ALLOWED_PARSERS = new Set(['json', 'text', 'blob', 'arraybuffer', 'formdata']);
+const ALLOWED_PARSERS = new Set([
+  'json',
+  'text',
+  'blob',
+  'arraybuffer',
+  'formdata',
+]);
 const ALLOWED_CREDENTIALS = new Set(['omit', 'same-origin', 'include']);
 
 let fetchCounter = 0;
@@ -26,25 +32,31 @@ function validateStatePath(path: string): string[] | null {
   return segments;
 }
 
-function buildComponentAssignment(path: string[], valueExpression: string): string {
+function buildComponentAssignment(
+  path: string[],
+  valueExpression: string
+): string {
   if (path.length === 0) {
     return '';
   }
   const lines: string[] = [];
   lines.push('if (!owner) { return; }');
   lines.push('var target = owner;');
-  for (let i = 0; i < path.length - 1; i++) {
-    const segment = path[i];
+  for (const segment of path.slice(0, -1)) {
     lines.push(
       `if (target['${segment}'] == null || typeof target['${segment}'] !== 'object') { target['${segment}'] = {}; }`
     );
     lines.push(`target = target['${segment}'];`);
   }
-  lines.push(`target['${path[path.length - 1]}'] = ${valueExpression};`);
+  const [lastSegment] = [...path].reverse();
+  lines.push(`target['${lastSegment}'] = ${valueExpression};`);
   return lines.join('\n');
 }
 
-function buildGlobalAssignment(path: string[], valueExpression: string): string {
+function buildGlobalAssignment(
+  path: string[],
+  valueExpression: string
+): string {
   if (path.length === 0) {
     return '';
   }
@@ -59,7 +71,9 @@ function buildAssignment(
   if (!path || path.length === 0) {
     return '';
   }
-  return isComponent ? buildComponentAssignment(path, valueExpression) : buildGlobalAssignment(path, valueExpression);
+  return isComponent
+    ? buildComponentAssignment(path, valueExpression)
+    : buildGlobalAssignment(path, valueExpression);
 }
 
 export const handleFetchTag: TagHandler = (
@@ -85,7 +99,11 @@ export const handleFetchTag: TagHandler = (
     const onceAttr = element.getAttribute('once');
 
     if (!urlExpr) {
-      errors.push({ type: 'validation', message: 'FETCH requires url attribute', tag: 'FETCH' });
+      errors.push({
+        type: 'validation',
+        message: 'FETCH requires url attribute',
+        tag: 'FETCH',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -93,7 +111,7 @@ export const handleFetchTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: `Unsupported HTTP method: ${methodAttr}. Allowed: ${Array.from(ALLOWED_METHODS).join(', ')}`,
-        tag: 'FETCH'
+        tag: 'FETCH',
       });
       return { code: '', errors, warnings };
     }
@@ -102,7 +120,7 @@ export const handleFetchTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: `Unsupported parser: ${parseAttr}. Allowed: ${Array.from(ALLOWED_PARSERS).join(', ')}`,
-        tag: 'FETCH'
+        tag: 'FETCH',
       });
       return { code: '', errors, warnings };
     }
@@ -111,27 +129,40 @@ export const handleFetchTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: `Invalid credentials value: ${credentialsAttr}`,
-        tag: 'FETCH'
+        tag: 'FETCH',
       });
       return { code: '', errors, warnings };
     }
 
     const urlErrors = SecurityValidator.validateContent(urlExpr);
     if (urlErrors.length > 0) {
-      errors.push(...urlErrors.map(error => ({ ...error, tag: 'FETCH', message: `Invalid url expression: ${urlExpr}` })));
+      errors.push(
+        ...urlErrors.map((error) => ({
+          ...error,
+          tag: 'FETCH',
+          message: `Invalid url expression: ${urlExpr}`,
+        }))
+      );
       return { code: '', errors, warnings };
     }
 
     if (bodyAttr) {
       const bodyErrors = SecurityValidator.validateContent(bodyAttr);
       if (bodyErrors.length > 0) {
-        errors.push(...bodyErrors.map(error => ({ ...error, tag: 'FETCH', message: `Invalid body expression: ${bodyAttr}` })));
+        errors.push(
+          ...bodyErrors.map((error) => ({
+            ...error,
+            tag: 'FETCH',
+            message: `Invalid body expression: ${bodyAttr}`,
+          }))
+        );
         return { code: '', errors, warnings };
       }
       if (methodAttr === 'GET') {
         warnings.push({
-          message: 'HTTP GET with body attribute may be ignored by some browsers',
-          tag: 'FETCH'
+          message:
+            'HTTP GET with body attribute may be ignored by some browsers',
+          tag: 'FETCH',
         });
       }
     }
@@ -140,7 +171,11 @@ export const handleFetchTag: TagHandler = (
       const headersErrors = SecurityValidator.validateContent(headersAttr);
       if (headersErrors.length > 0) {
         errors.push(
-          ...headersErrors.map(error => ({ ...error, tag: 'FETCH', message: `Invalid headers expression: ${headersAttr}` }))
+          ...headersErrors.map((error) => ({
+            ...error,
+            tag: 'FETCH',
+            message: `Invalid headers expression: ${headersAttr}`,
+          }))
         );
         return { code: '', errors, warnings };
       }
@@ -149,26 +184,44 @@ export const handleFetchTag: TagHandler = (
     if (whenAttr) {
       const whenErrors = SecurityValidator.validateContent(whenAttr);
       if (whenErrors.length > 0) {
-        errors.push(...whenErrors.map(error => ({ ...error, tag: 'FETCH', message: `Invalid condition: ${whenAttr}` })));
+        errors.push(
+          ...whenErrors.map((error) => ({
+            ...error,
+            tag: 'FETCH',
+            message: `Invalid condition: ${whenAttr}`,
+          }))
+        );
         return { code: '', errors, warnings };
       }
     }
 
     const intoPath = validateStatePath(intoAttr ?? '');
     if (intoAttr && !intoPath) {
-      errors.push({ type: 'validation', message: `Invalid into path: ${intoAttr}`, tag: 'FETCH' });
+      errors.push({
+        type: 'validation',
+        message: `Invalid into path: ${intoAttr}`,
+        tag: 'FETCH',
+      });
       return { code: '', errors, warnings };
     }
 
     const errorPath = validateStatePath(errorAttr ?? '');
     if (errorAttr && !errorPath) {
-      errors.push({ type: 'validation', message: `Invalid error path: ${errorAttr}`, tag: 'FETCH' });
+      errors.push({
+        type: 'validation',
+        message: `Invalid error path: ${errorAttr}`,
+        tag: 'FETCH',
+      });
       return { code: '', errors, warnings };
     }
 
     const loadingPath = validateStatePath(loadingAttr ?? '');
     if (loadingAttr && !loadingPath) {
-      errors.push({ type: 'validation', message: `Invalid loading path: ${loadingAttr}`, tag: 'FETCH' });
+      errors.push({
+        type: 'validation',
+        message: `Invalid loading path: ${loadingAttr}`,
+        tag: 'FETCH',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -186,7 +239,13 @@ export const handleFetchTag: TagHandler = (
         }
         const depErrors = SecurityValidator.validateContent(dep);
         if (depErrors.length > 0) {
-          errors.push(...depErrors.map(error => ({ ...error, tag: 'FETCH', message: `Invalid dependency: ${dep}` })));
+          errors.push(
+            ...depErrors.map((error) => ({
+              ...error,
+              tag: 'FETCH',
+              message: `Invalid dependency: ${dep}`,
+            }))
+          );
           return { code: '', errors, warnings };
         }
         dependencySet.add(dep);
@@ -194,7 +253,9 @@ export const handleFetchTag: TagHandler = (
     }
 
     const dependencies = Array.from(dependencySet);
-    const immediate = immediateAttr ? immediateAttr.toLowerCase() !== 'false' : true;
+    const immediate = immediateAttr
+      ? immediateAttr.toLowerCase() !== 'false'
+      : true;
     const once = onceAttr ? onceAttr.toLowerCase() === 'true' : false;
     const fetchId = `__fetch_${++fetchCounter}`;
     const runtime = ensureRuntime();
@@ -202,7 +263,7 @@ export const handleFetchTag: TagHandler = (
 
     const depsCode =
       dependencies.length > 0
-        ? `[${dependencies.map(dep => `function(){ return ${dep}; }`).join(', ')}]`
+        ? `[${dependencies.map((dep) => `function(){ return ${dep}; }`).join(', ')}]`
         : '[]';
 
     const requestInitEntries: string[] = [`method: '${methodAttr}'`];
@@ -223,7 +284,7 @@ export const handleFetchTag: TagHandler = (
           }`
         : `{}`;
 
-    const parserLine = (() => {
+    const parserLine = ((): string => {
       switch (parseAttr) {
         case 'text':
           return 'const data = await response.text();';
@@ -240,16 +301,23 @@ export const handleFetchTag: TagHandler = (
     })();
 
     const assignData = buildAssignment(intoPath ?? null, 'data', isComponent);
-    const assignErrorClear = errorPath ? buildAssignment(errorPath, 'null', isComponent) : '';
-    const errorMessageExpr = "(error instanceof Error && error.message) ? error.message : String(error)";
-    const assignError = buildAssignment(errorPath, errorMessageExpr, isComponent);
+    const assignErrorClear = errorPath
+      ? buildAssignment(errorPath, 'null', isComponent)
+      : '';
+    const errorMessageExpr =
+      '(error instanceof Error && error.message) ? error.message : String(error)';
+    const assignError = buildAssignment(
+      errorPath,
+      errorMessageExpr,
+      isComponent
+    );
     const setLoadingTrue = buildAssignment(loadingPath, 'true', isComponent);
     const setLoadingFalse = buildAssignment(loadingPath, 'false', isComponent);
 
     const guardExpression = whenAttr ? `(${whenAttr})` : 'true';
 
-    const code = `${runtime}
-      (function(owner){
+    const registrationCode = `(function(owner){
+        if (typeof window !== 'undefined' && window.__HTMS_SSR__) { return; }
         var runtime = typeof window !== 'undefined' ? window.__htms : null;
         if (!runtime) { return; }
         runtime.registerEffect({
@@ -287,7 +355,9 @@ ${setLoadingFalse ? `                ${setLoadingFalse.replace(/\n/g, '\n       
                 if (runtime) {
                   runtime.notify();
                 }
-                if (owner && typeof owner.render === 'function') {
+                if (owner && typeof owner.requestUpdate === 'function') {
+                  owner.requestUpdate();
+                } else if (owner && typeof owner.render === 'function') {
                   owner.render();
                 }
               }
@@ -301,24 +371,37 @@ ${setLoadingFalse ? `                ${setLoadingFalse.replace(/\n/g, '\n       
           }
         });
       })(${isComponent ? 'this' : 'null'});`;
+    const code = `${runtime}
+      ${registrationCode}`;
 
     CompilerLogger.logInfo('Generated fetch effect', {
       id: fetchId,
       method: methodAttr,
       hasBody: !!bodyAttr,
-      parse: parseAttr
+      parse: parseAttr,
     });
 
     return {
       code,
       errors,
-      warnings
+      warnings,
+      component: isComponent
+        ? {
+            directives: [
+              {
+                kind: 'statement',
+                code: registrationCode,
+                requiresRuntime: true,
+              },
+            ],
+          }
+        : undefined,
     };
   } catch (error) {
     return {
       code: '',
       errors: [{ type: 'runtime', message: String(error), tag: 'FETCH' }],
-      warnings
+      warnings,
     };
   }
 };

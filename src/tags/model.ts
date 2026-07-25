@@ -5,13 +5,7 @@ import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 
 const DEFAULT_EVENT = 'input';
-const ALLOWED_EVENTS = new Set([
-  'input',
-  'change',
-  'blur',
-  'keyup',
-  'keydown'
-]);
+const ALLOWED_EVENTS = new Set(['input', 'change', 'blur', 'keyup', 'keydown']);
 
 function normalizePath(raw: string): { path: string[]; expr: string } | null {
   const trimmed = raw.trim();
@@ -38,7 +32,8 @@ export const handleModelTag: TagHandler = (
 
   try {
     const selector = element.getAttribute('selector');
-    const pathAttr = element.getAttribute('path') || element.getAttribute('name');
+    const pathAttr =
+      element.getAttribute('path') || element.getAttribute('name');
     const prop = element.getAttribute('prop') || 'value';
     const eventAttr = element.getAttribute('event') || DEFAULT_EVENT;
     const trimAttr = element.getAttribute('trim');
@@ -47,18 +42,26 @@ export const handleModelTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: 'MODEL requires selector and path attributes',
-        tag: 'MODEL'
+        tag: 'MODEL',
       });
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(selector)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector', tag: 'MODEL' });
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector',
+        tag: 'MODEL',
+      });
       return { code: '', errors, warnings };
     }
 
     if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(prop)) {
-      errors.push({ type: 'validation', message: 'Invalid property path', tag: 'MODEL' });
+      errors.push({
+        type: 'validation',
+        message: 'Invalid property path',
+        tag: 'MODEL',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -66,7 +69,7 @@ export const handleModelTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: `Invalid MODEL event: ${eventAttr}`,
-        tag: 'MODEL'
+        tag: 'MODEL',
       });
       return { code: '', errors, warnings };
     }
@@ -76,7 +79,7 @@ export const handleModelTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: `Invalid model path: ${pathAttr}`,
-        tag: 'MODEL'
+        tag: 'MODEL',
       });
       return { code: '', errors, warnings };
     }
@@ -86,12 +89,12 @@ export const handleModelTag: TagHandler = (
       prop === 'checked'
         ? 'event.currentTarget.checked'
         : prop === 'value' && trim
-        ? 'event.currentTarget.value.trim()'
-        : `event.currentTarget.${prop}`;
+          ? 'event.currentTarget.value.trim()'
+          : `event.currentTarget.${prop}`;
 
     const exprErrors = SecurityValidator.validateContent(pathInfo.expr);
     if (exprErrors.length > 0) {
-      errors.push(...exprErrors.map(error => ({ ...error, tag: 'MODEL' })));
+      errors.push(...exprErrors.map((error) => ({ ...error, tag: 'MODEL' })));
       if (options.strictMode) {
         return { code: '', errors, warnings };
       }
@@ -101,7 +104,7 @@ export const handleModelTag: TagHandler = (
       kind: 'bind',
       selector,
       property: prop,
-      expression: pathInfo.expr
+      expression: pathInfo.expr,
     };
 
     const stateDirective: StateDirective = {
@@ -109,7 +112,7 @@ export const handleModelTag: TagHandler = (
       mode: 'set',
       path: pathInfo.path,
       op: '=',
-      value: sourceExpr
+      value: sourceExpr,
     };
 
     const eventDirective: EventDirective = {
@@ -117,14 +120,16 @@ export const handleModelTag: TagHandler = (
       selector,
       eventType: eventAttr,
       body: [],
-      directives: [stateDirective]
+      directives: [stateDirective],
     };
 
     const isComponentContext = options.parentContext === 'component';
     const selEsc = SecurityValidator.escapeForTemplate(selector);
     const propEsc = SecurityValidator.escapeForTemplate(prop);
     const runtime = ensureRuntime();
-    const assignment = pathAttr.startsWith('this.') ? pathAttr : `this.${pathAttr}`;
+    const assignment = pathAttr.startsWith('this.')
+      ? pathAttr
+      : `this.${pathAttr}`;
 
     const code = isComponentContext
       ? ''
@@ -154,7 +159,7 @@ export const handleModelTag: TagHandler = (
       selector,
       path: pathInfo.path.join('.'),
       prop,
-      event: eventAttr
+      event: eventAttr,
     });
 
     return {
@@ -162,10 +167,14 @@ export const handleModelTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [bindDirective, eventDirective]
-      }
+        directives: [bindDirective, eventDirective],
+      },
     };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'MODEL' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'MODEL' }],
+      warnings,
+    };
   }
 };

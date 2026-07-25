@@ -17,37 +17,51 @@ export const handleSpliceTag: TagHandler = (
     const valuesAttr = element.getAttribute('values'); // JSON array or omitted
 
     if (!array) {
-      errors.push({ type: 'validation', message: 'SPLICE requires array attribute', tag: 'SPLICE' });
+      errors.push({
+        type: 'validation',
+        message: 'SPLICE requires array attribute',
+        tag: 'SPLICE',
+      });
       return { code: '', errors, warnings };
     }
 
     // Validate array path
-    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(array)) {
-      errors.push({ type: 'validation', message: 'Invalid array path', tag: 'SPLICE' });
+    if (!SecurityValidator.isJavaScriptPath(array)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid array path',
+        tag: 'SPLICE',
+      });
       return { code: '', errors, warnings };
     }
     for (const part of array.split('.')) {
       const ve = SecurityValidator.validateJavaScriptIdentifier(part);
       if (ve.length) {
-        errors.push(...ve.map(e => ({ ...e, tag: 'SPLICE' })));
+        errors.push(...ve.map((e) => ({ ...e, tag: 'SPLICE' })));
         return { code: '', errors, warnings };
       }
     }
 
     // Validate numbers
-    const indexIsNumeric = /^-?\\d+(\\.\\d+)?$/.test(index);
+    const indexIsNumeric = SecurityValidator.isNumericLiteral(index);
     if (!indexIsNumeric) {
       const exprErrors = SecurityValidator.validateContent(index);
       if (exprErrors.length) {
-        errors.push(...exprErrors.map(e => ({ ...e, tag: 'SPLICE' })));
+        errors.push(...exprErrors.map((e) => ({ ...e, tag: 'SPLICE' })));
         return { code: '', errors, warnings };
       }
     } else {
       const idxErr = SecurityValidator.validateNumericValue(index);
-      if (idxErr.length) { errors.push(...idxErr.map(e => ({ ...e, tag: 'SPLICE' }))); return { code: '', errors, warnings }; }
+      if (idxErr.length) {
+        errors.push(...idxErr.map((e) => ({ ...e, tag: 'SPLICE' })));
+        return { code: '', errors, warnings };
+      }
     }
     const delErr = SecurityValidator.validateNumericValue(deleteCount);
-    if (delErr.length) { errors.push(...delErr.map(e => ({ ...e, tag: 'SPLICE' }))); return { code: '', errors, warnings }; }
+    if (delErr.length) {
+      errors.push(...delErr.map((e) => ({ ...e, tag: 'SPLICE' })));
+      return { code: '', errors, warnings };
+    }
 
     // Values
     let tail = '';
@@ -55,13 +69,22 @@ export const handleSpliceTag: TagHandler = (
     if (valuesAttr) {
       try {
         const parsed = JSON.parse(valuesAttr);
-        if (!Array.isArray(parsed)) throw new Error('values must be JSON array');
-        valueExpressions = parsed.map(v =>
-          typeof v === 'string' ? `"${SecurityValidator.escapeForTemplate(v)}"` : String(v)
+        if (!Array.isArray(parsed))
+          throw new Error('values must be JSON array');
+        valueExpressions = parsed.map((v) =>
+          typeof v === 'string'
+            ? `"${SecurityValidator.escapeForTemplate(v)}"`
+            : String(v)
         );
-        tail = valueExpressions.length ? ', ' + valueExpressions.join(', ') : '';
+        tail = valueExpressions.length
+          ? ', ' + valueExpressions.join(', ')
+          : '';
       } catch {
-        errors.push({ type: 'validation', message: 'Invalid values JSON array', tag: 'SPLICE' });
+        errors.push({
+          type: 'validation',
+          message: 'Invalid values JSON array',
+          tag: 'SPLICE',
+        });
         return { code: '', errors, warnings };
       }
     }
@@ -83,7 +106,7 @@ export const handleSpliceTag: TagHandler = (
       path,
       index,
       deleteCount,
-      values: valueExpressions
+      values: valueExpressions,
     };
 
     return {
@@ -91,10 +114,14 @@ export const handleSpliceTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [stateDirective]
-      }
+        directives: [stateDirective],
+      },
     };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'SPLICE' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'SPLICE' }],
+      warnings,
+    };
   }
 };

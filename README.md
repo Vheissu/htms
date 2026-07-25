@@ -1,41 +1,118 @@
-# htms — Hyper Text Media Script
+# HTMS
 
-Write JavaScript with HTML tags. Yes, this is legal (and a little unhinged). No, you should not ship it to production without adult supervision.
+Write JavaScript with HTML. Yes, on purpose.
 
-## What is this?
+HTMS (Hyper Text Media Script) compiles HTML-flavoured source into reactive web components. The syntax borrows the good bit from ColdFusion: state, loops and events are tags too. The output is regular JavaScript built on Custom Elements, Shadow DOM and DOM events.
 
-HTMS turns HTML-ish markup into executable JavaScript. You compose control flow and DOM with tags like `<var>`, `<repeat>`, `<if>`, `<call>`, and plain-old `<div>`. A compiler converts that into JS with safety checks and lots of side‑eye.
+```html
+<component name="click-counter">
+  <var name="count" value="0" mutable="true"></var>
 
-## Quick Start
+  <button id="increment">Clicked {count} times</button>
 
-- Install deps: `npm ci`
-- Build the TypeScript sources: `npm run build`
-- Compile a component demo: `node dist/cli.js compile demos/hello-world-component.html --mode component --output demos/hello-world-component.js`
-- Dev server (live reload): `node dist/cli.js dev demos/hello-world-component.html`
-- Watch & recompile: `node dist/cli.js watch demos/hello-world-component.html`
-- Optional: run browser smoke tests (Chromium required once via `npx playwright install chromium`): `npm run test:e2e`
+  <event target="#increment" type="click">
+    <set name="count" op="++"></set>
+  </event>
+</component>
+```
 
-## Dev Workflow
+No `eval`, no `Function` constructor and no private browser runtime to learn.
 
-- `htms dev <component.html>` compiles, serves a generated preview page, and live-reloads on save.
-- The dev server serves static files from the input file's directory. Open `http://localhost:5173/` for the auto preview or `http://localhost:5173/<your-page>.html` if you want a custom page.
-- If your input has multiple components, use `--tag <name>` to pick which one gets mounted in the auto preview.
-- `htms watch <component.html>` re-compiles to JS on every change without running a server.
+## Try it from this repo
+
+The current toolchain requires Node 20.19 or newer.
+
+```bash
+npm ci
+npm run build
+npm run htms -- create click-counter
+npm run htms -- dev click-counter.html
+```
+
+Open `http://127.0.0.1:5173/`, click the button, then edit the HTML. The browser reloads after a clean compile. If you misspell a tag or forget an attribute, the error appears in the preview and the terminal with the source line and a suggested fix.
+
+The starter is deliberately small enough to pull apart. HTMS won't replace an existing file unless you pass `--force`.
+
+[Read the getting-started guide](https://github.com/Vheissu/htms/blob/master/docs/getting-started.md)
+or run `npm run demo:serve` and open `http://localhost:5173/demos/`.
+
+## CLI
+
+- `htms create <name>` makes an interactive starter. `htms new` is an alias.
+- `htms dev <file>` compiles, serves a preview and reloads it on save.
+- `htms validate <file>` runs the real compiler without writing output.
+- `htms compile <file>` writes JavaScript and a sibling TypeScript declaration.
+- `htms watch <file>` recompiles without starting a server.
+- `htms render <file>` produces server-rendered Declarative Shadow DOM.
+
+Run `htms <command> --help` for every option. If a file declares several components, pass `--tag <name>` to `dev` or `render`.
 
 ## Component Inputs
 
 `<component>` can expose browser-native custom element inputs:
 
 ```html
-<component name="user-badge" props="labelText" observed="label-text">
+<component
+  name="user-badge"
+  props="labelText, count:number, active:boolean, options:json"
+>
   <span id="label"></span>
   <bind selector="#label" prop="textContent" expr="this.labelText"></bind>
 </component>
 ```
 
-- `props` creates public properties with reactive setters. Setting `element.labelText = 'Ready'` re-renders the component after it is connected.
+- `props` creates public properties with reactive setters. A prop is a string unless its name ends with `:number`, `:boolean`, or `:json`.
 - Props initialize from their matching kebab-case attributes (`labelText` reads `label-text`) and default to `null` when no attribute is present.
-- `observed` lists attributes for `static observedAttributes`. Attribute updates are reflected into the matching prop, or into a camel-cased property when there is no prop with the same name.
+- Declared props automatically observe their matching attributes. Boolean props use attribute presence, invalid numbers and JSON become `null`, and a missing boolean attribute becomes `false`.
+- `observed` can list extra attributes that aren't declared as props. Those are exposed as camel-cased string properties.
+
+## Output formats
+
+`--format esm` exports all generated classes in one ESM export list. `--format cjs` writes them to `module.exports`. `--format iife` registers the elements immediately and exposes the classes on `globalThis.HTMSComponents`.
+
+Every format also gets a `.d.ts` file describing component props, emitted events, update lifecycle, and `HTMLElementTagNameMap` entries.
+
+## Component updates
+
+Prop changes and top-level state changes are batched into one render per microtask. An event handler can update several fields without rebuilding the component after every write.
+
+Every generated component has `requestUpdate()` and `updateComplete`:
+
+```js
+counter.count = 2;
+counter.count = 3;
+await counter.updateComplete;
+```
+
+The DOM now contains the state for `3`, after one render. Assigning a new value to a field declared with `<var>` schedules an update. JavaScript can't observe an in-place nested mutation such as `counter.items.push(value)`, so call `counter.requestUpdate()` after that kind of change. HTMS `<push>` and `<splice>` do this automatically.
+
+Reactive renders reconcile a detached fragment with the current DOM. Compatible non-keyed elements keep their identity, while keyed children can move without being recreated. This also preserves keyboard focus, text selection, scroll position, and unfinished values in uncontrolled form fields. Fields managed by `<bind>`, `<model>`, or `<setprop>` continue to use their component state as the source of truth.
+
+If a render fails, the component stores the error in `renderError` and emits a bubbling, composed `htms-error` event. Call `event.preventDefault()` after handling the error to suppress the default console report.
+
+## Server rendering and hydration
+
+The server API renders compiled components in an isolated JSDOM document and returns Declarative Shadow DOM plus a JSON hydration manifest:
+
+```ts
+import { renderToString } from 'htms';
+
+const { html } = renderToString(source, {
+  tagName: 'user-badge',
+  props: { labelText: 'Ready', count: 2 },
+});
+```
+
+The CLI exposes the same path:
+
+```bash
+htms render component.html \
+  --props '{"labelText":"Ready","count":2}' \
+  --attributes '{"class":"compact"}' \
+  --output component.ssr.html
+```
+
+`<effect>` and `<fetch>` stay dormant on the server. In the browser, load the compiled component bundle and call `hydrate()` from the package. The first client render adopts and reconciles the server tree, including a fallback for parsers that leave Declarative Shadow DOM as a template.
 
 ## How It Works (roughly)
 
@@ -43,9 +120,12 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
 - A security pass rejects dangerous constructs (`eval`, inline handlers, raw `innerHTML`, path traversal, …).
 - In component mode, standard elements become cached template fragments, while control/state tags compile into instructions that mutate the component instance and re-render the shadow DOM.
 - Component text and attributes can interpolate reactive state and props with `{count}`, `{user.name}`, and `{labelText}`.
+- Components compose through normal custom elements and browser slots. Dynamic SVG and MathML nodes keep their namespaces.
 - Component-owned runtime effects are disposed in `disconnectedCallback`, so cleanup handlers and fetch aborts run when elements leave the page.
+- Effect and fetch helpers share one runtime bootstrap per generated bundle. Components that do not use runtime-backed directives do not include it.
+- Server and client rendering use the same component compiler and reconciliation code.
 
-## Tag Glossary (HTML‑first)
+## Tag glossary
 
 - State & Arrays
   - `<var name="x" value="42" mutable="true" />` — declare `let x = 42` (accepts JSON).
@@ -60,7 +140,7 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
   - `<switch variable="day">…</switch>` or `<switch expr="this.day">…</switch>` — nested tags allowed.
 - DOM Updates
   - `<setprop selector="#msg" prop="textContent" expr="'Hello'" />` — set property (use `expr` for JS, or `value` for literals).
-  - `<setattr selector="#link" name="title" value="'Info'" />` — set attribute.
+  - `<setattr selector="#link" name="title" value="Info" />` — set attribute.
   - `<append target="#list"> <li>Row</li> </append>` — append generated children to an existing element.
   - `<class selector="#card" name="active" when="this.isActive" />` — toggle class based on expression.
   - `<style selector="#card" prop="background-color" value="red" />` — set inline style.
@@ -73,6 +153,10 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
   - Native component markup can also bind directly: `<p title="Count {count}">{label}: {count}</p>`.
 - Lists (keyed)
   - `<keyedlist target="#ul" of="items" item="it" index="i" key="it.id"> <li>{it.name}</li> </keyedlist>` — component-scoped keyed list rendering with item/index interpolation and DOM node preservation for matching keys.
+- Composition
+  - Put one compiled custom element inside another as normal HTML. The compiler keeps custom-element children instead of treating them as unknown HTMS tags.
+  - Use `<slot></slot>` and `<slot name="heading"></slot>` inside a component to accept default and named content from its parent.
+  - SVG and MathML can sit directly in a component template, including interpolated attributes.
 - Events
   - `<event target="#btn" type="click"> …child tags… </event>` — handler is composed of child tags (no action string required).
   - `<submit target="#form"> …child tags… </submit>` — form submit helper (prevents default). Use child tags to update state/DOM.
@@ -84,9 +168,13 @@ HTMS turns HTML-ish markup into executable JavaScript. You compose control flow 
 - `demos/event-toggle-component.html` — `<event>`, `<setattr>`, and `<toggle>` working together.
 - `demos/bind-component.html` — `<bind>` hydrates text content without global state.
 - `demos/counter-component.html` — `<var>`, `<set>`, and `<bind>` demonstrate reactive state and re-rendering.
+- `demos/derived-component.html` — derived values update before template interpolation and bindings.
 - `demos/emit-component.html` — `<emit>` dispatches a composed `CustomEvent` to the host so parents can listen.
+- `demos/composition-component.html` — two compiled components composed with named and default slots.
+- `demos/ssr-card-component.html` — typed props rendered on the server and updated through a client event.
+- `demos/list-component.html` and `demos/todo-component.html` — repeat rendering, keyed updates, item events, and form state.
+- `demos/effect-fetch-component.html`, `demos/effect-fetch-error-component.html`, and `demos/effect-fetch-auto-component.html` — request success, failure, cleanup, and automatic loading.
 
-## Disclaimers
+## Security boundary
 
-- Do not paste untrusted content. The compiler tries to help, but it is not a firewall.
-- This is a proof‑of‑concept with tests. If you build something real, we salute you (from a safe distance).
+HTMS rejects known executable sinks and unsafe template attributes, but source files are still application code. Do not compile untrusted markup and execute the result.

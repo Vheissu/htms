@@ -1,9 +1,15 @@
 import path from 'path';
 import { TransformStream } from 'stream/web';
 import { test, expect } from '@playwright/test';
+import { renderToString } from '../../src/server-renderer';
 
-if (typeof (globalThis as any).TransformStream === 'undefined') {
-  (globalThis as any).TransformStream = TransformStream;
+interface TransformStreamGlobal {
+  TransformStream?: typeof TransformStream;
+}
+
+const transformStreamGlobal = globalThis as unknown as TransformStreamGlobal;
+if (typeof transformStreamGlobal.TransformStream === 'undefined') {
+  transformStreamGlobal.TransformStream = TransformStream;
 }
 
 const HELLO_JS = path.resolve(
@@ -31,6 +37,10 @@ const EFFECT_FETCH_AUTO_JS = path.resolve(
   '../../demos/effect-fetch-auto-component.js'
 );
 const EMIT_JS = path.resolve(__dirname, '../../demos/emit-component.js');
+const COMPOSITION_JS = path.resolve(
+  __dirname,
+  '../../demos/composition-component.js'
+);
 
 test.describe('hello-world component', () => {
   test('renders shadow DOM content', async ({ page }) => {
@@ -96,7 +106,7 @@ test.describe('hello-world component', () => {
 
     await page.setContent('<counter-box></counter-box>');
 
-    const getCount = () =>
+    const getCount = (): Promise<string | undefined> =>
       page.locator('counter-box').evaluate((el) => {
         const shadow = el.shadowRoot;
         const valueEl = shadow?.querySelector('#count');
@@ -118,7 +128,11 @@ test.describe('hello-world component', () => {
     await page.setContent('<derived-box label-text="Items"></derived-box>');
 
     const component = page.locator('derived-box');
-    const readState = () =>
+    const readState = (): Promise<{
+      status: string | undefined;
+      summary: string | undefined;
+      title: string | null | undefined;
+    }> =>
       component.evaluate((el) => {
         const shadow = el.shadowRoot;
         const status = shadow?.querySelector('#status');
@@ -154,7 +168,9 @@ test.describe('hello-world component', () => {
     await page.setContent('<list-box></list-box>');
 
     const component = page.locator('list-box');
-    const readRows = () =>
+    const readRows = (): Promise<
+      Array<{ text: string | undefined; key: string | null }>
+    > =>
       component.evaluate((el) => {
         const shadow = el.shadowRoot;
         return Array.from(shadow?.querySelectorAll('li.person') ?? []).map(
@@ -199,6 +215,65 @@ test.describe('hello-world component', () => {
   });
 });
 
+test.describe('server rendering and hydration', () => {
+  test('adopts server markup and preserves DOM identity on client updates', async ({
+    page,
+  }) => {
+    const rendered = renderToString(
+      `
+        <component name="browser-hydration" props="label">
+          <var name="count" value="0" mutable="true"></var>
+          <p id="content">{label}: {count}</p>
+          <button id="increment">Increment</button>
+          <event target="#increment" type="click">
+            <set name="count" op="++"></set>
+          </event>
+        </component>
+      `,
+      { props: { label: 'From server' } }
+    );
+
+    await page.setContent(rendered.html);
+    await page.locator('browser-hydration').evaluate((element) => {
+      const content = element.shadowRoot?.querySelector('#content') as
+        | (HTMLElement & { __serverMarker?: string })
+        | null;
+      if (!content) {
+        throw new Error('Declarative shadow content missing');
+      }
+      content.__serverMarker = 'preserved';
+    });
+
+    await page.addScriptTag({ content: rendered.code });
+    await page.locator('browser-hydration').evaluate(async (element) => {
+      const component = element as HTMLElement & {
+        label: string;
+        updateComplete: Promise<void>;
+      };
+      component.label = 'From client';
+      await component.updateComplete;
+    });
+    await page.locator('browser-hydration').locator('button#increment').click();
+
+    const clientState = await page
+      .locator('browser-hydration')
+      .evaluate((element) => {
+        const content = element.shadowRoot?.querySelector('#content') as
+          | (HTMLElement & { __serverMarker?: string })
+          | null;
+        return {
+          marker: content?.__serverMarker,
+          text: content?.textContent,
+        };
+      });
+
+    expect(clientState).toEqual({
+      marker: 'preserved',
+      text: 'From client: 1',
+    });
+  });
+});
+
 test.describe('emit component', () => {
   test('dispatches a composed custom event that crosses the shadow boundary', async ({
     page,
@@ -210,14 +285,13 @@ test.describe('emit component', () => {
 
     await page.evaluate(() => {
       (window as unknown as { __emitted: number[] }).__emitted = [];
-      document.querySelector('emit-counter')?.addEventListener(
-        'count-changed',
-        (event) => {
+      document
+        .querySelector('emit-counter')
+        ?.addEventListener('count-changed', (event) => {
           (window as unknown as { __emitted: number[] }).__emitted.push(
             (event as CustomEvent<number>).detail
           );
-        }
-      );
+        });
     });
 
     await page.locator('emit-counter').locator('button#inc').click();
@@ -228,6 +302,39 @@ test.describe('emit component', () => {
     );
 
     expect(emitted).toEqual([1, 2]);
+  });
+});
+
+test.describe('component composition', () => {
+  test('projects named and default content through nested components', async ({
+    page,
+  }) => {
+    await page.goto('about:blank');
+    await page.addScriptTag({ path: COMPOSITION_JS, type: 'module' });
+    await page.setContent('<composition-demo></composition-demo>');
+
+    const result = await page.locator('composition-demo').evaluate((demo) => {
+      const card = demo.shadowRoot?.querySelector('profile-card');
+      const headingSlot = card?.shadowRoot?.querySelector(
+        'slot[name="heading"]'
+      ) as HTMLSlotElement | null;
+      const bodySlot = card?.shadowRoot?.querySelector(
+        'slot:not([name])'
+      ) as HTMLSlotElement | null;
+      const icon = card?.shadowRoot?.querySelector('svg');
+
+      return {
+        heading: headingSlot?.assignedElements()[0]?.textContent?.trim(),
+        body: bodySlot?.assignedElements()[0]?.textContent?.trim(),
+        iconNamespace: icon?.namespaceURI,
+      };
+    });
+
+    expect(result).toEqual({
+      heading: 'Ada Lovelace',
+      body: 'Wrote the first published algorithm intended for a machine.',
+      iconNamespace: 'http://www.w3.org/2000/svg',
+    });
   });
 });
 
@@ -259,11 +366,6 @@ test.describe('effect + fetch demo', () => {
     expect(initialStatus).toBe('Status: Idle');
 
     await component.locator('button#load').click();
-
-    await page.waitForFunction(() => {
-      const el = document.querySelector('effect-fetch-demo');
-      return el?.state?.loadNonce != null;
-    });
 
     const effectIds = await page.evaluate(() => {
       return Array.isArray(window.__htms?.effects)

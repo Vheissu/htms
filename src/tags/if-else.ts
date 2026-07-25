@@ -1,8 +1,14 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
-import { elementToTemplateNode, isLowerCaseTag } from '../component/template-utils';
+import {
+  elementToTemplateNode,
+  isLowerCaseTag,
+} from '../component/template-utils';
 import { DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { handleElement } from '../handlers';
+
+type ConsumedElement = Element & { __htmsConsumed?: boolean };
 
 const ELSEIF_TAGS = new Set(['ELSEIF', 'ELSE-IF']);
 
@@ -19,28 +25,23 @@ function validateCondition(
 ): string | null {
   const conditionErrors = SecurityValidator.validateContent(condition);
   if (conditionErrors.length > 0) {
-    errors.push(...conditionErrors.map(error => ({ ...error, tag })));
+    errors.push(...conditionErrors.map((error) => ({ ...error, tag })));
     if (strictMode) {
       return null;
     }
   }
 
-  // Validate condition format — allow common boolean expressions but reject function calls
-  if (
-    !/^[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!%+\-*/]+\s*[a-zA-Z0-9_$'".\s]+)*(\s*[&|]{2}\s*[a-zA-Z_$][a-zA-Z0-9_$]*(\s*[<>=!%+\-*/]+\s*[a-zA-Z0-9_$'".\s]+)*)?$/.test(
-      condition.trim()
-    )
-  ) {
+  if (!SecurityValidator.isSideEffectFreeExpression(condition.trim())) {
     warnings.push({
       message: 'Complex condition detected - may pose security risks',
-      tag
+      tag,
     });
 
     if (strictMode) {
       errors.push({
         type: 'security',
         message: 'Complex conditions not allowed in strict mode',
-        tag
+        tag,
       });
       return null;
     }
@@ -68,7 +69,7 @@ function collectBranchContent(
       }
       const textErrors = SecurityValidator.validateContent(text);
       if (textErrors.length > 0) {
-        errors.push(...textErrors.map(error => ({ ...error, tag })));
+        errors.push(...textErrors.map((error) => ({ ...error, tag })));
         if (options.strictMode) {
           continue;
         }
@@ -80,7 +81,6 @@ function collectBranchContent(
     }
 
     const child = childNode as Element;
-    const { handleElement } = require('../handlers');
     const childResult = handleElement(child, options);
     if (childResult.errors.length > 0) {
       errors.push(...childResult.errors);
@@ -118,24 +118,24 @@ function formatBranchBody(code: string, label: string): string {
   const lines = code
     .split('\n')
     .filter(Boolean)
-    .map(line => `    ${line}`)
+    .map((line) => `    ${line}`)
     .join('\n');
   return `  try {\n${lines}\n  } catch (error) {\n    console.error('${label} block execution error:', error);\n  }`;
 }
 
 export const handleIfElseTags: TagHandler = (
-  element: Element, 
+  element: Element,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
   const warnings: HandlerResult['warnings'] = [];
-  
+
   try {
     if (element.tagName.toUpperCase() !== 'IF') {
       errors.push({
         type: 'validation',
         message: 'This handler only processes IF tags',
-        tag: element.tagName
+        tag: element.tagName,
       });
       return { code: '', errors, warnings };
     }
@@ -145,7 +145,7 @@ export const handleIfElseTags: TagHandler = (
       errors.push({
         type: 'validation',
         message: 'IF tag requires a condition attribute',
-        tag: 'IF'
+        tag: 'IF',
       });
       return { code: '', errors, warnings };
     }
@@ -160,7 +160,13 @@ export const handleIfElseTags: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    const ifBranch = collectBranchContent(element, options, 'IF', errors, warnings);
+    const ifBranch = collectBranchContent(
+      element,
+      options,
+      'IF',
+      errors,
+      warnings
+    );
     const branches: Array<{
       condition: string;
       code: string;
@@ -171,24 +177,27 @@ export const handleIfElseTags: TagHandler = (
         condition: sanitizedCondition,
         code: ifBranch.code,
         templates: ifBranch.templates,
-        directives: ifBranch.directives
-      }
+        directives: ifBranch.directives,
+      },
     ];
 
-    let elseBranch: { code: string; templates: TemplateNode[]; directives: DirectiveNode[] } | null =
-      null;
+    let elseBranch: {
+      code: string;
+      templates: TemplateNode[];
+      directives: DirectiveNode[];
+    } | null = null;
 
     let nextSibling = element.nextElementSibling;
     while (nextSibling) {
       const tagName = nextSibling.tagName.toUpperCase();
       if (isElseIfTag(tagName)) {
-        (nextSibling as any).__htmsConsumed = true;
+        (nextSibling as ConsumedElement).__htmsConsumed = true;
         const elseIfCondition = nextSibling.getAttribute('condition');
         if (!elseIfCondition) {
           errors.push({
             type: 'validation',
             message: 'ELSEIF tag requires a condition attribute',
-            tag: tagName
+            tag: tagName,
           });
           if (options.strictMode) {
             return { code: '', errors, warnings };
@@ -212,55 +221,70 @@ export const handleIfElseTags: TagHandler = (
           continue;
         }
 
-        const branch = collectBranchContent(nextSibling, options, tagName, errors, warnings);
+        const branch = collectBranchContent(
+          nextSibling,
+          options,
+          tagName,
+          errors,
+          warnings
+        );
         branches.push({
           condition: sanitizedElseIf,
           code: branch.code,
           templates: branch.templates,
-          directives: branch.directives
+          directives: branch.directives,
         });
         nextSibling = nextSibling.nextElementSibling;
         continue;
       }
 
       if (tagName === 'ELSE') {
-        (nextSibling as any).__htmsConsumed = true;
-        const branch = collectBranchContent(nextSibling, options, 'ELSE', errors, warnings);
+        (nextSibling as ConsumedElement).__htmsConsumed = true;
+        const branch = collectBranchContent(
+          nextSibling,
+          options,
+          'ELSE',
+          errors,
+          warnings
+        );
         elseBranch = {
           code: branch.code,
           templates: branch.templates,
-          directives: branch.directives
+          directives: branch.directives,
         };
       }
       break;
     }
 
-    let code = `if (${branches[0].condition}) {\n${formatBranchBody(
-      branches[0].code,
+    const [firstBranch, ...remainingBranches] = branches;
+    let code = `if (${firstBranch.condition}) {\n${formatBranchBody(
+      firstBranch.code,
       'IF'
     )}\n}`;
 
-    if (branches.length > 1) {
-      for (let i = 1; i < branches.length; i++) {
-        code += ` else if (${branches[i].condition}) {\n${formatBranchBody(
-          branches[i].code,
-          'ELSEIF'
-        )}\n}`;
-      }
+    for (const branch of remainingBranches) {
+      code += ` else if (${branch.condition}) {\n${formatBranchBody(
+        branch.code,
+        'ELSEIF'
+      )}\n}`;
     }
 
     if (elseBranch) {
       code += ` else {\n${formatBranchBody(elseBranch.code, 'ELSE')}\n}`;
     }
 
-    const buildChain = (index: number): DirectiveNode => {
-      const current = branches[index];
+    const buildChain = (remaining: typeof branches): DirectiveNode => {
+      const [current, ...rest] = remaining;
+      if (!current) {
+        throw new Error('Conditional chain cannot be empty');
+      }
       const whenTrue = {
         template: current.templates,
-        directives: current.directives.length > 0 ? current.directives : undefined
+        directives:
+          current.directives.length > 0 ? current.directives : undefined,
       };
 
-      if (index === branches.length - 1) {
+      if (rest.length === 0) {
         return {
           kind: 'condition',
           condition: current.condition,
@@ -269,25 +293,27 @@ export const handleIfElseTags: TagHandler = (
             ? {
                 template: elseBranch.templates,
                 directives:
-                  elseBranch.directives.length > 0 ? elseBranch.directives : undefined
+                  elseBranch.directives.length > 0
+                    ? elseBranch.directives
+                    : undefined,
               }
-            : undefined
+            : undefined,
         };
       }
 
-      const nextDirective = buildChain(index + 1);
+      const nextDirective = buildChain(rest);
       return {
         kind: 'condition',
         condition: current.condition,
         whenTrue,
         whenFalse: {
           template: [],
-          directives: [nextDirective]
-        }
+          directives: [nextDirective],
+        },
       };
     };
 
-    const componentDirective = buildChain(0);
+    const componentDirective = buildChain(branches);
 
     CompilerLogger.logDebug('Generated conditional statement', {
       condition: sanitizedCondition,
@@ -295,7 +321,7 @@ export const handleIfElseTags: TagHandler = (
       hasElse: !!elseBranch,
       hasElseBody: !!elseBranch?.code.trim(),
       elseIfCount: branches.length - 1,
-      codeLength: code.length
+      codeLength: code.length,
     });
 
     return {
@@ -303,22 +329,21 @@ export const handleIfElseTags: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [componentDirective]
-      }
+        directives: [componentDirective],
+      },
     };
-
   } catch (error) {
     const runtimeError = {
       type: 'runtime' as const,
       message: `If-else tag handler failed: ${error instanceof Error ? error.message : String(error)}`,
-      tag: 'IF'
+      tag: 'IF',
     };
-    
+
     CompilerLogger.logCompilerError('If-else tag handler error', {
       error: runtimeError.message,
-      element: element.outerHTML
+      element: element.outerHTML,
     });
-    
+
     return { code: '', errors: [runtimeError], warnings };
   }
 };

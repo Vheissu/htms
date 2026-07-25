@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { handleElement } from '../handlers';
 
 export const handleSubmitTag: TagHandler = (
   element: Element,
@@ -11,25 +12,33 @@ export const handleSubmitTag: TagHandler = (
 
   try {
     const target = element.getAttribute('target');
-    const prevent = (element.getAttribute('prevent') || 'true').toLowerCase() !== 'false';
+    const prevent =
+      (element.getAttribute('prevent') || 'true').toLowerCase() !== 'false';
 
     if (!target) {
-      errors.push({ type: 'validation', message: 'SUBMIT requires target', tag: 'SUBMIT' });
+      errors.push({
+        type: 'validation',
+        message: 'SUBMIT requires target',
+        tag: 'SUBMIT',
+      });
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(target)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector format for target', tag: 'SUBMIT' });
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector format for target',
+        tag: 'SUBMIT',
+      });
       return { code: '', errors, warnings };
     }
 
     // Build body from child tags
     let bodyCode = '';
     for (const child of Array.from(element.children)) {
-      const { handleElement } = require('../handlers');
       const r = handleElement(child, options);
       if (r.errors.length > 0) {
-        errors.push(...r.errors.map((e: any) => ({ ...e, tag: 'SUBMIT' })));
+        errors.push(...r.errors.map((error) => ({ ...error, tag: 'SUBMIT' })));
         if (options.strictMode) return { code: '', errors, warnings };
       }
       if (r.warnings.length > 0) warnings.push(...r.warnings);
@@ -47,7 +56,11 @@ export const handleSubmitTag: TagHandler = (
           element.addEventListener('submit', function(event){
             try {
               ${prevent ? 'event.preventDefault && event.preventDefault();' : ''}
-${bodyCode.split('\n').filter(Boolean).map((l: string) => '              ' + l).join('\n')}
+${bodyCode
+  .split('\n')
+  .filter(Boolean)
+  .map((l: string) => '              ' + l)
+  .join('\n')}
             } catch (error) {
               console.error('Submit handler error:', error);
             }
@@ -57,10 +70,16 @@ ${bodyCode.split('\n').filter(Boolean).map((l: string) => '              ' + l).
         console.error('Submit setup failed:', error);
       }`;
 
-    CompilerLogger.logDebug('Generated submit handler', { target: sel, prevent });
+    CompilerLogger.logDebug('Generated submit handler', {
+      target: sel,
+      prevent,
+    });
     return { code, errors, warnings };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'SUBMIT' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'SUBMIT' }],
+      warnings,
+    };
   }
 };
-

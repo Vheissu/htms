@@ -1,0 +1,11 @@
+<component name="ssr-card" props="name:string, count:number">
+  <article class="card">
+    <h2>{name}</h2>
+    <p id="count">Server count: {count}</p>
+    <button id="increment" type="button">Increment</button>
+  </article>
+
+  <event target="#increment" type="click">
+    <set name="count" op="++"></set>
+  </event>
+</component>

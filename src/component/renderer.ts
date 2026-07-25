@@ -1,14 +1,29 @@
-import { handleElement, isStandardHtmlElement as coreIsStandardHtmlElement } from '../handlers';
-import { CompilerError, CompilerWarning, HandlerResult, ParseOptions, TagHandlerOptions } from '../types';
+import {
+  handleElement,
+  isStandardHtmlElement as coreIsStandardHtmlElement,
+} from '../handlers';
+import {
+  CompilerError,
+  CompilerWarning,
+  HandlerResult,
+  ParseOptions,
+  TagHandlerOptions,
+} from '../types';
 import { SecurityValidator } from '../utils/security';
 import { ComponentIR, createEmptyComponentIR } from './ir';
-import { elementToTemplateNode } from './template-utils';
+import {
+  collectTemplateSecurityErrors,
+  elementToTemplateNode,
+} from './template-utils';
+import { addNodeLocations } from '../diagnostics';
 
 interface ComponentRenderResult {
   ir: ComponentIR;
   errors: CompilerError[];
   warnings: CompilerWarning[];
 }
+
+type ConsumableElement = Element & { __htmsConsumed?: boolean };
 
 export function elementsToComponentCode(
   componentElement: Element,
@@ -29,9 +44,9 @@ export function elementsToComponentCode(
       const contentErrors = SecurityValidator.validateContent(textContent);
       if (contentErrors.length > 0) {
         errors.push(
-          ...contentErrors.map(error => ({
+          ...contentErrors.map((error) => ({
             ...error,
-            tag: 'TEXT'
+            tag: 'TEXT',
           }))
         );
         if (strictMode) {
@@ -41,7 +56,7 @@ export function elementsToComponentCode(
 
       ir.templateNodes.push({
         type: 'text',
-        textContent: textContent
+        textContent: textContent,
       });
       continue;
     }
@@ -51,16 +66,24 @@ export function elementsToComponentCode(
     }
 
     const element = node as Element;
-    if ((element as any).__htmsConsumed) {
+    if ((element as ConsumableElement).__htmsConsumed) {
       continue;
     }
     if (element.tagName) {
       const tagName = element.tagName.toUpperCase();
       if (tagName === 'ELSE' || tagName === 'ELSEIF' || tagName === 'ELSE-IF') {
-        warnings.push({
-          message: 'Unpaired top-level conditional branch ignored inside component',
-          tag: tagName
-        });
+        warnings.push(
+          ...addNodeLocations(
+            [
+              {
+                message:
+                  'Unpaired top-level conditional branch ignored inside component',
+                tag: tagName,
+              },
+            ],
+            element
+          )
+        );
         continue;
       }
     }
@@ -73,6 +96,22 @@ export function elementsToComponentCode(
         element.hasAttribute('name'));
 
     if (coreIsStandardHtmlElement(element) && !treatAsCustom) {
+      const templateErrors = collectTemplateSecurityErrors(element);
+      if (templateErrors.length > 0) {
+        if (strictMode) {
+          errors.push(...addNodeLocations(templateErrors, element));
+          continue;
+        }
+        warnings.push(
+          ...addNodeLocations(
+            templateErrors.map((error) => ({
+              message: error.message,
+              tag: error.tag,
+            })),
+            element
+          )
+        );
+      }
       ir.templateNodes.push(elementToTemplateNode(element));
       continue;
     }
@@ -81,7 +120,7 @@ export function elementsToComponentCode(
       strictMode,
       parentContext: 'component',
       appendTargetVar,
-      componentContext: true
+      componentContext: true,
     };
 
     const result: HandlerResult = handleElement(element, handlerOptions);

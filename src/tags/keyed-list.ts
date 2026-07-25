@@ -12,6 +12,7 @@ import { handleEventTag } from './event';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
+import { handleElement } from '../handlers';
 
 let keyedCounter = 0;
 
@@ -101,7 +102,7 @@ export const handleKeyedListTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(target)) {
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector for target',
@@ -207,14 +208,15 @@ export const handleKeyedListTag: TagHandler = (
       };
     }
 
-    const { handleElement } = require('../handlers');
     const tpl = handleElement(templateEl, {
       ...options,
       loopVariable: itemVar,
       parentContext: 'template',
     });
     if (tpl.errors.length > 0) {
-      errors.push(...tpl.errors.map((e: any) => ({ ...e, tag: 'KEYEDLIST' })));
+      errors.push(
+        ...tpl.errors.map((error) => ({ ...error, tag: 'KEYEDLIST' }))
+      );
       if (options.strictMode) return { code: '', errors, warnings };
     }
     if (tpl.warnings.length > 0) warnings.push(...tpl.warnings);

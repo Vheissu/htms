@@ -5,10 +5,14 @@ import { StateDirective } from '../component/ir';
 
 function buildValueExpr(value: string): string | null {
   if (!value) return 'undefined';
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) return value;
-  if (/^-?\d+(\.\d+)?$/.test(value)) return value;
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  )
+    return value;
+  if (SecurityValidator.isNumericLiteral(value)) return value;
   if (value === 'true' || value === 'false' || value === 'null') return value;
-  if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(value)) return value;
+  if (SecurityValidator.isJavaScriptPath(value)) return value;
   const escaped = SecurityValidator.escapeForTemplate(value);
   return `"${escaped}"`;
 }
@@ -25,21 +29,30 @@ export const handlePushTag: TagHandler = (
     const value = element.getAttribute('value') || '';
     const exprAttr = element.getAttribute('expr');
     if (!array) {
-      errors.push({ type: 'validation', message: 'PUSH requires array attribute', tag: 'PUSH' });
+      errors.push({
+        type: 'validation',
+        message: 'PUSH requires array attribute',
+        tag: 'PUSH',
+      });
       return { code: '', errors, warnings };
     }
-    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(array)) {
-      errors.push({ type: 'validation', message: 'Invalid array path', tag: 'PUSH' });
+    if (!SecurityValidator.isJavaScriptPath(array)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid array path',
+        tag: 'PUSH',
+      });
       return { code: '', errors, warnings };
     }
     for (const part of array.split('.')) {
       const errs = SecurityValidator.validateJavaScriptIdentifier(part);
       if (errs.length > 0) {
-        errors.push(...errs.map(e => ({ ...e, tag: 'PUSH' })));
+        errors.push(...errs.map((e) => ({ ...e, tag: 'PUSH' })));
         return { code: '', errors, warnings };
       }
     }
-    const valExpr = exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
+    const valExpr =
+      exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
     const isComponentContext = options.parentContext === 'component';
     const code = isComponentContext
       ? ''
@@ -54,7 +67,7 @@ export const handlePushTag: TagHandler = (
       kind: 'state',
       mode: 'push',
       path,
-      value: valExpr ?? 'undefined'
+      value: valExpr ?? 'undefined',
     };
 
     return {
@@ -62,10 +75,14 @@ export const handlePushTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [stateDirective]
-      }
+        directives: [stateDirective],
+      },
     };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'PUSH' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'PUSH' }],
+      warnings,
+    };
   }
 };

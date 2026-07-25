@@ -14,11 +14,29 @@ export const handleSetAttrTag: TagHandler = (
     const name = element.getAttribute('name');
     const value = element.getAttribute('value') || '';
     if (!selector || !name) {
-      errors.push({ type: 'validation', message: 'SETATTR requires selector and name', tag: 'SETATTR' });
+      errors.push({
+        type: 'validation',
+        message: 'SETATTR requires selector and name',
+        tag: 'SETATTR',
+      });
       return { code: '', errors, warnings };
     }
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(selector)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector', tag: 'SETATTR' });
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector',
+        tag: 'SETATTR',
+      });
+      return { code: '', errors, warnings };
+    }
+    const attributeErrors = SecurityValidator.validateHtmlAttribute(
+      name,
+      value
+    );
+    if (attributeErrors.length > 0) {
+      errors.push(
+        ...attributeErrors.map((error) => ({ ...error, tag: 'SETATTR' }))
+      );
       return { code: '', errors, warnings };
     }
     const sel = SecurityValidator.escapeForTemplate(selector);
@@ -43,7 +61,7 @@ export const handleSetAttrTag: TagHandler = (
       selector,
       target: 'attribute',
       name,
-      value: JSON.stringify(valEsc)
+      value: JSON.stringify(valEsc),
     };
 
     return {
@@ -51,10 +69,14 @@ export const handleSetAttrTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [directive]
-      }
+        directives: [directive],
+      },
     };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'SETATTR' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'SETATTR' }],
+      warnings,
+    };
   }
 };

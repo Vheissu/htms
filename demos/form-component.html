@@ -11,16 +11,10 @@
     <p id="summary"></p>
   </div>
 
-  <function name="preventSubmit" params="event">
-    event.preventDefault();
-    return;
-  </function>
-
-  <event target="#signup" type="submit">
-    <call function="preventSubmit" args="event"></call>
+  <submit target="#signup">
     <set name="name" op="=" expr="this.__htmsRoot.querySelector('#nameInput').value.trim()"></set>
     <set name="email" op="=" expr="this.__htmsRoot.querySelector('#emailInput').value.trim()"></set>
-  </event>
+  </submit>
 
   <bind selector="#summary" prop="textContent" expr='this.name && this.email ? `Saved ${this.name} <${this.email}>` : "Fill out the form"'></bind>
 </component>

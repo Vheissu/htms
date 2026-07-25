@@ -1,8 +1,15 @@
 import { parseHTML } from '../parser';
-import { ParseOptions } from '../types';
+import { CompilerResult, ParseOptions } from '../types';
 
-function compileComponent(markup: string, options: ParseOptions = {}) {
-  return parseHTML(markup, { mode: 'component', outputFormat: 'esm', ...options });
+function compileComponent(
+  markup: string,
+  options: ParseOptions = {}
+): CompilerResult {
+  return parseHTML(markup, {
+    mode: 'component',
+    outputFormat: 'esm',
+    ...options,
+  });
 }
 
 describe('Parser (component mode)', () => {
@@ -17,7 +24,9 @@ describe('Parser (component mode)', () => {
 
     expect(result.success).toBe(true);
     expect(result.code).toBeDefined();
-    expect(result?.code).toContain('class LoggerBoxComponent extends HTMLElement');
+    expect(result?.code).toContain(
+      'class LoggerBoxComponent extends HTMLElement'
+    );
     expect(result?.code).toContain('console.log');
   });
 
@@ -57,7 +66,11 @@ describe('Parser (component mode)', () => {
     const result = compileComponent(html);
 
     expect(result.success).toBe(false);
-    expect(result.errors.some(error => error.message.includes('must include a hyphen'))).toBe(true);
+    expect(
+      result.errors.some((error) =>
+        error.message.includes('must include a hyphen')
+      )
+    ).toBe(true);
   });
 
   it('rejects dangerous content in strict mode', () => {
@@ -70,6 +83,6 @@ describe('Parser (component mode)', () => {
     const result = compileComponent(html, { strictMode: true });
 
     expect(result.success).toBe(false);
-    expect(result.errors.some(error => error.type === 'security')).toBe(true);
+    expect(result.errors.some((error) => error.type === 'security')).toBe(true);
   });
 });

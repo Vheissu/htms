@@ -47,7 +47,9 @@ export const handleEmitTag: TagHandler = (
     if (detail) {
       const detailErrors = SecurityValidator.validateContent(detail);
       if (detailErrors.length > 0) {
-        errors.push(...detailErrors.map((error) => ({ ...error, tag: 'EMIT' })));
+        errors.push(
+          ...detailErrors.map((error) => ({ ...error, tag: 'EMIT' }))
+        );
         if (options.strictMode) {
           return { code: '', errors, warnings };
         }
@@ -72,7 +74,11 @@ export const handleEmitTag: TagHandler = (
       cancelable,
     });
 
-    const directive: DirectiveNode = { kind: 'statement', code: statement };
+    const directive: DirectiveNode = {
+      kind: 'statement',
+      code: statement,
+      emittedEventName: name,
+    };
     const isComponentContext = options.parentContext === 'component';
 
     return {

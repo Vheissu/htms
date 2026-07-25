@@ -14,18 +14,26 @@ export const handleToggleTag: TagHandler = (
     const target = element.getAttribute('target');
     const condition = element.getAttribute('condition');
     if (!target || !condition) {
-      errors.push({ type: 'validation', message: 'TOGGLE requires target and condition', tag: 'TOGGLE' });
+      errors.push({
+        type: 'validation',
+        message: 'TOGGLE requires target and condition',
+        tag: 'TOGGLE',
+      });
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(target)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector format for target', tag: 'TOGGLE' });
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector format for target',
+        tag: 'TOGGLE',
+      });
       return { code: '', errors, warnings };
     }
 
     const condErrors = SecurityValidator.validateContent(condition);
     if (condErrors.length > 0) {
-      errors.push(...condErrors.map(e => ({ ...e, tag: 'TOGGLE' })));
+      errors.push(...condErrors.map((e) => ({ ...e, tag: 'TOGGLE' })));
       return { code: '', errors, warnings };
     }
 
@@ -49,17 +57,21 @@ export const handleToggleTag: TagHandler = (
       kind: 'visibility',
       selector: target,
       condition,
-      mode: 'toggle'
+      mode: 'toggle',
     };
     return {
       code,
       errors,
       warnings,
       component: {
-        directives: [directive]
-      }
+        directives: [directive],
+      },
     };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'TOGGLE' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'TOGGLE' }],
+      warnings,
+    };
   }
 };

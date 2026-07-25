@@ -7,6 +7,7 @@ import { DirectiveNode, TemplateNode } from '../component/ir';
 import { handleEventTag } from './event';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { handleElement } from '../handlers';
 
 function collectNestedComponentDirectives(
   element: Element,
@@ -216,8 +217,6 @@ export const handleRepeatTag: TagHandler = (
         parentContext: 'loop',
       };
 
-      // Import the handleElement function to process children
-      const { handleElement } = require('../handlers');
       const childResult = handleElement(child, childOptions);
 
       if (childResult.errors.length > 0) {

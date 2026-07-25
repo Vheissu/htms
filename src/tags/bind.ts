@@ -17,23 +17,35 @@ export const handleBindTag: TagHandler = (
     const expr = element.getAttribute('expr');
 
     if (!selector || !expr) {
-      errors.push({ type: 'validation', message: 'BIND requires selector and expr', tag: 'BIND' });
+      errors.push({
+        type: 'validation',
+        message: 'BIND requires selector and expr',
+        tag: 'BIND',
+      });
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(selector)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector', tag: 'BIND' });
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector',
+        tag: 'BIND',
+      });
       return { code: '', errors, warnings };
     }
 
     if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(prop)) {
-      errors.push({ type: 'validation', message: 'Invalid property name', tag: 'BIND' });
+      errors.push({
+        type: 'validation',
+        message: 'Invalid property name',
+        tag: 'BIND',
+      });
       return { code: '', errors, warnings };
     }
 
     const exprErrors = SecurityValidator.validateContent(expr);
     if (exprErrors.length > 0) {
-      errors.push(...exprErrors.map(e => ({ ...e, tag: 'BIND' })));
+      errors.push(...exprErrors.map((e) => ({ ...e, tag: 'BIND' })));
       return { code: '', errors, warnings };
     }
 
@@ -57,7 +69,7 @@ export const handleBindTag: TagHandler = (
       kind: 'bind',
       selector,
       property: prop,
-      expression: expr
+      expression: expr,
     };
 
     return {
@@ -65,11 +77,14 @@ export const handleBindTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [directive]
-      }
+        directives: [directive],
+      },
     };
-
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'BIND' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'BIND' }],
+      warnings,
+    };
   }
 };

@@ -8,7 +8,7 @@ const ACTIONS = new Set(['add', 'remove', 'toggle']);
 function parseClassNames(raw: string): string[] {
   return raw
     .split(/\s+/)
-    .map(name => name.trim())
+    .map((name) => name.trim())
     .filter(Boolean);
 }
 
@@ -27,25 +27,34 @@ export const handleClassTag: TagHandler = (
     const selector = element.getAttribute('selector');
     const nameAttr = element.getAttribute('name') || '';
     const actionAttr = element.getAttribute('action')?.toLowerCase();
-    const whenAttr = element.getAttribute('when') || element.getAttribute('condition');
+    const whenAttr =
+      element.getAttribute('when') || element.getAttribute('condition');
 
     if (!selector || !nameAttr.trim()) {
       errors.push({
         type: 'validation',
         message: 'CLASS requires selector and name attributes',
-        tag: 'CLASS'
+        tag: 'CLASS',
       });
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(selector)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector', tag: 'CLASS' });
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector',
+        tag: 'CLASS',
+      });
       return { code: '', errors, warnings };
     }
 
     const classNames = parseClassNames(nameAttr);
     if (classNames.length === 0) {
-      errors.push({ type: 'validation', message: 'CLASS name is empty', tag: 'CLASS' });
+      errors.push({
+        type: 'validation',
+        message: 'CLASS name is empty',
+        tag: 'CLASS',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -54,7 +63,7 @@ export const handleClassTag: TagHandler = (
         errors.push({
           type: 'validation',
           message: `Invalid class name: ${className}`,
-          tag: 'CLASS'
+          tag: 'CLASS',
         });
         return { code: '', errors, warnings };
       }
@@ -65,7 +74,7 @@ export const handleClassTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: `Invalid action for CLASS: ${action}`,
-        tag: 'CLASS'
+        tag: 'CLASS',
       });
       return { code: '', errors, warnings };
     }
@@ -78,7 +87,9 @@ export const handleClassTag: TagHandler = (
     if (whenAttr) {
       const conditionErrors = SecurityValidator.validateContent(whenAttr);
       if (conditionErrors.length > 0) {
-        errors.push(...conditionErrors.map(error => ({ ...error, tag: 'CLASS' })));
+        errors.push(
+          ...conditionErrors.map((error) => ({ ...error, tag: 'CLASS' }))
+        );
         if (options.strictMode) {
           return { code: '', errors, warnings };
         }
@@ -88,7 +99,7 @@ export const handleClassTag: TagHandler = (
 
     const isComponentContext = options.parentContext === 'component';
     const selEsc = SecurityValidator.escapeForTemplate(selector);
-    const classListLiteral = classNames.map(name => `"${name}"`).join(', ');
+    const classListLiteral = classNames.map((name) => `"${name}"`).join(', ');
     const condExpr = condition ? `!!(${condition})` : '';
 
     const code = isComponentContext
@@ -113,14 +124,14 @@ export const handleClassTag: TagHandler = (
       selector,
       classNames,
       action: action as 'add' | 'remove' | 'toggle',
-      condition
+      condition,
     };
 
     CompilerLogger.logDebug('Generated class directive', {
       selector,
       classNames,
       action,
-      hasCondition: !!condition
+      hasCondition: !!condition,
     });
 
     return {
@@ -128,10 +139,14 @@ export const handleClassTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [directive]
-      }
+        directives: [directive],
+      },
     };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'CLASS' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'CLASS' }],
+      warnings,
+    };
   }
 };

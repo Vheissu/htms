@@ -1,8 +1,12 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { AppendDirective, DirectiveNode, TemplateNode } from '../component/ir';
-import { elementToTemplateNode, isLowerCaseTag } from '../component/template-utils';
+import {
+  elementToTemplateNode,
+  isLowerCaseTag,
+} from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { handleElement } from '../handlers';
 
 let appendCounter = 0;
 
@@ -16,11 +20,19 @@ export const handleAppendTag: TagHandler = (
   try {
     const target = element.getAttribute('target');
     if (!target) {
-      errors.push({ type: 'validation', message: 'APPEND requires target', tag: 'APPEND' });
+      errors.push({
+        type: 'validation',
+        message: 'APPEND requires target',
+        tag: 'APPEND',
+      });
       return { code: '', errors, warnings };
     }
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(target)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector', tag: 'APPEND' });
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector',
+        tag: 'APPEND',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -42,15 +54,17 @@ export const handleAppendTag: TagHandler = (
         continue;
       }
 
-      const { handleElement } = require('../handlers');
       const childResult = handleElement(child, {
         ...options,
-        appendTargetVar: isComponentContext ? options.appendTargetVar : legacyVarName
+        appendTargetVar: isComponentContext
+          ? options.appendTargetVar
+          : legacyVarName,
       });
       if (childResult.errors.length > 0) {
         errors.push(...childResult.errors);
       }
-      if (childResult.warnings.length > 0) warnings.push(...childResult.warnings);
+      if (childResult.warnings.length > 0)
+        warnings.push(...childResult.warnings);
       if (!isComponentContext && childResult.code) {
         code += childResult.code + '\n';
       }
@@ -75,7 +89,8 @@ export const handleAppendTag: TagHandler = (
       kind: 'append',
       selector: target,
       template: componentTemplates,
-      directives: componentDirectives.length > 0 ? componentDirectives : undefined
+      directives:
+        componentDirectives.length > 0 ? componentDirectives : undefined,
     };
 
     return {
@@ -83,10 +98,14 @@ export const handleAppendTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [directive]
-      }
+        directives: [directive],
+      },
     };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'APPEND' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'APPEND' }],
+      warnings,
+    };
   }
 };

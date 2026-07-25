@@ -1,9 +1,5 @@
-#!/usr/bin/env node
-
-// Re-export CLI for backwards compatibility
-export * from './cli';
-
-// If run directly, execute CLI
-if (require.main === module) {
-  require('./cli');
-}
+export * from './component/declarations';
+export * from './hydration';
+export * from './parser';
+export * from './server-renderer';
+export * from './types';

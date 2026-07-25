@@ -1,18 +1,123 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>List</title>
-<style>
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 32px; line-height: 1.5; }
-  main { display: grid; gap: 24px; }
-  .todo, .box, .form { display: grid; gap: 12px; max-width: 420px; }
-  .todo .input-row { display: flex; gap: 8px; }
-  .todo input { flex: 1 1 auto; }
-  ul { padding-left: 18px; }
-  button { cursor: pointer; }
-  .badge { margin-left: 8px; font-size: 12px; padding: 2px 6px; border-radius: 999px; background: #2563eb; color: white; }
-  .badge-muted { background: #94a3b8; }
-</style>
-<main>
-  <list-box></list-box>
-</main>
-<script type="module" src="./list-component.js"></script>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
+  <title>List | HTMS Demo</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #f6f7fb;
+      --surface: #ffffff;
+      --ink: #172033;
+      --muted: #5d687a;
+      --line: #dfe3ec;
+      --accent: #d94828;
+      font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100dvh;
+      margin: 0;
+      color: var(--ink);
+      background: var(--page);
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(100% - 2rem, 72rem);
+      min-height: 4.5rem;
+      margin: auto;
+      border-bottom: 1px solid var(--line);
+    }
+
+    header a {
+      color: var(--ink);
+      font-weight: 750;
+      text-decoration: none;
+    }
+
+    header span {
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    main {
+      display: grid;
+      width: min(100% - 2rem, 72rem);
+      min-height: calc(100dvh - 8.5rem);
+      margin: auto;
+      padding: clamp(2rem, 8vw, 7rem) 0;
+      place-items: center;
+    }
+
+    .stage {
+      width: min(100%, 48rem);
+      padding: clamp(1.25rem, 5vw, 3.5rem);
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      background: var(--surface);
+      box-shadow: 0 1.5rem 4rem rgb(44 53 72 / 10%);
+    }
+
+    footer {
+      width: min(100% - 2rem, 72rem);
+      margin: auto;
+      padding: 1rem 0 2rem;
+      color: var(--muted);
+      font: 0.8125rem/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    :focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 70%, transparent);
+      outline-offset: 4px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #11151d;
+        --surface: #191f2a;
+        --ink: #edf0f6;
+        --muted: #a7b0c1;
+        --line: #323b4a;
+        --accent: #ff7657;
+      }
+
+      .stage {
+        box-shadow: 0 1.5rem 4rem rgb(5 8 13 / 24%);
+      }
+    }
+
+    @media (max-width: 40rem) {
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.15rem;
+      }
+
+      .stage {
+        border-radius: 0.75rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="./">HTMS demos</a>
+    <span>List</span>
+  </header>
+  <main>
+    <section class="stage" aria-label="List component">
+      <list-box></list-box>
+    </section>
+  </main>
+  <footer>&lt;list-box&gt;&lt;/list-box&gt;</footer>
+  <script type="module" src="./list-component.js"></script>
+</body>
+</html>

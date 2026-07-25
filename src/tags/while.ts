@@ -1,8 +1,12 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { DirectiveNode, TemplateNode, WhileDirective } from '../component/ir';
-import { elementToTemplateNode, isLowerCaseTag } from '../component/template-utils';
+import {
+  elementToTemplateNode,
+  isLowerCaseTag,
+} from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { handleElement } from '../handlers';
 
 const DEFAULT_MAX_ITERATIONS = 1000;
 const MAX_ITERATION_LIMIT = 10000;
@@ -22,14 +26,16 @@ export const handleWhileTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: 'WHILE tag requires a condition attribute',
-        tag: 'WHILE'
+        tag: 'WHILE',
       });
       return { code: '', errors, warnings };
     }
 
     const conditionErrors = SecurityValidator.validateContent(condition);
     if (conditionErrors.length > 0) {
-      errors.push(...conditionErrors.map(error => ({ ...error, tag: 'WHILE' })));
+      errors.push(
+        ...conditionErrors.map((error) => ({ ...error, tag: 'WHILE' }))
+      );
       if (options.strictMode) {
         return { code: '', errors, warnings };
       }
@@ -39,7 +45,7 @@ export const handleWhileTag: TagHandler = (
     if (maxAttr && maxAttr.trim().length > 0) {
       const maxErrors = SecurityValidator.validateNumericValue(maxAttr);
       if (maxErrors.length > 0) {
-        errors.push(...maxErrors.map(error => ({ ...error, tag: 'WHILE' })));
+        errors.push(...maxErrors.map((error) => ({ ...error, tag: 'WHILE' })));
         return { code: '', errors, warnings };
       }
       maxIterations = Math.floor(Number(maxAttr));
@@ -47,14 +53,14 @@ export const handleWhileTag: TagHandler = (
         errors.push({
           type: 'validation',
           message: 'WHILE max must be a positive number',
-          tag: 'WHILE'
+          tag: 'WHILE',
         });
         return { code: '', errors, warnings };
       }
       if (maxIterations > MAX_ITERATION_LIMIT) {
         warnings.push({
           message: `WHILE max is very high (${maxIterations}); consider a lower value`,
-          tag: 'WHILE'
+          tag: 'WHILE',
         });
       }
     }
@@ -71,13 +77,18 @@ export const handleWhileTag: TagHandler = (
         }
         const textErrors = SecurityValidator.validateContent(text);
         if (textErrors.length > 0) {
-          errors.push(...textErrors.map(error => ({ ...error, tag: 'WHILE' })));
+          errors.push(
+            ...textErrors.map((error) => ({ ...error, tag: 'WHILE' }))
+          );
           if (options.strictMode) {
             return { code: '', errors, warnings };
           }
         }
         bodyCode += `${text}\n`;
-        templateNodes.push({ type: 'text', textContent: SecurityValidator.sanitizeString(text) });
+        templateNodes.push({
+          type: 'text',
+          textContent: SecurityValidator.sanitizeString(text),
+        });
         continue;
       }
 
@@ -88,9 +99,8 @@ export const handleWhileTag: TagHandler = (
       const child = node as Element;
       const childOptions: TagHandlerOptions = {
         ...options,
-        parentContext: 'loop'
+        parentContext: 'loop',
       };
-      const { handleElement } = require('../handlers');
       const childResult = handleElement(child, childOptions);
 
       if (childResult.errors.length > 0) {
@@ -126,8 +136,10 @@ export const handleWhileTag: TagHandler = (
       ? `  try {\n${bodyCode
           .split('\n')
           .filter(Boolean)
-          .map(line => `    ${line}`)
-          .join('\n')}\n  } catch (error) {\n    console.error('WHILE body error:', error);\n  }\n`
+          .map((line) => `    ${line}`)
+          .join(
+            '\n'
+          )}\n  } catch (error) {\n    console.error('WHILE body error:', error);\n  }\n`
       : '  // Empty WHILE body\n';
 
     const code = `{
@@ -142,14 +154,14 @@ ${loopBody}  }
       condition: safeCondition,
       maxIterations,
       template: templateNodes,
-      directives: directives.length > 0 ? directives : undefined
+      directives: directives.length > 0 ? directives : undefined,
     };
 
     CompilerLogger.logDebug('Generated while loop', {
       condition: safeCondition,
       maxIterations,
       hasBody: bodyCode.trim().length > 0,
-      templateCount: templateNodes.length
+      templateCount: templateNodes.length,
     });
 
     return {
@@ -157,18 +169,18 @@ ${loopBody}  }
       errors,
       warnings,
       component: {
-        directives: [whileDirective]
-      }
+        directives: [whileDirective],
+      },
     };
   } catch (error) {
     const runtimeError = {
       type: 'runtime' as const,
       message: `While tag handler failed: ${error instanceof Error ? error.message : String(error)}`,
-      tag: 'WHILE'
+      tag: 'WHILE',
     };
     CompilerLogger.logCompilerError('While tag handler error', {
       error: runtimeError.message,
-      element: element.outerHTML
+      element: element.outerHTML,
     });
     return { code: '', errors: [runtimeError], warnings };
   }

@@ -1,6 +1,7 @@
 export interface TemplateNode {
   type: 'element' | 'text';
   tagName?: string;
+  namespace?: 'html' | 'svg' | 'mathml';
   attributes?: Record<string, string>;
   children?: TemplateNode[];
   textContent?: string;
@@ -141,6 +142,13 @@ export interface StateDirective {
   values?: string[];
 }
 
+export interface StatementDirective {
+  kind: 'statement';
+  code: string;
+  requiresRuntime?: boolean;
+  emittedEventName?: string;
+}
+
 export type DirectiveNode =
   | LoopDirective
   | ConditionDirective
@@ -155,7 +163,7 @@ export type DirectiveNode =
   | ClassDirective
   | StyleDirective
   | StateDirective
-  | { kind: 'statement'; code: string };
+  | StatementDirective;
 
 export interface ComponentIR {
   templateNodes: TemplateNode[];

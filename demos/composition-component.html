@@ -1,0 +1,39 @@
+<component name="composition-demo">
+  <profile-card>
+    <span slot="heading">Ada Lovelace</span>
+    <p>Wrote the first published algorithm intended for a machine.</p>
+  </profile-card>
+</component>
+
+<component name="profile-card">
+  <style>
+    :host {
+      display: block;
+      max-width: 28rem;
+    }
+    article {
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-weight: 700;
+    }
+    svg {
+      color: #7c3aed;
+    }
+  </style>
+  <article>
+    <header>
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+        <circle cx="12" cy="8" r="4" fill="currentColor"></circle>
+        <path d="M4 22c0-5 3-8 8-8s8 3 8 8" fill="currentColor"></path>
+      </svg>
+      <slot name="heading">Unnamed profile</slot>
+    </header>
+    <slot><p>No biography supplied.</p></slot>
+  </article>
+</component>

@@ -28,12 +28,20 @@ export const handleSetTag: TagHandler = (
     const op = (element.getAttribute('op') || '=').trim();
 
     if (!name) {
-      errors.push({ type: 'validation', message: 'SET tag requires a name attribute', tag: 'SET' });
+      errors.push({
+        type: 'validation',
+        message: 'SET tag requires a name attribute',
+        tag: 'SET',
+      });
       return { code: '', errors, warnings };
     }
 
     if (!ALLOWED_OPS.has(op)) {
-      errors.push({ type: 'validation', message: `Invalid op: ${op}`, tag: 'SET' });
+      errors.push({
+        type: 'validation',
+        message: `Invalid op: ${op}`,
+        tag: 'SET',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -43,7 +51,11 @@ export const handleSetTag: TagHandler = (
 
     const parts = validatePath(name);
     if (!parts) {
-      errors.push({ type: 'validation', message: `Invalid path: ${name}`, tag: 'SET' });
+      errors.push({
+        type: 'validation',
+        message: `Invalid path: ${name}`,
+        tag: 'SET',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -53,7 +65,11 @@ export const handleSetTag: TagHandler = (
         processedValue = exprAttr;
       } else {
         if (!value) {
-          errors.push({ type: 'validation', message: 'SET requires a value unless using ++/--', tag: 'SET' });
+          errors.push({
+            type: 'validation',
+            message: 'SET requires a value unless using ++/--',
+            tag: 'SET',
+          });
           return { code: '', errors, warnings };
         }
 
@@ -64,35 +80,49 @@ export const handleSetTag: TagHandler = (
             if (!Array.isArray(parsed)) throw new Error('not array');
             processedValue = JSON.stringify(parsed);
           } catch {
-            errors.push({ type: 'validation', message: 'Invalid JSON array literal', tag: 'SET' });
+            errors.push({
+              type: 'validation',
+              message: 'Invalid JSON array literal',
+              tag: 'SET',
+            });
             return { code: '', errors, warnings };
           }
         } else if (value.startsWith('{') && value.endsWith('}')) {
           try {
             const parsed = JSON.parse(value);
-            if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) throw new Error('not object');
+            if (
+              typeof parsed !== 'object' ||
+              Array.isArray(parsed) ||
+              parsed === null
+            )
+              throw new Error('not object');
             for (const key of Object.keys(parsed)) {
-              const keyErrs = SecurityValidator.validateJavaScriptIdentifier(key);
+              const keyErrs =
+                SecurityValidator.validateJavaScriptIdentifier(key);
               if (keyErrs.length > 0) {
-                errors.push(...keyErrs.map(e => ({ ...e, tag: 'SET' })));
+                errors.push(...keyErrs.map((e) => ({ ...e, tag: 'SET' })));
                 return { code: '', errors, warnings };
               }
             }
             processedValue = JSON.stringify(parsed);
           } catch {
-            errors.push({ type: 'validation', message: 'Invalid JSON object literal', tag: 'SET' });
+            errors.push({
+              type: 'validation',
+              message: 'Invalid JSON object literal',
+              tag: 'SET',
+            });
             return { code: '', errors, warnings };
           }
-        } else if (/^-?\d+(\.\d+)?$/.test(value)) {
+        } else if (SecurityValidator.isNumericLiteral(value)) {
           const numErrors = SecurityValidator.validateNumericValue(value);
           if (numErrors.length > 0) {
-            errors.push(...numErrors.map(e => ({ ...e, tag: 'SET' })));
+            errors.push(...numErrors.map((e) => ({ ...e, tag: 'SET' })));
             return { code: '', errors, warnings };
           }
           processedValue = value;
         } else if (value === 'true' || value === 'false' || value === 'null') {
           processedValue = value;
-        } else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(value)) {
+        } else if (SecurityValidator.isJavaScriptPath(value)) {
           // variable or dotted path reference
           processedValue = value;
         } else {
@@ -123,7 +153,7 @@ if (typeof window !== 'undefined' && window.__htms) { window.__htms.notify(); }`
     CompilerLogger.logDebug('Generated set operation', {
       target,
       op,
-      hasValue: op !== '++' && op !== '--'
+      hasValue: op !== '++' && op !== '--',
     });
 
     const stateDirective: StateDirective = {
@@ -131,7 +161,7 @@ if (typeof window !== 'undefined' && window.__htms) { window.__htms.notify(); }`
       mode: 'set',
       path: parts,
       op,
-      value: op !== '++' && op !== '--' ? processedValue : undefined
+      value: op !== '++' && op !== '--' ? processedValue : undefined,
     };
 
     return {
@@ -139,17 +169,18 @@ if (typeof window !== 'undefined' && window.__htms) { window.__htms.notify(); }`
       errors,
       warnings,
       component: {
-        directives: [stateDirective]
-      }
+        directives: [stateDirective],
+      },
     };
-
   } catch (error) {
     const runtimeError = {
       type: 'runtime' as const,
       message: `Set tag handler failed: ${error instanceof Error ? error.message : String(error)}`,
-      tag: 'SET'
+      tag: 'SET',
     };
-    CompilerLogger.logCompilerError('Set tag handler error', { error: runtimeError.message });
+    CompilerLogger.logCompilerError('Set tag handler error', {
+      error: runtimeError.message,
+    });
     return { code: '', errors: [runtimeError], warnings };
   }
 };

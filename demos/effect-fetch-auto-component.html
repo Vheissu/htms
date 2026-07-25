@@ -17,7 +17,7 @@
     if (!owner || typeof owner.__htmsSetState !== 'function') { return; }
     if (owner.__htmsAutoFetchScheduled) { return; }
     const state = owner.state || {};
-    if (state.loadNonce) { return; }
+    if (state.loadNonce || state.quote || state.error) { return; }
     owner.__htmsAutoFetchScheduled = true;
     const runBootstrap = () => {
       if (!owner || typeof owner.__htmsSetState !== 'function') { return; }

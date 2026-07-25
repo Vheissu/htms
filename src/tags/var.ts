@@ -4,22 +4,23 @@ import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
 export const handleVarTag: TagHandler = (
-  element: Element, 
+  element: Element,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
   const warnings: HandlerResult['warnings'] = [];
-  
+
   try {
     const name = element.getAttribute('name');
     const value = element.getAttribute('value') || '';
-    const mutable = (element.getAttribute('mutable') || 'false').toLowerCase() === 'true';
+    const mutable =
+      (element.getAttribute('mutable') || 'false').toLowerCase() === 'true';
 
     if (!name) {
       errors.push({
         type: 'validation',
         message: 'VAR tag requires a name attribute',
-        tag: 'VAR'
+        tag: 'VAR',
       });
       return { code: '', errors, warnings };
     }
@@ -27,14 +28,14 @@ export const handleVarTag: TagHandler = (
     // Validate variable name
     const nameErrors = SecurityValidator.validateJavaScriptIdentifier(name);
     if (nameErrors.length > 0) {
-      errors.push(...nameErrors.map(error => ({ ...error, tag: 'VAR' })));
+      errors.push(...nameErrors.map((error) => ({ ...error, tag: 'VAR' })));
       return { code: '', errors, warnings };
     }
 
     // Security validation of value
     const valueErrors = SecurityValidator.validateContent(value);
     if (valueErrors.length > 0) {
-      errors.push(...valueErrors.map(error => ({ ...error, tag: 'VAR' })));
+      errors.push(...valueErrors.map((error) => ({ ...error, tag: 'VAR' })));
       if (options.strictMode) {
         return { code: '', errors, warnings };
       }
@@ -55,37 +56,43 @@ export const handleVarTag: TagHandler = (
           errors.push({
             type: 'validation',
             message: 'Invalid array literal',
-            tag: 'VAR'
+            tag: 'VAR',
           });
           return { code: '', errors, warnings };
         }
-        
+
         // Ensure all array elements are safe
         for (const item of parsed) {
           if (typeof item === 'string') {
             const itemErrors = SecurityValidator.validateContent(item);
             if (itemErrors.length > 0) {
-              errors.push(...itemErrors.map(error => ({ ...error, tag: 'VAR' })));
+              errors.push(
+                ...itemErrors.map((error) => ({ ...error, tag: 'VAR' }))
+              );
               if (options.strictMode) {
                 return { code: '', errors, warnings };
               }
             }
-          } else if (typeof item !== 'number' && typeof item !== 'boolean' && item !== null) {
+          } else if (
+            typeof item !== 'number' &&
+            typeof item !== 'boolean' &&
+            item !== null
+          ) {
             errors.push({
               type: 'validation',
               message: `Unsupported array element type: ${typeof item}`,
-              tag: 'VAR'
+              tag: 'VAR',
             });
             return { code: '', errors, warnings };
           }
         }
-        
+
         processedValue = JSON.stringify(parsed);
       } catch {
         errors.push({
           type: 'validation',
           message: 'Invalid JSON array literal',
-          tag: 'VAR'
+          tag: 'VAR',
         });
         return { code: '', errors, warnings };
       }
@@ -94,8 +101,16 @@ export const handleVarTag: TagHandler = (
     else if (value.startsWith('{') && value.endsWith('}')) {
       try {
         const parsed = JSON.parse(value);
-        if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
-          errors.push({ type: 'validation', message: 'Invalid object literal', tag: 'VAR' });
+        if (
+          typeof parsed !== 'object' ||
+          Array.isArray(parsed) ||
+          parsed === null
+        ) {
+          errors.push({
+            type: 'validation',
+            message: 'Invalid object literal',
+            tag: 'VAR',
+          });
           return { code: '', errors, warnings };
         }
 
@@ -112,7 +127,9 @@ export const handleVarTag: TagHandler = (
             return v.every(validateNested);
           }
           if (t === 'object') {
-            for (const [k, vv] of Object.entries(v as Record<string, unknown>)) {
+            for (const [k, vv] of Object.entries(
+              v as Record<string, unknown>
+            )) {
               const ke = SecurityValidator.validateJavaScriptIdentifier(k);
               if (ke.length > 0) return false;
               if (!validateNested(vv)) return false;
@@ -123,25 +140,36 @@ export const handleVarTag: TagHandler = (
         };
 
         if (!validateNested(parsed)) {
-          errors.push({ type: 'validation', message: 'Invalid nested value in object literal', tag: 'VAR' });
+          errors.push({
+            type: 'validation',
+            message: 'Invalid nested value in object literal',
+            tag: 'VAR',
+          });
           return { code: '', errors, warnings };
         }
 
         processedValue = JSON.stringify(parsed);
       } catch {
-        errors.push({ type: 'validation', message: 'Invalid JSON object literal', tag: 'VAR' });
+        errors.push({
+          type: 'validation',
+          message: 'Invalid JSON object literal',
+          tag: 'VAR',
+        });
         return { code: '', errors, warnings };
       }
     }
     // Handle quoted string literal (preserve quotes)
-    else if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    else if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       processedValue = value;
     }
     // Handle numeric values
-    else if (/^-?\d+(\.\d+)?$/.test(value)) {
+    else if (SecurityValidator.isNumericLiteral(value)) {
       const numErrors = SecurityValidator.validateNumericValue(value);
       if (numErrors.length > 0) {
-        errors.push(...numErrors.map(error => ({ ...error, tag: 'VAR' })));
+        errors.push(...numErrors.map((error) => ({ ...error, tag: 'VAR' })));
         return { code: '', errors, warnings };
       }
       processedValue = value;
@@ -158,7 +186,7 @@ export const handleVarTag: TagHandler = (
     else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(value)) {
       const varErrors = SecurityValidator.validateJavaScriptIdentifier(value);
       if (varErrors.length > 0) {
-        errors.push(...varErrors.map(error => ({ ...error, tag: 'VAR' })));
+        errors.push(...varErrors.map((error) => ({ ...error, tag: 'VAR' })));
         return { code: '', errors, warnings };
       }
       processedValue = value;
@@ -167,30 +195,32 @@ export const handleVarTag: TagHandler = (
     else {
       const escapedValue = SecurityValidator.escapeForTemplate(value);
       processedValue = `"${escapedValue}"`;
-      
+
       warnings.push({
         message: 'Value treated as string literal and escaped for security',
-        tag: 'VAR'
+        tag: 'VAR',
       });
     }
 
     const decl = mutable ? 'let' : 'const';
     const isComponentContext = options.parentContext === 'component';
-    const code = isComponentContext ? '' : `${decl} ${name} = ${processedValue};`;
+    const code = isComponentContext
+      ? ''
+      : `${decl} ${name} = ${processedValue};`;
 
     CompilerLogger.logDebug('Generated variable declaration', {
       name,
       originalValue: value,
       processedValue,
       generatedCode: code,
-      mutable
+      mutable,
     });
 
     const stateDirective: StateDirective = {
       kind: 'state',
       mode: 'init',
       path: name.split('.'),
-      value: processedValue
+      value: processedValue,
     };
 
     return {
@@ -198,22 +228,21 @@ export const handleVarTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [stateDirective]
-      }
+        directives: [stateDirective],
+      },
     };
-
   } catch (error) {
     const runtimeError = {
       type: 'runtime' as const,
       message: `Var tag handler failed: ${error instanceof Error ? error.message : String(error)}`,
-      tag: 'VAR'
+      tag: 'VAR',
     };
-    
+
     CompilerLogger.logCompilerError('Var tag handler error', {
       error: runtimeError.message,
-      element: element.outerHTML
+      element: element.outerHTML,
     });
-    
+
     return { code: '', errors: [runtimeError], warnings };
   }
 };

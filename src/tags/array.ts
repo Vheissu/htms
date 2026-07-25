@@ -3,12 +3,12 @@ import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
 export const handleArrayTag: TagHandler = (
-  element: Element, 
+  element: Element,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
   const warnings: HandlerResult['warnings'] = [];
-  
+
   try {
     const name = element.getAttribute('name');
 
@@ -16,7 +16,7 @@ export const handleArrayTag: TagHandler = (
       errors.push({
         type: 'validation',
         message: 'ARRAY tag requires a name attribute',
-        tag: 'ARRAY'
+        tag: 'ARRAY',
       });
       return { code: '', errors, warnings };
     }
@@ -24,21 +24,21 @@ export const handleArrayTag: TagHandler = (
     // Validate array name
     const nameErrors = SecurityValidator.validateJavaScriptIdentifier(name);
     if (nameErrors.length > 0) {
-      errors.push(...nameErrors.map(error => ({ ...error, tag: 'ARRAY' })));
+      errors.push(...nameErrors.map((error) => ({ ...error, tag: 'ARRAY' })));
       return { code: '', errors, warnings };
     }
 
     // Collect array values from child elements
     const values: string[] = [];
-    
+
     for (const child of Array.from(element.children)) {
       if (child.tagName.toLowerCase() === 'value') {
         const valueContent = child.textContent?.trim() || '';
-        
+
         if (!valueContent) {
           warnings.push({
             message: 'Empty array value ignored',
-            tag: 'ARRAY'
+            tag: 'ARRAY',
           });
           continue;
         }
@@ -46,7 +46,9 @@ export const handleArrayTag: TagHandler = (
         // Security validation of value content
         const contentErrors = SecurityValidator.validateContent(valueContent);
         if (contentErrors.length > 0) {
-          errors.push(...contentErrors.map(error => ({ ...error, tag: 'ARRAY' })));
+          errors.push(
+            ...contentErrors.map((error) => ({ ...error, tag: 'ARRAY' }))
+          );
           if (options.strictMode) {
             continue;
           }
@@ -54,12 +56,15 @@ export const handleArrayTag: TagHandler = (
 
         // Process different value types
         let processedValue: string;
-        
+
         // Check if it's a number
-        if (/^-?\d+(\.\d+)?$/.test(valueContent)) {
-          const numErrors = SecurityValidator.validateNumericValue(valueContent);
+        if (SecurityValidator.isNumericLiteral(valueContent)) {
+          const numErrors =
+            SecurityValidator.validateNumericValue(valueContent);
           if (numErrors.length > 0) {
-            errors.push(...numErrors.map(error => ({ ...error, tag: 'ARRAY' })));
+            errors.push(
+              ...numErrors.map((error) => ({ ...error, tag: 'ARRAY' }))
+            );
             continue;
           }
           processedValue = valueContent;
@@ -74,15 +79,16 @@ export const handleArrayTag: TagHandler = (
         }
         // Treat as string (escape and quote)
         else {
-          const escapedValue = SecurityValidator.escapeForTemplate(valueContent);
+          const escapedValue =
+            SecurityValidator.escapeForTemplate(valueContent);
           processedValue = `"${escapedValue}"`;
         }
-        
+
         values.push(processedValue);
       } else {
         warnings.push({
           message: `Unexpected child element in ARRAY: ${child.tagName}`,
-          tag: 'ARRAY'
+          tag: 'ARRAY',
         });
       }
     }
@@ -93,23 +99,22 @@ export const handleArrayTag: TagHandler = (
     CompilerLogger.logDebug('Generated array declaration', {
       name,
       valueCount: values.length,
-      generatedCode: code
+      generatedCode: code,
     });
 
     return { code, errors, warnings };
-
   } catch (error) {
     const runtimeError = {
       type: 'runtime' as const,
       message: `Array tag handler failed: ${error instanceof Error ? error.message : String(error)}`,
-      tag: 'ARRAY'
+      tag: 'ARRAY',
     };
-    
+
     CompilerLogger.logCompilerError('Array tag handler error', {
       error: runtimeError.message,
-      element: element.outerHTML
+      element: element.outerHTML,
     });
-    
+
     return { code: '', errors: [runtimeError], warnings };
   }
 };

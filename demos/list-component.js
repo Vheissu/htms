@@ -10,6 +10,36 @@ class ListBoxComponent extends HTMLElement {
     }
     return this.__templateCache;
   }
+  __htmsDefineStateProperty(propName) {
+    const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
+    const ownValue = hadOwnValue ? this[propName] : undefined;
+    if (hadOwnValue) {
+      delete this[propName];
+    }
+    Object.defineProperty(this, propName, {
+      configurable: true,
+      enumerable: true,
+      get: () => this.__htmsState[propName],
+      set: value => {
+        const previous = this.__htmsState[propName];
+        if (Object.is(previous, value)) {
+          return;
+        }
+        this.__htmsState[propName] = value;
+        if (!this.__htmsRendering) {
+          this.__htmsRequestRender();
+        }
+      }
+    });
+    if (hadOwnValue) {
+      this.__htmsState[propName] = ownValue;
+    }
+  }
+  __htmsNotifyStateChange() {
+    if (!this.__htmsRendering) {
+      this.__htmsRequestRender();
+    }
+  }
   __htmsResolvePath(path) {
     if (!Array.isArray(path) || path.length === 0) {
       throw new Error('Invalid state path');
@@ -30,7 +60,8 @@ class ListBoxComponent extends HTMLElement {
   }
   __htmsInitState(path, initializer) {
     const {target, key} = this.__htmsResolvePath(path);
-    if (!Object.prototype.hasOwnProperty.call(target, key)) {
+    const storage = target === this ? this.__htmsState : target;
+    if (!Object.prototype.hasOwnProperty.call(storage, key)) {
       target[key] = initializer();
     }
   }
@@ -39,11 +70,13 @@ class ListBoxComponent extends HTMLElement {
     if (op === '++') {
       const current = typeof target[key] === 'number' ? target[key] : 0;
       target[key] = current + 1;
+      this.__htmsNotifyStateChange();
       return;
     }
     if (op === '--') {
       const current = typeof target[key] === 'number' ? target[key] : 0;
       target[key] = current - 1;
+      this.__htmsNotifyStateChange();
       return;
     }
     const current = target[key];
@@ -64,6 +97,7 @@ class ListBoxComponent extends HTMLElement {
     default:
       target[key] = value;
     }
+    this.__htmsNotifyStateChange();
   }
   __htmsEnsureArray(path) {
     const {target, key} = this.__htmsResolvePath(path);
@@ -75,6 +109,7 @@ class ListBoxComponent extends HTMLElement {
   __htmsPushState(path, valueFactory) {
     const arr = this.__htmsEnsureArray(path);
     arr.push(valueFactory());
+    this.__htmsNotifyStateChange();
   }
   __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory) {
     const arr = this.__htmsEnsureArray(path);
@@ -82,12 +117,94 @@ class ListBoxComponent extends HTMLElement {
     const del = deleteFactory();
     const values = valuesFactory();
     arr.splice(index, del, ...values);
+    this.__htmsNotifyStateChange();
+  }
+  get updateComplete() {
+    return this.__htmsUpdatePromise;
+  }
+  get renderError() {
+    return this.__htmsLastError;
+  }
+  requestUpdate() {
+    return this.__htmsRequestRender();
+  }
+  __htmsRequestRender() {
+    if (!this.__htmsConnected || this.__htmsRenderScheduled) {
+      return this.__htmsUpdatePromise;
+    }
+    this.__htmsRenderScheduled = true;
+    this.__htmsUpdatePromise = new Promise(resolve => {
+      this.__htmsResolveUpdate = resolve;
+    });
+    queueMicrotask(() => {
+      if (!this.__htmsRenderScheduled) {
+        return;
+      }
+      this.__htmsRenderScheduled = false;
+      if (this.__htmsConnected) {
+        this.render();
+      } else {
+        this.__htmsFinishUpdate();
+      }
+    });
+    return this.__htmsUpdatePromise;
+  }
+  __htmsFinishUpdate() {
+    const resolve = this.__htmsResolveUpdate;
+    this.__htmsResolveUpdate = null;
+    if (resolve) {
+      resolve();
+    }
+  }
+  __htmsReportRenderError(error) {
+    this.__htmsLastError = error;
+    const errorEvent = new CustomEvent('htms-error', {
+      detail: {
+        error,
+        component: this
+      },
+      bubbles: true,
+      composed: true,
+      cancelable: true
+    });
+    const shouldLog = this.dispatchEvent(errorEvent);
+    if (shouldLog) {
+      console.error('HTMS component render failed:', error);
+    }
+  }
+  __htmsMarkListener(target, eventType, handler) {
+    if (!target.__htmsListeners) {
+      target.__htmsListeners = [];
+    }
+    target.__htmsListeners.push({
+      eventType,
+      handler
+    });
   }
   __htmsListen(target, eventType, handler) {
     target.addEventListener(eventType, handler);
     this.__htmsRenderCleanups.push(() => {
       target.removeEventListener(eventType, handler);
     });
+  }
+  __htmsActivateListeners(target, source) {
+    const listeners = source.__htmsListeners || [];
+    for (const listener of listeners) {
+      this.__htmsListen(target, listener.eventType, listener.handler);
+    }
+  }
+  __htmsResolveEventRoot(currentTarget, sourceScope) {
+    if (sourceScope && sourceScope.__htmsMountedNode) {
+      return sourceScope.__htmsMountedNode;
+    }
+    if (sourceScope && sourceScope.nodeType === Node.ELEMENT_NODE && sourceScope.isConnected) {
+      return sourceScope;
+    }
+    const eventRoot = currentTarget && typeof currentTarget.getRootNode === 'function' ? currentTarget.getRootNode() : null;
+    if (eventRoot && eventRoot !== document) {
+      return eventRoot;
+    }
+    return this.__htmsRoot || this;
   }
   __htmsCleanupRenderListeners() {
     const cleanups = this.__htmsRenderCleanups;
@@ -96,26 +213,60 @@ class ListBoxComponent extends HTMLElement {
       cleanup();
     }
   }
-  __htmsSnapshotKeyedLists(root, configs) {
-    const snapshots = Object.create(null);
-    for (const config of configs) {
-      snapshots[config.id] = Array.from(root.querySelectorAll(config.selector)).map(container => {
-        const keyed = new Map();
-        Array.from(container.children).forEach(child => {
-          if (typeof child.getAttribute !== 'function') {
-            return;
-          }
-          const key = child.getAttribute('data-key');
-          if (key !== null && !keyed.has(key)) {
-            keyed.set(key, child);
-          }
-        });
-        return keyed;
-      });
+  __htmsMarkProperty(target, path, value) {
+    if (!target.__htmsProperties) {
+      target.__htmsProperties = [];
     }
-    return snapshots;
+    target.__htmsProperties.push({
+      path,
+      value
+    });
   }
-  __htmsSyncElement(target, source) {
+  __htmsApplyProperties(target, source) {
+    const properties = source.__htmsProperties || [];
+    for (const property of properties) {
+      let receiver = target;
+      for (const segment of property.path.slice(0, -1)) {
+        if (receiver[segment] == null) {
+          receiver[segment] = {};
+        }
+        receiver = receiver[segment];
+      }
+      receiver[property.path[property.path.length - 1]] = property.value;
+    }
+  }
+  __htmsNodesMatch(target, source) {
+    if (!target || target.nodeType !== source.nodeType || target.nodeName !== source.nodeName || target.namespaceURI !== source.namespaceURI) {
+      return false;
+    }
+    if (source.nodeType !== Node.ELEMENT_NODE) {
+      return true;
+    }
+    const sourceKey = source.getAttribute('data-key');
+    const targetKey = target.getAttribute('data-key');
+    return sourceKey === null && targetKey === null ? true : sourceKey === targetKey;
+  }
+  __htmsFindMatchingNode(reference, source, keyedTargets, idTargets) {
+    if (source.nodeType === Node.ELEMENT_NODE) {
+      const key = source.getAttribute('data-key');
+      const id = source.id;
+      if (key !== null) {
+        const candidate = keyedTargets.get(key);
+        if (this.__htmsNodesMatch(candidate, source)) {
+          keyedTargets.delete(key);
+          return candidate;
+        }
+      } else if (id) {
+        const candidate = idTargets.get(id);
+        if (this.__htmsNodesMatch(candidate, source)) {
+          idTargets.delete(id);
+          return candidate;
+        }
+      }
+    }
+    return this.__htmsNodesMatch(reference, source) ? reference : null;
+  }
+  __htmsSyncAttributes(target, source) {
     Array.from(target.attributes).forEach(attr => {
       if (!source.hasAttribute(attr.name)) {
         target.removeAttribute(attr.name);
@@ -126,136 +277,275 @@ class ListBoxComponent extends HTMLElement {
         target.setAttribute(attr.name, attr.value);
       }
     });
-    const targetChildren = Array.from(target.childNodes);
-    const sourceChildren = Array.from(source.childNodes);
-    const childCount = Math.max(targetChildren.length, sourceChildren.length);
-    for (let i = 0; i < childCount; i++) {
-      const targetChild = targetChildren[i];
-      const sourceChild = sourceChildren[i];
-      if (!sourceChild && targetChild) {
-        target.removeChild(targetChild);
-        continue;
-      }
-      if (sourceChild && !targetChild) {
-        target.appendChild(sourceChild.cloneNode(true));
-        continue;
-      }
-      if (!sourceChild || !targetChild) {
-        continue;
-      }
-      if (targetChild.nodeType === Node.TEXT_NODE && sourceChild.nodeType === Node.TEXT_NODE) {
-        if (targetChild.textContent !== sourceChild.textContent) {
-          targetChild.textContent = sourceChild.textContent;
-        }
-        continue;
-      }
-      if (targetChild.nodeType === Node.ELEMENT_NODE && sourceChild.nodeType === Node.ELEMENT_NODE && targetChild.nodeName === sourceChild.nodeName) {
-        this.__htmsSyncElement(targetChild, sourceChild);
-        continue;
-      }
-      target.replaceChild(sourceChild.cloneNode(true), targetChild);
+  }
+  __htmsActivateTree(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
     }
+    this.__htmsActivateListeners(node, node);
+    Array.from(node.querySelectorAll('*')).forEach(child => {
+      this.__htmsActivateListeners(child, child);
+    });
+  }
+  __htmsSyncNode(target, source) {
+    source.__htmsMountedNode = target;
+    if (source.nodeType === Node.TEXT_NODE || source.nodeType === Node.COMMENT_NODE) {
+      if (target.nodeValue !== source.nodeValue) {
+        target.nodeValue = source.nodeValue;
+      }
+      return;
+    }
+    if (source.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    this.__htmsSyncAttributes(target, source);
+    this.__htmsApplyProperties(target, source);
+    this.__htmsActivateListeners(target, source);
+    if (source.localName === 'template' && target.content && source.content) {
+      this.__htmsReconcileChildren(target.content, source.content);
+      return;
+    }
+    this.__htmsReconcileChildren(target, source);
+  }
+  __htmsReconcileChildren(targetParent, sourceParent) {
+    const sourceChildren = Array.from(sourceParent.childNodes);
+    const keyedTargets = new Map();
+    const idTargets = new Map();
+    Array.from(targetParent.children || []).forEach(child => {
+      const key = child.getAttribute('data-key');
+      if (key !== null && !keyedTargets.has(key)) {
+        keyedTargets.set(key, child);
+      }
+      if (child.id && !idTargets.has(child.id)) {
+        idTargets.set(child.id, child);
+      }
+    });
+    let reference = targetParent.firstChild;
+    for (const source of sourceChildren) {
+      const match = this.__htmsFindMatchingNode(reference, source, keyedTargets, idTargets);
+      if (!match) {
+        targetParent.insertBefore(source, reference);
+        source.__htmsMountedNode = source;
+        this.__htmsActivateTree(source);
+        reference = source.nextSibling;
+        continue;
+      }
+      if (match !== reference) {
+        targetParent.insertBefore(match, reference);
+      }
+      this.__htmsSyncNode(match, source);
+      reference = match.nextSibling;
+    }
+    while (reference) {
+      const next = reference.nextSibling;
+      targetParent.removeChild(reference);
+      reference = next;
+    }
+  }
+  __htmsEnsureRenderRoot() {
+    if (this.__htmsRoot) {
+      return this.__htmsRoot;
+    }
+    const declarativeTemplate = Array.from(this.children).find(child => child.localName === 'template' && child.hasAttribute('shadowrootmode'));
+    const existingRoot = this.shadowRoot;
+    const root = existingRoot || this.attachShadow({ mode: 'open' });
+    if (declarativeTemplate) {
+      root.appendChild(declarativeTemplate.content);
+      declarativeTemplate.remove();
+    }
+    this.__htmsRoot = root;
+    return root;
+  }
+  __htmsSnapshotFocus(root, controlledSelectors) {
+    const documentActive = typeof document !== 'undefined' ? document.activeElement : null;
+    const candidate = root.activeElement || (documentActive && root.contains(documentActive) ? documentActive : null);
+    if (!candidate || candidate === root) {
+      return null;
+    }
+    const path = [];
+    let current = candidate;
+    while (current && current !== root) {
+      const parent = current.parentNode;
+      if (!parent) {
+        return null;
+      }
+      path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
+      current = parent;
+    }
+    if (current !== root) {
+      return null;
+    }
+    let controlled = false;
+    if (typeof candidate.matches === 'function') {
+      for (const selector of controlledSelectors) {
+        try {
+          if (candidate.matches(selector)) {
+            controlled = true;
+            break;
+          }
+        } catch (error) {
+          console.warn('HTMS ignored invalid controlled selector:', selector, error);
+        }
+      }
+    }
+    return {
+      path,
+      id: candidate.id || null,
+      nodeName: candidate.nodeName,
+      value: !controlled && 'value' in candidate ? candidate.value : undefined,
+      checked: !controlled && 'checked' in candidate ? candidate.checked : undefined,
+      selectionStart: typeof candidate.selectionStart === 'number' ? candidate.selectionStart : null,
+      selectionEnd: typeof candidate.selectionEnd === 'number' ? candidate.selectionEnd : null,
+      selectionDirection: candidate.selectionDirection || 'none',
+      scrollTop: candidate.scrollTop,
+      scrollLeft: candidate.scrollLeft
+    };
+  }
+  __htmsRestoreFocus(root, snapshot) {
+    if (!snapshot) {
+      return;
+    }
+    let candidate = null;
+    if (snapshot.id) {
+      candidate = Array.from(root.querySelectorAll('[id]')).find(node => node.id === snapshot.id) || null;
+    }
+    if (!candidate) {
+      candidate = root;
+      for (const index of snapshot.path) {
+        candidate = candidate && candidate.childNodes ? candidate.childNodes[index] : null;
+        if (!candidate) {
+          return;
+        }
+      }
+    }
+    if (!candidate || candidate.nodeName !== snapshot.nodeName || typeof candidate.focus !== 'function') {
+      return;
+    }
+    if (snapshot.value !== undefined && 'value' in candidate) {
+      candidate.value = snapshot.value;
+    }
+    if (snapshot.checked !== undefined && 'checked' in candidate) {
+      candidate.checked = snapshot.checked;
+    }
+    try {
+      candidate.focus({ preventScroll: true });
+    } catch (error) {
+      candidate.focus();
+    }
+    if (snapshot.selectionStart !== null && snapshot.selectionEnd !== null && typeof candidate.setSelectionRange === 'function') {
+      try {
+        candidate.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd, snapshot.selectionDirection);
+      } catch (error) {
+      }
+    }
+    candidate.scrollTop = snapshot.scrollTop;
+    candidate.scrollLeft = snapshot.scrollLeft;
   }
   constructor() {
     super();
     this.__htmsRoot = null;
     this.__htmsProps = Object.create(null);
+    this.__htmsState = Object.create(null);
     this.__htmsConnected = false;
+    this.__htmsRendering = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsResolveUpdate = null;
+    this.__htmsUpdatePromise = Promise.resolve();
+    this.__htmsLastError = null;
     this.__htmsRenderCleanups = [];
-    this.__htmsKeyedSnapshots = Object.create(null);
-    if (!this.__htmsRoot) {
-      this.__htmsRoot = this.attachShadow({ mode: 'open' });
-    }
+    this.__htmsDefineStateProperty('people');
   }
   connectedCallback() {
+    this.__htmsEnsureRenderRoot();
     this.__htmsConnected = true;
     this.render();
   }
   disconnectedCallback() {
     this.__htmsConnected = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsFinishUpdate();
     this.__htmsCleanupRenderListeners();
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
   }
   render() {
-    const root = this.__htmsRoot || this;
-    if (!root) {
-      throw new Error('Component root not initialized');
-    }
-    const componentRoot = root;
-    this.__htmsCleanupRenderListeners();
-    const __htmsKeyedSnapshots = this.__htmsSnapshotKeyedLists(componentRoot, [{
-        'id': 'keyed-0',
-        'selector': '#people'
-      }]);
-    while (componentRoot.firstChild) {
-      componentRoot.removeChild(componentRoot.firstChild);
-    }
-    this.__htmsInitState(['people'], () => [
-      'Ada',
-      'Lin',
-      'Ida'
-    ]);
-    const staticFragment = ListBoxComponent.__htmsTemplate.content.cloneNode(true);
-    componentRoot.appendChild(staticFragment);
-    {
-      const _targets0 = componentRoot.querySelectorAll('#people');
-      _targets0.forEach((container, _containerIndex1) => {
-        const _previousByKey2 = __htmsKeyedSnapshots['keyed-0'] && __htmsKeyedSnapshots['keyed-0'][_containerIndex1] || new Map();
-        const _source3 = this.people;
-        const _items4 = Array.isArray(_source3) ? _source3 : [];
-        for (let i = 0; i < _items4.length; i++) {
-          const item = _items4[i];
-          const _frag5 = document.createDocumentFragment();
-          const _el0 = document.createElement('li');
-          _el0.setAttribute('class', 'person');
-          const _el1 = document.createElement('span');
-          _el1.appendChild(document.createTextNode(item == null ? '' : String(item)));
-          _el0.appendChild(_el1);
-          const _el2 = document.createElement('button');
-          _el2.setAttribute('class', 'promote');
-          _el2.setAttribute('type', 'button');
-          _el2.appendChild(document.createTextNode('Remove'));
-          _el0.appendChild(_el2);
-          _frag5.appendChild(_el0);
-          const _key6 = item;
-          const _keyText7 = String(_key6);
-          const _keyedNode8 = _frag5.firstElementChild;
-          if (_keyedNode8 && typeof _keyedNode8.setAttribute === 'function') {
-            _keyedNode8.setAttribute('data-key', _keyText7);
-          }
-          const _existingNode9 = _previousByKey2.get(_keyText7);
-          if (_existingNode9) {
-            _previousByKey2.delete(_keyText7);
-          }
-          let _mountedNode10 = _keyedNode8;
-          if (_existingNode9 && _keyedNode8 && _existingNode9.tagName === _keyedNode8.tagName) {
-            this.__htmsSyncElement(_existingNode9, _keyedNode8);
-            _mountedNode10 = _existingNode9;
-          }
-          if (_mountedNode10) {
-            container.appendChild(_mountedNode10);
-            {
-              const eventTargets = _mountedNode10.querySelectorAll('.promote');
-              eventTargets.forEach(targetEl => {
-                const _handler11 = event => {
-                  // No event body
-                  this.__htmsSpliceState(['people'], () => i, () => 1, () => []);
-                  this.render();
-                };
-                this.__htmsListen(targetEl, 'click', _handler11);
-              });
+    this.__htmsRenderScheduled = false;
+    this.__htmsRendering = true;
+    this.__htmsLastError = null;
+    try {
+      const root = this.__htmsRoot || this;
+      if (!root) {
+        throw new Error('Component root not initialized');
+      }
+      const componentRoot = document.createDocumentFragment();
+      const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, []);
+      this.__htmsCleanupRenderListeners();
+      this.__htmsInitState(['people'], () => [
+        'Ada',
+        'Lin',
+        'Ida'
+      ]);
+      const staticFragment = ListBoxComponent.__htmsTemplate.content.cloneNode(true);
+      componentRoot.appendChild(staticFragment);
+      {
+        const _targets0 = componentRoot.querySelectorAll('#people');
+        _targets0.forEach(container => {
+          const _source1 = this.people;
+          const _items2 = Array.isArray(_source1) ? _source1 : [];
+          for (let i = 0; i < _items2.length; i++) {
+            const item = _items2[i];
+            const _frag3 = document.createDocumentFragment();
+            const _el0 = document.createElement('li');
+            _el0.setAttribute('class', 'person');
+            const _el1 = document.createElement('span');
+            _el1.appendChild(document.createTextNode(item == null ? '' : String(item)));
+            _el0.appendChild(_el1);
+            const _el2 = document.createElement('button');
+            _el2.setAttribute('class', 'promote');
+            _el2.setAttribute('type', 'button');
+            _el2.appendChild(document.createTextNode('Remove'));
+            _el0.appendChild(_el2);
+            _frag3.appendChild(_el0);
+            const _key4 = item;
+            const _keyText5 = String(_key4);
+            const _keyedNode6 = _frag3.firstElementChild;
+            if (_keyedNode6 && typeof _keyedNode6.setAttribute === 'function') {
+              _keyedNode6.setAttribute('data-key', _keyText5);
             }
-          } else {
-            container.appendChild(_frag5);
+            if (_keyedNode6) {
+              container.appendChild(_keyedNode6);
+              {
+                const eventTargets = _keyedNode6.querySelectorAll('.promote');
+                eventTargets.forEach(targetEl => {
+                  const _handler7 = event => {
+                    const _eventRoot8 = this.__htmsResolveEventRoot(event.currentTarget, _keyedNode6);
+                    // No event body
+                    this.__htmsSpliceState(['people'], () => i, () => 1, () => []);
+                    this.requestUpdate();
+                  };
+                  this.__htmsMarkListener(targetEl, 'click', _handler7);
+                });
+              }
+            } else {
+              container.appendChild(_frag3);
+            }
           }
-        }
-      });
+        });
+      }
+      this.__htmsReconcileChildren(root, componentRoot);
+      this.__htmsRestoreFocus(root, __htmsFocusSnapshot);
+    } catch (error) {
+      this.__htmsReportRenderError(error);
+    } finally {
+      this.__htmsRendering = false;
+      this.__htmsFinishUpdate();
     }
   }
 }
-customElements.define('list-box', ListBoxComponent);
+if (!customElements.get('list-box')) {
+  customElements.define('list-box', ListBoxComponent);
+}
 export {
   ListBoxComponent
 };

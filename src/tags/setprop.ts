@@ -3,14 +3,19 @@ import { AttributeDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 
+const BLOCKED_PROPERTY_SINKS = new Set(['innerhtml', 'outerhtml', 'srcdoc']);
+
 function buildValueExpr(value: string): string | null {
   if (!value) return 'undefined';
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
     return value;
   }
-  if (/^-?\d+(\.\d+)?$/.test(value)) return value;
+  if (SecurityValidator.isNumericLiteral(value)) return value;
   if (value === 'true' || value === 'false' || value === 'null') return value;
-  if (/^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(value)) return value;
+  if (SecurityValidator.isJavaScriptPath(value)) return value;
   // Fallback to string literal
   const escaped = SecurityValidator.escapeForTemplate(value);
   return `"${escaped}"`;
@@ -29,20 +34,58 @@ export const handleSetPropTag: TagHandler = (
     const value = element.getAttribute('value') || '';
     const exprAttr = element.getAttribute('expr');
     if (!selector || !prop) {
-      errors.push({ type: 'validation', message: 'SETPROP requires selector and prop', tag: 'SETPROP' });
+      errors.push({
+        type: 'validation',
+        message: 'SETPROP requires selector and prop',
+        tag: 'SETPROP',
+      });
       return { code: '', errors, warnings };
     }
-    if (!/^[a-zA-Z0-9\-_#.\[\]=":() ]+$/.test(selector)) {
-      errors.push({ type: 'validation', message: 'Invalid CSS selector', tag: 'SETPROP' });
+    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+      errors.push({
+        type: 'validation',
+        message: 'Invalid CSS selector',
+        tag: 'SETPROP',
+      });
       return { code: '', errors, warnings };
     }
     if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(prop)) {
-      errors.push({ type: 'validation', message: 'Invalid property path', tag: 'SETPROP' });
+      errors.push({
+        type: 'validation',
+        message: 'Invalid property path',
+        tag: 'SETPROP',
+      });
       return { code: '', errors, warnings };
     }
-    const valExpr = exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
+    const rootProperty = prop.split('.')[0].toLowerCase();
+    if (
+      rootProperty.startsWith('on') ||
+      BLOCKED_PROPERTY_SINKS.has(rootProperty)
+    ) {
+      errors.push({
+        type: 'security',
+        message: `Dangerous property sink not allowed: ${prop}`,
+        tag: 'SETPROP',
+      });
+      return { code: '', errors, warnings };
+    }
+
+    const rawExpression = exprAttr?.trim() || value;
+    const expressionErrors = SecurityValidator.validateContent(rawExpression);
+    if (expressionErrors.length > 0) {
+      errors.push(
+        ...expressionErrors.map((error) => ({ ...error, tag: 'SETPROP' }))
+      );
+      return { code: '', errors, warnings };
+    }
+    const valExpr =
+      exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
     if (valExpr == null) {
-      errors.push({ type: 'validation', message: 'Invalid value', tag: 'SETPROP' });
+      errors.push({
+        type: 'validation',
+        message: 'Invalid value',
+        tag: 'SETPROP',
+      });
       return { code: '', errors, warnings };
     }
 
@@ -50,8 +93,8 @@ export const handleSetPropTag: TagHandler = (
     const parts = prop.split('.');
     const head = parts.shift()!;
     const tail = parts;
-    let path = `el[\"${head}\"]`;
-    for (const p of tail) path += `[\"${p}\"]`;
+    let path = `el["${head}"]`;
+    for (const p of tail) path += `["${p}"]`;
 
     const isComponentContext = options.parentContext === 'component';
     const code = isComponentContext
@@ -76,7 +119,7 @@ export const handleSetPropTag: TagHandler = (
       target: 'property',
       name: prop,
       path: pathSegments,
-      value: valExpr
+      value: valExpr,
     };
 
     return {
@@ -84,10 +127,14 @@ export const handleSetPropTag: TagHandler = (
       errors,
       warnings,
       component: {
-        directives: [directive]
-      }
+        directives: [directive],
+      },
     };
   } catch (error) {
-    return { code: '', errors: [{ type: 'runtime', message: String(error), tag: 'SETPROP' }], warnings };
+    return {
+      code: '',
+      errors: [{ type: 'runtime', message: String(error), tag: 'SETPROP' }],
+      warnings,
+    };
   }
 };

@@ -98,12 +98,12 @@ export const handlePrintTag: TagHandler = (
       message: `Print tag handler failed: ${error instanceof Error ? error.message : String(error)}`,
       tag: 'PRINT'
     };
-    
+
     CompilerLogger.logCompilerError('Print tag handler error', {
       error: runtimeError.message,
       element: element.outerHTML
     });
-    
+
     return { code: '', errors: [runtimeError], warnings };
   }
 };

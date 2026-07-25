@@ -38,6 +38,8 @@ import {
 } from './types';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
+import { isTemplateElement } from './component/template-utils';
+import { addNodeLocations } from './diagnostics';
 
 const ALLOWED_STANDARD_ELEMENTS = new Set([
   'INPUT',
@@ -108,39 +110,41 @@ const ALLOWED_STANDARD_ELEMENTS = new Set([
   'META',
 ]);
 
-const HANDLERS_MAPPING = {
-  PRINT: handlePrintTag,
-  REPEAT: handleRepeatTag,
-  VAR: handleVarTag,
-  IF: handleIfElseTags,
-  FUNCTION: handleFunctionTag,
-  CALL: handleCallTag,
-  SWITCH: handleSwitchTag,
-  WHILE: handleWhileTag,
-  OBJECT: handleObjectTag,
-  ARRAY: handleArrayTag,
-  COMMENT: handleCommentTag,
-  EVENT: handleEventTag,
-  INJECT: handleInjectTag,
-  SET: handleSetTag,
-  SPLICE: handleSpliceTag,
-  PUSH: handlePushTag,
-  SETPROP: handleSetPropTag,
-  TOGGLE: handleToggleTag,
-  SHOW: handleShowTag,
-  BIND: handleBindTag,
-  SETATTR: handleSetAttrTag,
-  APPEND: handleAppendTag,
-  KEYEDLIST: handleKeyedListTag,
-  SUBMIT: handleSubmitTag,
-  EFFECT: handleEffectTag,
-  FETCH: handleFetchTag,
-  CLASS: handleClassTag,
-  STYLE: handleStyleTag,
-  MODEL: handleModelTag,
-  DERIVE: handleDeriveTag,
-  EMIT: handleEmitTag,
-} satisfies Record<string, TagHandler>;
+const HANDLERS_MAPPING = new Map<string, TagHandler>([
+  ['PRINT', handlePrintTag],
+  ['REPEAT', handleRepeatTag],
+  ['VAR', handleVarTag],
+  ['IF', handleIfElseTags],
+  ['FUNCTION', handleFunctionTag],
+  ['CALL', handleCallTag],
+  ['SWITCH', handleSwitchTag],
+  ['WHILE', handleWhileTag],
+  ['OBJECT', handleObjectTag],
+  ['ARRAY', handleArrayTag],
+  ['COMMENT', handleCommentTag],
+  ['EVENT', handleEventTag],
+  ['INJECT', handleInjectTag],
+  ['SET', handleSetTag],
+  ['SPLICE', handleSpliceTag],
+  ['PUSH', handlePushTag],
+  ['SETPROP', handleSetPropTag],
+  ['TOGGLE', handleToggleTag],
+  ['SHOW', handleShowTag],
+  ['BIND', handleBindTag],
+  ['SETATTR', handleSetAttrTag],
+  ['APPEND', handleAppendTag],
+  ['KEYEDLIST', handleKeyedListTag],
+  ['SUBMIT', handleSubmitTag],
+  ['EFFECT', handleEffectTag],
+  ['FETCH', handleFetchTag],
+  ['CLASS', handleClassTag],
+  ['STYLE', handleStyleTag],
+  ['MODEL', handleModelTag],
+  ['DERIVE', handleDeriveTag],
+  ['EMIT', handleEmitTag],
+]);
+
+type ConsumableElement = Element & { __htmsConsumed?: boolean };
 
 export function handleElement(
   element: Element,
@@ -161,7 +165,7 @@ export function handleElement(
       };
     }
 
-    if ((element as any).__htmsConsumed) {
+    if ((element as ConsumableElement).__htmsConsumed) {
       return { code: '', errors: [], warnings: [] };
     }
 
@@ -173,10 +177,7 @@ export function handleElement(
       hasChildren: element.children.length > 0,
     });
 
-    const hasHandler = Object.prototype.hasOwnProperty.call(
-      HANDLERS_MAPPING,
-      tagName
-    );
+    const hasHandler = HANDLERS_MAPPING.has(tagName);
     const preferCustom =
       tagName === 'STYLE' &&
       (element.hasAttribute('selector') ||
@@ -190,20 +191,24 @@ export function handleElement(
 
     // Check if it's a supported custom tag
     if (!hasHandler) {
+      const suggestion = suggestTagName(tagName);
       const error: CompilerError = {
         type: 'validation',
         message: `Unsupported tag: ${tagName}`,
         tag: tagName,
+        hint: suggestion
+          ? `Did you mean <${suggestion.toLowerCase()}>?`
+          : undefined,
       };
 
       CompilerLogger.logValidationError('Unsupported tag encountered', {
         tagName,
-        availableTags: Object.keys(HANDLERS_MAPPING),
+        availableTags: Array.from(HANDLERS_MAPPING.keys()),
       });
 
       return {
         code: '',
-        errors: [error],
+        errors: addNodeLocations([error], element),
         warnings: [],
       };
     }
@@ -219,7 +224,7 @@ export function handleElement(
       if (options.strictMode) {
         return {
           code: '',
-          errors: securityErrors,
+          errors: addNodeLocations(securityErrors, element),
           warnings: [],
         };
       } else {
@@ -227,17 +232,22 @@ export function handleElement(
         return {
           code: '',
           errors: [],
-          warnings: securityErrors.map((error) => ({
-            message: error.message,
-            tag: tagName,
-          })),
+          warnings: addNodeLocations(
+            securityErrors.map((error) => ({
+              message: error.message,
+              tag: tagName,
+            })),
+            element
+          ),
         };
       }
     }
 
     // Execute the handler
-    const handlerFunction =
-      HANDLERS_MAPPING[tagName as keyof typeof HANDLERS_MAPPING];
+    const handlerFunction = HANDLERS_MAPPING.get(tagName);
+    if (!handlerFunction) {
+      throw new Error(`Handler missing for supported tag: ${tagName}`);
+    }
     const result = handlerFunction(element, options);
 
     // Note: Security is enforced on inputs and final AST (in parse phase).
@@ -251,6 +261,8 @@ export function handleElement(
       warningCount: result.warnings.length,
     });
 
+    addNodeLocations(result.errors, element);
+    addNodeLocations(result.warnings, element);
     return result;
   } catch (error) {
     const handlerError: CompilerError = {
@@ -266,22 +278,69 @@ export function handleElement(
 
     return {
       code: '',
-      errors: [handlerError],
+      errors: addNodeLocations([handlerError], element),
       warnings: [],
     };
   }
 }
 
+function editDistance(left: string, right: string): number {
+  let previous = new Map<number, number>();
+  for (let index = 0; index <= right.length; index += 1) {
+    previous.set(index, index);
+  }
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = new Map<number, number>();
+    current.set(0, leftIndex);
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost =
+        left.charAt(leftIndex - 1) === right.charAt(rightIndex - 1) ? 0 : 1;
+      const deletion = (previous.get(rightIndex) ?? 0) + 1;
+      const insertion = (current.get(rightIndex - 1) ?? 0) + 1;
+      const substitution =
+        (previous.get(rightIndex - 1) ?? 0) + substitutionCost;
+      current.set(rightIndex, Math.min(deletion, insertion, substitution));
+    }
+
+    previous = current;
+  }
+
+  return previous.get(right.length) ?? Math.max(left.length, right.length);
+}
+
+function suggestTagName(tagName: string): string | null {
+  const normalized = tagName.toUpperCase();
+  let closest: { tag: string; distance: number } | null = null;
+
+  for (const candidate of getAllowedTags()) {
+    const distance = editDistance(normalized, candidate);
+    if (!closest || distance < closest.distance) {
+      closest = { tag: candidate, distance };
+    }
+  }
+
+  if (!closest) {
+    return null;
+  }
+
+  const threshold = Math.max(1, Math.floor(normalized.length / 3));
+  return closest.distance <= threshold ? closest.tag : null;
+}
+
 export function isStandardHtmlElement(element: Element): boolean {
-  return ALLOWED_STANDARD_ELEMENTS.has(element.tagName.toUpperCase());
+  return (
+    ALLOWED_STANDARD_ELEMENTS.has(element.tagName.toUpperCase()) ||
+    isTemplateElement(element)
+  );
 }
 
 function validateElementSecurity(element: Element): CompilerError[] {
   const errors: CompilerError[] = [];
 
   // Validate attributes
-  for (let i = 0; i < element.attributes.length; i++) {
-    const attr = element.attributes[i];
+  for (const attr of Array.from(element.attributes)) {
     const attrErrors = SecurityValidator.validateHtmlAttribute(
       attr.name,
       attr.value
@@ -311,7 +370,7 @@ function validateElementSecurity(element: Element): CompilerError[] {
 
 export function getAllowedTags(): string[] {
   return [
-    ...Object.keys(HANDLERS_MAPPING),
+    ...Array.from(HANDLERS_MAPPING.keys()),
     ...Array.from(ALLOWED_STANDARD_ELEMENTS),
   ];
 }
@@ -319,7 +378,7 @@ export function getAllowedTags(): string[] {
 export function isTagSupported(tagName: string): boolean {
   const upperTagName = tagName.toUpperCase();
   return (
-    HANDLERS_MAPPING.hasOwnProperty(upperTagName) ||
+    HANDLERS_MAPPING.has(upperTagName) ||
     ALLOWED_STANDARD_ELEMENTS.has(upperTagName)
   );
 }
