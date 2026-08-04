@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Working HTMS examples covering state, events, forms, lists, composition, effects, fetch and server rendering.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
+  <link rel="canonical" href="https://vheissu.github.io/htms/">
   <title>HTMS Component Demos</title>
   <style>
     :root {
@@ -49,6 +51,23 @@
     .tagline {
       color: var(--muted);
       font: 0.8125rem/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    .site-links {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .site-links a {
+      color: var(--ink);
+      font-size: 0.875rem;
+      font-weight: 750;
+      text-decoration: none;
+    }
+
+    .site-links a:hover {
+      color: var(--accent);
     }
 
     .hero {
@@ -274,7 +293,11 @@
 <body>
   <header class="shell">
     <span class="wordmark">HTMS</span>
-    <span class="tagline">HTML in. JavaScript out.</span>
+    <div class="site-links">
+      <span class="tagline">HTML in. JavaScript out.</span>
+      <a href="https://github.com/Vheissu/htms#readme">Docs</a>
+      <a href="https://github.com/Vheissu/htms">GitHub</a>
+    </div>
   </header>
   <main class="shell">
     <section class="hero">

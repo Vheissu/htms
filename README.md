@@ -33,7 +33,8 @@ Open `http://127.0.0.1:5173/`, click the button, then edit the HTML. The browser
 
 The starter is deliberately small enough to pull apart. HTMS won't replace an existing file unless you pass `--force`.
 
-[Read the getting-started guide](https://github.com/Vheissu/htms/blob/master/docs/getting-started.md)
+[Try the live component demos](https://vheissu.github.io/htms/), read the
+[getting-started guide](https://github.com/Vheissu/htms/blob/master/docs/getting-started.md),
 or run `npm run demo:serve` and open `http://localhost:5173/demos/`.
 
 ## CLI

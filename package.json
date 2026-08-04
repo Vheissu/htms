@@ -9,7 +9,7 @@
   "bugs": {
     "url": "https://github.com/Vheissu/htms/issues"
   },
-  "homepage": "https://github.com/Vheissu/htms#readme",
+  "homepage": "https://vheissu.github.io/htms/",
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "browser": "dist/browser.js",

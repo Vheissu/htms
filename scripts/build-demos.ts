@@ -67,7 +67,9 @@ function buildDemo(file: string): CompiledDemo {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Run the ${title} example and inspect the HTMS source that compiled it.">
   <link rel="icon" href="${FAVICON}">
+  <link rel="canonical" href="https://vheissu.github.io/htms/${base}.preview.html">
   <title>${title} | HTMS Demo</title>
   <style>
     :root {
@@ -108,6 +110,17 @@ function buildDemo(file: string): CompiledDemo {
 
     header span {
       color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    .demo-links {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .demo-links a:last-child {
+      color: var(--accent);
       font-size: 0.875rem;
     }
 
@@ -162,7 +175,12 @@ function buildDemo(file: string): CompiledDemo {
         align-items: flex-start;
         flex-direction: column;
         justify-content: center;
-        gap: 0.15rem;
+        gap: 0.5rem;
+      }
+
+      .demo-links {
+        width: 100%;
+        justify-content: space-between;
       }
 
       .stage {
@@ -174,7 +192,10 @@ function buildDemo(file: string): CompiledDemo {
 <body>
   <header>
     <a href="./">HTMS demos</a>
-    <span>${title}</span>
+    <nav class="demo-links" aria-label="Demo links">
+      <span>${title}</span>
+      <a href="https://github.com/Vheissu/htms/blob/master/demos/${file}">View source</a>
+    </nav>
   </header>
   <main>
     <section class="stage" aria-label="${title} component">
@@ -215,7 +236,9 @@ function writeGallery(demos: CompiledDemo[]): void {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Working HTMS examples covering state, events, forms, lists, composition, effects, fetch and server rendering.">
   <link rel="icon" href="${FAVICON}">
+  <link rel="canonical" href="https://vheissu.github.io/htms/">
   <title>HTMS Component Demos</title>
   <style>
     :root {
@@ -261,6 +284,23 @@ function writeGallery(demos: CompiledDemo[]): void {
     .tagline {
       color: var(--muted);
       font: 0.8125rem/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    .site-links {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .site-links a {
+      color: var(--ink);
+      font-size: 0.875rem;
+      font-weight: 750;
+      text-decoration: none;
+    }
+
+    .site-links a:hover {
+      color: var(--accent);
     }
 
     .hero {
@@ -486,7 +526,11 @@ function writeGallery(demos: CompiledDemo[]): void {
 <body>
   <header class="shell">
     <span class="wordmark">HTMS</span>
-    <span class="tagline">HTML in. JavaScript out.</span>
+    <div class="site-links">
+      <span class="tagline">HTML in. JavaScript out.</span>
+      <a href="https://github.com/Vheissu/htms#readme">Docs</a>
+      <a href="https://github.com/Vheissu/htms">GitHub</a>
+    </div>
   </header>
   <main class="shell">
     <section class="hero">
