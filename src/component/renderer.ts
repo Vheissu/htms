@@ -10,7 +10,7 @@ import {
   TagHandlerOptions,
 } from '../types';
 import { SecurityValidator } from '../utils/security';
-import { ComponentIR, createEmptyComponentIR } from './ir';
+import { ComponentIR, createEmptyComponentIR, TemplateChild } from './ir';
 import {
   collectTemplateSecurityErrors,
   elementToTemplateNode,
@@ -95,6 +95,40 @@ export function elementsToComponentCode(
         element.hasAttribute('prop') ||
         element.hasAttribute('name'));
 
+    const handlerOptions: TagHandlerOptions = {
+      strictMode,
+      parentContext: 'component',
+      appendTargetVar,
+      componentContext: true,
+    };
+
+    // Directive tags nested inside markup (e.g. <div><event .../></div>)
+    // resolve to embedded template children scoped to the parent element.
+    const resolveChild = (child: Element): TemplateChild[] => {
+      const result = handleElement(child, handlerOptions);
+      if (result.errors.length > 0) {
+        errors.push(...result.errors);
+      }
+      if (result.warnings.length > 0) {
+        warnings.push(...result.warnings);
+      }
+      const children: TemplateChild[] = [];
+      if (result.component?.template) {
+        children.push(...result.component.template);
+      }
+      if (result.component?.directives) {
+        for (const directive of result.component.directives) {
+          children.push({ type: 'directive', directive });
+        }
+      } else if (result.code) {
+        children.push({
+          type: 'directive',
+          directive: { kind: 'statement', code: result.code },
+        });
+      }
+      return children;
+    };
+
     if (coreIsStandardHtmlElement(element) && !treatAsCustom) {
       const templateErrors = collectTemplateSecurityErrors(element);
       if (templateErrors.length > 0) {
@@ -112,16 +146,9 @@ export function elementsToComponentCode(
           )
         );
       }
-      ir.templateNodes.push(elementToTemplateNode(element));
+      ir.templateNodes.push(elementToTemplateNode(element, resolveChild));
       continue;
     }
-
-    const handlerOptions: TagHandlerOptions = {
-      strictMode,
-      parentContext: 'component',
-      appendTargetVar,
-      componentContext: true,
-    };
 
     const result: HandlerResult = handleElement(element, handlerOptions);
     if (result.errors.length > 0) {

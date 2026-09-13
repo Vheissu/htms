@@ -118,8 +118,7 @@ export const handleSwitchTag: TagHandler = (
           processedValue = caseValue;
         } else {
           // String value (escape and quote)
-          const escapedValue = SecurityValidator.escapeForTemplate(caseValue);
-          processedValue = `"${escapedValue}"`;
+          processedValue = SecurityValidator.jsStringLiteral(caseValue);
         }
 
         // Build case body from raw text (legacy) and child nodes
@@ -145,7 +144,7 @@ export const handleSwitchTag: TagHandler = (
             innerCaseCode += `${text}\n`;
             caseTemplates.push({
               type: 'text',
-              textContent: SecurityValidator.sanitizeString(text),
+              textContent: text,
             });
             continue;
           }
@@ -234,7 +233,7 @@ export const handleSwitchTag: TagHandler = (
             defaultInner += `${text}\n`;
             templates.push({
               type: 'text',
-              textContent: SecurityValidator.sanitizeString(text),
+              textContent: text,
             });
             continue;
           }

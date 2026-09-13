@@ -25,7 +25,7 @@ export const handleBindTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+    if (!SecurityValidator.isAllowedSelector(selector)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector',
@@ -49,8 +49,8 @@ export const handleBindTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    const selEsc = SecurityValidator.escapeForTemplate(selector);
-    const propEsc = SecurityValidator.escapeForTemplate(prop);
+    const selEsc = SecurityValidator.jsStringLiteral(selector);
+    const propEsc = SecurityValidator.jsStringLiteral(prop);
 
     const runtime = ensureRuntime();
 
@@ -60,7 +60,7 @@ export const handleBindTag: TagHandler = (
       : `${runtime}
       (function(){
         if (typeof window !== 'undefined' && window.__htms) {
-          window.__htms.bind(\`${selEsc}\`, \`${propEsc}\`, function(){ return ${expr}; });
+          window.__htms.bind(${selEsc}, ${propEsc}, function(){ return ${expr}; });
         }
       })();`;
 

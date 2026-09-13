@@ -39,7 +39,7 @@ export const handleClassTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+    if (!SecurityValidator.isAllowedSelector(selector)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector',
@@ -98,8 +98,10 @@ export const handleClassTag: TagHandler = (
     }
 
     const isComponentContext = options.parentContext === 'component';
-    const selEsc = SecurityValidator.escapeForTemplate(selector);
-    const classListLiteral = classNames.map((name) => `"${name}"`).join(', ');
+    const selEsc = SecurityValidator.jsStringLiteral(selector);
+    const classListLiteral = classNames
+      .map((name) => SecurityValidator.jsStringLiteral(name))
+      .join(', ');
     const condExpr = condition ? `!!(${condition})` : '';
 
     const code = isComponentContext
@@ -107,7 +109,7 @@ export const handleClassTag: TagHandler = (
       : `
       (function(){
         try {
-          const targets = document.querySelectorAll(\`${selEsc}\`);
+          const targets = document.querySelectorAll(${selEsc});
           targets.forEach(node => {
             const classes = [${classListLiteral}];
             classes.forEach(cls => {

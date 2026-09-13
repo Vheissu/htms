@@ -1,14 +1,21 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { AppendDirective, DirectiveNode, TemplateNode } from '../component/ir';
-import {
-  elementToTemplateNode,
-  isLowerCaseTag,
-} from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
+import { getNodeLocation } from '../diagnostics';
 
 let appendCounter = 0;
+
+// Location-based ids keep compiled output deterministic; the counter is a
+// fallback for elements parsed without node locations.
+function stableVarName(element: Element): string {
+  const location = getNodeLocation(element);
+  if (location) {
+    return `__appendTarget_${location.line}_${location.column}`;
+  }
+  return `__appendTarget${++appendCounter}`;
+}
 
 export const handleAppendTag: TagHandler = (
   element: Element,
@@ -27,7 +34,7 @@ export const handleAppendTag: TagHandler = (
       });
       return { code: '', errors, warnings };
     }
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
+    if (!SecurityValidator.isAllowedSelector(target)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector',
@@ -36,12 +43,13 @@ export const handleAppendTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    const sel = SecurityValidator.escapeForTemplate(target);
-    const legacyVarName = `__appendTarget${++appendCounter}`;
-    const isComponentContext = options.parentContext === 'component';
+    const sel = SecurityValidator.jsStringLiteral(target);
+    const legacyVarName = stableVarName(element);
+    const isComponentContext =
+      options.parentContext === 'component' || options.componentContext;
     let code = '';
     if (!isComponentContext) {
-      code = `const ${legacyVarName} = document.querySelector(\`${sel}\`);\n`;
+      code = `const ${legacyVarName} = document.querySelector(${sel});\n`;
       code += `if (!${legacyVarName}) { console.warn('APPEND target not found: ${sel}'); } else {\n`;
     }
 
@@ -49,13 +57,9 @@ export const handleAppendTag: TagHandler = (
     const componentDirectives: DirectiveNode[] = [];
 
     for (const child of Array.from(element.children)) {
-      if (isComponentContext && isLowerCaseTag(child)) {
-        componentTemplates.push(elementToTemplateNode(child));
-        continue;
-      }
-
       const childResult = handleElement(child, {
         ...options,
+        componentContext: isComponentContext || options.componentContext,
         appendTargetVar: isComponentContext
           ? options.appendTargetVar
           : legacyVarName,

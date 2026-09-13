@@ -3,70 +3,14 @@ import {
   elementToTemplateNode,
   isLowerCaseTag,
 } from '../component/template-utils';
-import { DirectiveNode, TemplateNode } from '../component/ir';
-import { handleEventTag } from './event';
+import {
+  DirectiveNode,
+  TemplateChild,
+  TemplateNode,
+} from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
-
-function collectNestedComponentDirectives(
-  element: Element,
-  options: TagHandlerOptions,
-  loopVariable: string,
-  errors: HandlerResult['errors'],
-  warnings: HandlerResult['warnings']
-): DirectiveNode[] {
-  const directives: DirectiveNode[] = [];
-
-  for (const child of Array.from(element.children)) {
-    if (isLowerCaseTag(child as Node)) {
-      directives.push(
-        ...collectNestedComponentDirectives(
-          child,
-          options,
-          loopVariable,
-          errors,
-          warnings
-        )
-      );
-      continue;
-    }
-
-    if (child.tagName.toUpperCase() !== 'EVENT') {
-      continue;
-    }
-
-    const childResult: HandlerResult = handleEventTag(child, {
-      ...options,
-      loopVariable,
-      parentContext: 'component',
-      componentContext: true,
-    });
-
-    if (childResult.errors.length > 0) {
-      errors.push(...childResult.errors);
-      if (options.strictMode) {
-        continue;
-      }
-    }
-
-    if (childResult.warnings.length > 0) {
-      warnings.push(...childResult.warnings);
-    }
-
-    if (childResult.component?.directives) {
-      directives.push(
-        ...childResult.component.directives.filter(
-          (directive) => directive.kind === 'event'
-        )
-      );
-    } else if (childResult.code) {
-      directives.push({ kind: 'statement', code: childResult.code });
-    }
-  }
-
-  return directives;
-}
 
 export const handleRepeatTag: TagHandler = (
   element: Element,
@@ -104,7 +48,22 @@ export const handleRepeatTag: TagHandler = (
     }
 
     let loopCode = '';
-    let loopVariable = 'item'; // default item variable
+    const itemAttr = element.getAttribute('item');
+    if (itemAttr) {
+      const itemErrors =
+        SecurityValidator.validateJavaScriptIdentifier(itemAttr);
+      if (itemErrors.length > 0) {
+        errors.push(
+          ...itemErrors.map((e) => ({
+            ...e,
+            tag: 'REPEAT',
+            message: `Invalid item variable: ${itemAttr}`,
+          }))
+        );
+        return { code: '', errors, warnings };
+      }
+    }
+    let loopVariable = itemAttr || 'item';
     let countNum: number | null = null;
     const componentDirectives: DirectiveNode[] = [];
     const componentTemplateChildren: TemplateNode[] = [];
@@ -194,7 +153,6 @@ export const handleRepeatTag: TagHandler = (
     }
 
     // Security validation of loop body
-    let sanitizedBody = '';
     if (body) {
       const bodyErrors = SecurityValidator.validateContent(body);
       if (bodyErrors.length > 0) {
@@ -205,7 +163,6 @@ export const handleRepeatTag: TagHandler = (
           return { code: '', errors, warnings };
         }
       }
-      sanitizedBody = SecurityValidator.sanitizeString(body);
     }
 
     // Process child elements that might reference the loop variable
@@ -237,15 +194,29 @@ export const handleRepeatTag: TagHandler = (
       if (childResult.component?.template) {
         componentTemplateChildren.push(...childResult.component.template);
       } else if (isLowerCaseTag(child)) {
-        componentTemplateChildren.push(elementToTemplateNode(child as Element));
-        componentDirectives.push(
-          ...collectNestedComponentDirectives(
-            child,
-            childOptions,
-            loopVariable,
-            errors,
-            warnings
-          )
+        componentTemplateChildren.push(
+          elementToTemplateNode(child as Element, (nested: Element) => {
+            const nestedResult = handleElement(nested, {
+              ...options,
+              loopVariable,
+              parentContext: 'loop',
+            });
+            errors.push(...nestedResult.errors);
+            warnings.push(...nestedResult.warnings);
+            const children = (nestedResult.component?.template ??
+              []) as TemplateChild[];
+            if (nestedResult.component?.directives) {
+              for (const directive of nestedResult.component.directives) {
+                children.push({ type: 'directive', directive });
+              }
+            } else if (nestedResult.code) {
+              children.push({
+                type: 'directive',
+                directive: { kind: 'statement', code: nestedResult.code },
+              });
+            }
+            return children;
+          })
         );
       }
 
@@ -258,15 +229,19 @@ export const handleRepeatTag: TagHandler = (
 
     // Combine loop body and child code
     let combinedBody = '';
-    if (sanitizedBody) {
-      combinedBody += `  try {\n    ${sanitizedBody}\n  } catch (error) {\n    console.error('Loop body execution error:', error);\n  }\n`;
+    if (body) {
+      combinedBody += `  try {\n    ${body}\n  } catch (error) {\n    console.error('Loop body execution error:', error);\n  }\n`;
     }
 
     if (childCode) {
       combinedBody += childCode;
     }
 
-    if (!combinedBody.trim()) {
+    if (
+      !combinedBody.trim() &&
+      componentTemplateChildren.length === 0 &&
+      componentDirectives.length === 0
+    ) {
       warnings.push({
         message: 'Empty loop body',
         tag: 'REPEAT',
@@ -276,18 +251,11 @@ export const handleRepeatTag: TagHandler = (
 
     const code = `${loopCode}\n${combinedBody}}`;
 
-    if (body && body !== sanitizedBody) {
-      warnings.push({
-        message: 'Loop body was sanitized for security',
-        tag: 'REPEAT',
-      });
-    }
-
     CompilerLogger.logDebug('Generated loop', {
       type: variable ? 'array-iteration' : 'numeric-loop',
       variable: variable || `count:${count}`,
       loopVariable,
-      hasBody: !!sanitizedBody,
+      hasBody: !!body,
       hasChildren: !!childCode,
       codeLength: code.length,
     });

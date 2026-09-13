@@ -283,10 +283,19 @@ describe('Tag handlers', () => {
       const previous = process.env.HTMS_ALLOW_INJECT_TAG;
       process.env.HTMS_ALLOW_INJECT_TAG = 'true';
 
-      const element = createElement('<INJECT selector="#target">Safe</INJECT>');
-      const result = handleInjectTag(element, { strictMode: false });
-
-      process.env.HTMS_ALLOW_INJECT_TAG = previous;
+      let result;
+      try {
+        const element = createElement(
+          '<INJECT selector="#target">Safe</INJECT>'
+        );
+        result = handleInjectTag(element, { strictMode: false });
+      } finally {
+        if (previous === undefined) {
+          delete process.env.HTMS_ALLOW_INJECT_TAG;
+        } else {
+          process.env.HTMS_ALLOW_INJECT_TAG = previous;
+        }
+      }
 
       expect(result.errors).toHaveLength(0);
       expect(

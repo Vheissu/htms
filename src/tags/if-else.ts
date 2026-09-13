@@ -74,9 +74,8 @@ function collectBranchContent(
           continue;
         }
       }
-      const sanitizedText = SecurityValidator.sanitizeString(text);
       innerCode += `${text}\n`;
-      templates.push({ type: 'text', textContent: sanitizedText });
+      templates.push({ type: 'text', textContent: text });
       continue;
     }
 

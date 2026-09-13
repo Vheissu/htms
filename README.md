@@ -135,7 +135,7 @@ htms render component.html \
   - `<push array="state.list" expr="document.getElementById('txt').value" />` — push; notifies bindings.
   - `<splice array="state.list" index="0" delete="1" values='["New"]' />` — remove/insert; notifies bindings.
 - Control Flow
-  - `<repeat variable="items" index="i">…</repeat>` or `<repeat count="3">…</repeat>` — inside, use `{item}`, property paths like `{item.name}`, and the optional index token (`{i}` here) in text or attribute values.
+  - `<repeat variable="items" item="it" index="i">…</repeat>` or `<repeat count="3">…</repeat>` — `item` names the loop variable (default `item`); inside, use `{it}`, property paths like `{it.name}`, and the optional index token (`{i}` here) in text or attribute values.
   - `<if condition="flag">…</if><else-if condition="other">…</else-if><else>…</else>` — nested tags allowed.
   - `<while condition="state.count < 3" max="1000">…</while>` — guarded loop; `max` prevents infinite loops.
   - `<switch variable="day">…</switch>` or `<switch expr="this.day">…</switch>` — nested tags allowed.
@@ -152,6 +152,8 @@ htms render component.html \
 - Reactive Bindings
   - `<bind selector="#cnt" prop="textContent" expr="String(state.items.length)" />` — binds DOM to an expression; updates on SET/PUSH/SPLICE.
   - Native component markup can also bind directly: `<p title="Count {count}">{label}: {count}</p>`.
+  - Interpolating a boolean attribute (`disabled`, `checked`, `readonly`, …) toggles the attribute's presence instead of rendering `"true"`/`"false"` strings: `<button disabled="{submitting}">`.
+  - HTMS directives nest inside ordinary markup, scoped to the enclosing element: `<div><event target="#btn" type="click">…</event></div>` works without a top-level `<event>`.
 - Lists (keyed)
   - `<keyedlist target="#ul" of="items" item="it" index="i" key="it.id"> <li>{it.name}</li> </keyedlist>` — component-scoped keyed list rendering with item/index interpolation and DOM node preservation for matching keys.
 - Composition
@@ -159,7 +161,8 @@ htms render component.html \
   - Use `<slot></slot>` and `<slot name="heading"></slot>` inside a component to accept default and named content from its parent.
   - SVG and MathML can sit directly in a component template, including interpolated attributes.
 - Events
-  - `<event target="#btn" type="click"> …child tags… </event>` — handler is composed of child tags (no action string required).
+  - `<event target="#btn" type="click"> …child tags… </event>` — handler is composed of child tags (no action string required). `type` accepts any DOM event name, including custom events dispatched by `<emit>`.
+  - Event modifiers: `prevent="true"` calls `event.preventDefault()`, `stop="true"` calls `event.stopPropagation()`, `once="true"` removes the listener after the first fire, `passive="false"` marks the listener non-passive, `key="Enter"` filters `KeyboardEvent`s, and `debounce="200"` delays the handler by N milliseconds. `<event>` tags can nest inside ordinary markup — they bind relative to the enclosing element.
   - `<submit target="#form"> …child tags… </submit>` — form submit helper (prevents default). Use child tags to update state/DOM.
   - `<emit name="count-changed" detail="this.count" />` — dispatches a `CustomEvent` from the component so parents can react. Place it inside an `<event>`/`<submit>` handler. Defaults to `bubbles`/`composed` so the event crosses the shadow boundary; opt out with `bubbles="false"` / `composed="false"`, or set `cancelable="true"`.
 
@@ -179,3 +182,7 @@ htms render component.html \
 ## Security boundary
 
 HTMS rejects known executable sinks and unsafe template attributes, but source files are still application code. Do not compile untrusted markup and execute the result.
+
+- `<inject>` is disabled entirely unless `HTMS_ALLOW_INJECT_TAG=true` is set — and even then it writes through `textContent`, never `innerHTML`.
+- Inline event-handler attributes (`onclick`, `onload`, …) are rejected in markup; use `<event>` instead.
+- File logging is opt-in: set `HTMS_LOG_DIR` to write `htms-combined.log`/`htms-error.log` to a chosen directory. Importing the library never writes files to your working directory.

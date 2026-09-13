@@ -1,5 +1,5 @@
 import validator from 'validator';
-import * as esprima from 'esprima';
+import * as acorn from 'acorn';
 import { CompilerError } from '../types';
 
 const DANGEROUS_PATTERNS = [
@@ -14,12 +14,78 @@ const DANGEROUS_PATTERNS = [
   /vbscript\s*:/i,
   /data\s*:\s*text\/html/i,
   /<script/i,
-  /(?:^|[\s<])on\w+\s*=/i,
+  // Inline event-handler attributes (onclick=, onload=, ...). Restricted to
+  // known handler names so legitimate attributes like `once` or `one` are
+  // not false positives; validateHtmlAttribute rejects `on*` names anyway.
+  /(?:^|[\s<])on(?:abort|auxclick|blur|cancel|click|close|contextmenu|copy|cut|dblclick|drag(?:start|end|enter|leave|over|drop)?|error|focus(?:in|out)?|input|key(?:down|press|up)|load|mouse(?:down|up|move|over|out|enter|leave|wheel)|pointer(?:down|up|move|over|out|enter|leave|cancel)|reset|resize|scroll|select|submit|touch(?:start|end|move|cancel)|wheel)\s*=/i,
   /\.\.\//,
   /~\//,
   /\/proc\//,
   /\/etc\//,
 ];
+
+// Known DOM event-handler content attributes (onclick, onload, ...).
+// Arbitrary `on*` attribute names are inert in HTML — only these actually
+// execute, and names like `once` must not false-positive.
+const EVENT_HANDLER_ATTRIBUTES = new Set([
+  'onabort',
+  'onauxclick',
+  'onbeforeinput',
+  'onblur',
+  'oncancel',
+  'onchange',
+  'onclick',
+  'onclose',
+  'oncontextmenu',
+  'oncopy',
+  'oncuechange',
+  'oncut',
+  'ondblclick',
+  'ondrag',
+  'ondragend',
+  'ondragenter',
+  'ondragleave',
+  'ondragover',
+  'ondragstart',
+  'ondrop',
+  'onerror',
+  'onfocus',
+  'onfocusin',
+  'onfocusout',
+  'oninput',
+  'onkeydown',
+  'onkeypress',
+  'onkeyup',
+  'onload',
+  'onmousedown',
+  'onmouseenter',
+  'onmouseleave',
+  'onmousemove',
+  'onmouseout',
+  'onmouseover',
+  'onmouseup',
+  'onmousewheel',
+  'onpaste',
+  'onpointercancel',
+  'onpointerdown',
+  'onpointerenter',
+  'onpointerleave',
+  'onpointermove',
+  'onpointerout',
+  'onpointerover',
+  'onpointerup',
+  'onreset',
+  'onresize',
+  'onscroll',
+  'onscrollend',
+  'onselect',
+  'onsubmit',
+  'ontouchcancel',
+  'ontouchend',
+  'ontouchmove',
+  'ontouchstart',
+  'onwheel',
+]);
 
 const VALID_JS_IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 const RESERVED_WORDS = new Set([
@@ -122,7 +188,7 @@ export class SecurityValidator {
 
   static isSideEffectFreeExpression(expression: string): boolean {
     try {
-      const ast = esprima.parseScript(`(${expression})`);
+      const ast = acorn.parse(`(${expression})`, { ecmaVersion: 'latest' });
       const forbiddenTypes = new Set([
         'AssignmentExpression',
         'AwaitExpression',
@@ -190,6 +256,25 @@ export class SecurityValidator {
     }
 
     return validator.escape(input);
+  }
+
+  // Embed a runtime string into generated JavaScript source. This is the
+  // only correct way to quote arbitrary text; escaping for a template
+  // literal and then embedding inside quotes is an injection bug.
+  static jsStringLiteral(value: string): string {
+    return JSON.stringify(value);
+  }
+
+  static isAllowedSelector(selector: string): boolean {
+    if (!selector || typeof selector !== 'string') {
+      return false;
+    }
+    // CSS combinators, attribute selectors (including quoted values),
+    // pseudo-classes/elements, selector lists and the universal selector.
+    // Values are always embedded via jsStringLiteral, so quotes are safe;
+    // reject only characters that smuggle markup or escape sequences
+    // (`<`, backtick, backslash, braces).
+    return /^[a-zA-Z0-9_#.[\]="':()\s>+~*,|^$%!-]+$/.test(selector);
   }
 
   static validateContent(content: string): CompilerError[] {
@@ -300,7 +385,10 @@ export class SecurityValidator {
     }
 
     const normalizedName = name.toLowerCase();
-    if (normalizedName.startsWith('on') || normalizedName === 'srcdoc') {
+    if (
+      EVENT_HANDLER_ATTRIBUTES.has(normalizedName) ||
+      normalizedName === 'srcdoc'
+    ) {
       errors.push({
         type: 'security',
         message: `Dangerous attribute not allowed: ${name}`,

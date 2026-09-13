@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { handleElement } from './handlers';
 import * as escodegen from 'escodegen';
-import * as esprima from 'esprima';
+import * as acorn from 'acorn';
 import {
   ParseOptions,
   CompilerResult,
@@ -116,17 +116,22 @@ export function generateFinalJsCode(
   }
 
   try {
-    // Validate generated JavaScript syntax
-    const parse =
+    // Validate generated JavaScript syntax. Acorn parses modern syntax
+    // (optional chaining, nullish coalescing, etc.) that esprima could not.
+    const comments: acorn.Comment[] = [];
+    const tokens: acorn.Token[] = [];
+    const sourceType =
       options.outputFormat === undefined || options.outputFormat === 'esm'
-        ? esprima.parseModule
-        : esprima.parseScript;
-    let ast = parse(jsSnippets, {
-      range: true,
-      tokens: true,
-      comment: true,
-      tolerant: !options.strictMode, // Allow some syntax errors in non-strict mode
-    });
+        ? 'module'
+        : 'script';
+    const ast = acorn.parse(jsSnippets, {
+      ecmaVersion: 'latest',
+      sourceType,
+      ranges: true,
+      locations: true,
+      onComment: comments,
+      onToken: tokens,
+    }) as acorn.Program & { comments?: unknown[]; tokens?: unknown[] };
 
     // Security check on generated AST
     const securityErrors = validateASTSecurity(ast);
@@ -137,10 +142,26 @@ export function generateFinalJsCode(
       }
     }
 
-    // Attach comments and generate code
-    ast = escodegen.attachComments(ast, ast.comments, ast.tokens);
+    // Attach comments in the esprima-compatible shape escodegen expects
+    const esprimaComments = comments.map((comment) => ({
+      type: comment.type === 'Line' ? 'Line' : 'Block',
+      value: comment.value,
+      range: comment.range,
+    }));
+    const esprimaTokens = tokens.map((token) => ({
+      type: 'Punctuator',
+      value: jsSnippets.slice(token.start, token.end),
+      range: token.range,
+    }));
+    ast.comments = esprimaComments;
+    ast.tokens = esprimaTokens;
+    const astWithComments = escodegen.attachComments(
+      ast,
+      esprimaComments,
+      esprimaTokens
+    );
 
-    const generatedCode = escodegen.generate(ast, {
+    const generatedCode = escodegen.generate(astWithComments, {
       comment: true,
       format: {
         preserveBlankLines: true,
@@ -165,10 +186,11 @@ export function generateFinalJsCode(
 
     if (
       error instanceof Error &&
-      'lineNumber' in error &&
-      typeof error.lineNumber === 'number'
+      'loc' in error &&
+      error.loc &&
+      typeof (error.loc as { line?: unknown }).line === 'number'
     ) {
-      syntaxError.line = error.lineNumber;
+      syntaxError.line = (error.loc as { line: number }).line;
       syntaxError.source = 'generated';
     }
 

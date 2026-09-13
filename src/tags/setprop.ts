@@ -17,8 +17,7 @@ function buildValueExpr(value: string): string | null {
   if (value === 'true' || value === 'false' || value === 'null') return value;
   if (SecurityValidator.isJavaScriptPath(value)) return value;
   // Fallback to string literal
-  const escaped = SecurityValidator.escapeForTemplate(value);
-  return `"${escaped}"`;
+  return SecurityValidator.jsStringLiteral(value);
 }
 
 export const handleSetPropTag: TagHandler = (
@@ -41,7 +40,7 @@ export const handleSetPropTag: TagHandler = (
       });
       return { code: '', errors, warnings };
     }
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+    if (!SecurityValidator.isAllowedSelector(selector)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector',
@@ -89,12 +88,12 @@ export const handleSetPropTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    const sel = SecurityValidator.escapeForTemplate(selector);
+    const sel = SecurityValidator.jsStringLiteral(selector);
     const parts = prop.split('.');
     const head = parts.shift()!;
     const tail = parts;
-    let path = `el["${head}"]`;
-    for (const p of tail) path += `["${p}"]`;
+    let path = `el[${JSON.stringify(head)}]`;
+    for (const p of tail) path += `[${JSON.stringify(p)}]`;
 
     const isComponentContext = options.parentContext === 'component';
     const code = isComponentContext
@@ -102,7 +101,7 @@ export const handleSetPropTag: TagHandler = (
       : `
       (function(){
         try {
-          const el = document.querySelector(\`${sel}\`);
+          const el = document.querySelector(${sel});
           if (!el) { console.warn('SETPROP target not found: ${sel}'); return; }
           ${path} = ${valExpr};
         } catch (error) {

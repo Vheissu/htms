@@ -45,7 +45,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
-    "compile": "ts-node main.ts",
+    "compile": "ts-node src/cli.ts compile",
     "demo:build": "ts-node scripts/build-demos.ts",
     "demo:serve": "npm run build && npm run demo:build && ts-node scripts/serve-demos.ts",
     "lint": "eslint \"**/*.ts\"",
@@ -68,9 +68,9 @@
     }
   },
   "dependencies": {
+    "acorn": "^8.11.3",
     "commander": "^11.1.0",
     "escodegen": "^2.1.0",
-    "esprima": "^4.0.1",
     "jsdom": "^22.1.0",
     "validator": "^13.11.0",
     "winston": "^3.11.0"
@@ -79,7 +79,6 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.48.0",
     "@types/escodegen": "^0.0.7",
-    "@types/esprima": "^4.0.3",
     "@types/jest": "^30.0.0",
     "@types/jsdom": "^21.1.1",
     "@types/node": "^20.8.0",

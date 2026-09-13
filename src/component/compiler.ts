@@ -17,9 +17,12 @@ import {
   StyleDirective,
   StateDirective,
   TemplateNode,
+  walkComponentIR,
+  walkDirectives,
 } from './ir';
 import {
   serializeTemplateNodes,
+  templateNodesHaveDirectives,
   templateNodesHaveInterpolations,
   templateNodesToHTML,
 } from './template-serializer';
@@ -54,46 +57,13 @@ interface ComponentProperty {
   type: ComponentInputType;
 }
 
-function collectEmittedEventNames(directives?: DirectiveNode[]): string[] {
+function collectEmittedEventNames(ir: ComponentIR): string[] {
   const names = new Set<string>();
-
-  const visit = (items?: DirectiveNode[]): void => {
-    if (!items) return;
-
-    for (const directive of items) {
-      switch (directive.kind) {
-        case 'statement':
-          if (directive.emittedEventName) {
-            names.add(directive.emittedEventName);
-          }
-          break;
-        case 'loop':
-        case 'event':
-        case 'keyed-list':
-        case 'append':
-        case 'while':
-          visit(directive.directives);
-          break;
-        case 'condition':
-          visit(directive.whenTrue.directives);
-          visit(directive.whenFalse?.directives);
-          break;
-        case 'switch':
-          directive.cases.forEach((switchCase) => visit(switchCase.directives));
-          visit(directive.defaultCase?.directives);
-          break;
-        case 'state':
-        case 'visibility':
-        case 'attribute':
-        case 'bind':
-        case 'class':
-        case 'style':
-          break;
-      }
+  walkComponentIR(ir, (directive) => {
+    if (directive.kind === 'statement' && directive.emittedEventName) {
+      names.add(directive.emittedEventName);
     }
-  };
-
-  visit(directives);
+  });
   return Array.from(names);
 }
 
@@ -133,304 +103,93 @@ function isNativeElementProperty(element: Element, name: string): boolean {
   return name in element;
 }
 
-function containsState(directives?: DirectiveNode[]): boolean {
-  if (!directives) return false;
-  for (const directive of directives) {
-    switch (directive.kind) {
-      case 'state':
-        return true;
-      case 'loop':
-        if (containsState(directive.directives)) return true;
-        break;
-      case 'condition':
-        if (containsState(directive.whenTrue.directives)) return true;
-        if (
-          directive.whenFalse &&
-          containsState(directive.whenFalse.directives)
-        )
-          return true;
-        break;
-      case 'event':
-        if (containsState(directive.directives)) return true;
-        break;
-      case 'keyed-list':
-        if (containsState(directive.directives)) return true;
-        break;
-      case 'visibility':
-      case 'attribute':
-      case 'bind':
-        break;
-      case 'append':
-        if (containsState(directive.directives)) return true;
-        break;
-      case 'while':
-        if (containsState(directive.directives)) return true;
-        break;
-      case 'class':
-      case 'style':
-        break;
-      case 'switch':
-        if (directive.cases.some((c) => containsState(c.directives)))
-          return true;
-        if (
-          directive.defaultCase &&
-          containsState(directive.defaultCase.directives)
-        )
-          return true;
-        break;
+function containsState(ir: ComponentIR): boolean {
+  let found = false;
+  walkComponentIR(ir, (directive) => {
+    if (directive.kind === 'state') {
+      found = true;
     }
-  }
-  return false;
+  });
+  return found;
 }
 
-function containsEvent(directives?: DirectiveNode[]): boolean {
-  if (!directives) return false;
-
-  for (const directive of directives) {
-    switch (directive.kind) {
-      case 'event':
-        return true;
-      case 'loop':
-        if (containsEvent(directive.directives)) return true;
-        break;
-      case 'condition':
-        if (containsEvent(directive.whenTrue.directives)) return true;
-        if (
-          directive.whenFalse &&
-          containsEvent(directive.whenFalse.directives)
-        )
-          return true;
-        break;
-      case 'keyed-list':
-        if (containsEvent(directive.directives)) return true;
-        break;
-      case 'append':
-        if (containsEvent(directive.directives)) return true;
-        break;
-      case 'while':
-        if (containsEvent(directive.directives)) return true;
-        break;
-      case 'switch':
-        if (directive.cases.some((c) => containsEvent(c.directives)))
-          return true;
-        if (
-          directive.defaultCase &&
-          containsEvent(directive.defaultCase.directives)
-        )
-          return true;
-        break;
-      case 'state':
-      case 'visibility':
-      case 'attribute':
-      case 'bind':
-      case 'class':
-      case 'style':
-      case 'statement':
-        break;
+function containsEvent(ir: ComponentIR): boolean {
+  let found = false;
+  walkComponentIR(ir, (directive) => {
+    if (directive.kind === 'event') {
+      found = true;
     }
-  }
-
-  return false;
+  });
+  return found;
 }
 
-function containsRuntimeDependency(directives?: DirectiveNode[]): boolean {
-  if (!directives) return false;
-
-  for (const directive of directives) {
-    switch (directive.kind) {
-      case 'statement':
-        if (directive.requiresRuntime) return true;
-        break;
-      case 'loop':
-      case 'event':
-      case 'keyed-list':
-      case 'append':
-      case 'while':
-        if (containsRuntimeDependency(directive.directives)) return true;
-        break;
-      case 'condition':
-        if (containsRuntimeDependency(directive.whenTrue.directives))
-          return true;
-        if (
-          directive.whenFalse &&
-          containsRuntimeDependency(directive.whenFalse.directives)
-        ) {
-          return true;
-        }
-        break;
-      case 'switch':
-        if (
-          directive.cases.some((switchCase) =>
-            containsRuntimeDependency(switchCase.directives)
-          )
-        ) {
-          return true;
-        }
-        if (
-          directive.defaultCase &&
-          containsRuntimeDependency(directive.defaultCase.directives)
-        ) {
-          return true;
-        }
-        break;
-      case 'state':
-      case 'visibility':
-      case 'attribute':
-      case 'bind':
-      case 'class':
-      case 'style':
-        break;
+function containsRuntimeDependency(ir: ComponentIR): boolean {
+  let found = false;
+  walkComponentIR(ir, (directive) => {
+    if (directive.kind === 'statement' && directive.requiresRuntime) {
+      found = true;
     }
-  }
-
-  return false;
+  });
+  return found;
 }
 
-function collectControlledSelectors(directives?: DirectiveNode[]): string[] {
+function collectControlledSelectors(ir: ComponentIR): string[] {
   const selectors = new Set<string>();
-
-  const visit = (items?: DirectiveNode[]): void => {
-    if (!items) return;
-
-    for (const directive of items) {
-      switch (directive.kind) {
-        case 'bind':
-          selectors.add(directive.selector);
-          break;
-        case 'attribute':
-          if (directive.target === 'property') {
-            selectors.add(directive.selector);
-          }
-          break;
-        case 'loop':
-        case 'event':
-        case 'keyed-list':
-        case 'append':
-        case 'while':
-          visit(directive.directives);
-          break;
-        case 'condition':
-          visit(directive.whenTrue.directives);
-          visit(directive.whenFalse?.directives);
-          break;
-        case 'switch':
-          directive.cases.forEach((switchCase) => visit(switchCase.directives));
-          visit(directive.defaultCase?.directives);
-          break;
-        case 'state':
-        case 'visibility':
-        case 'class':
-        case 'style':
-        case 'statement':
-          break;
-      }
+  walkComponentIR(ir, (directive) => {
+    if (directive.kind === 'bind') {
+      selectors.add(directive.selector);
     }
-  };
-
-  visit(directives);
+    if (directive.kind === 'attribute' && directive.target === 'property') {
+      selectors.add(directive.selector);
+    }
+  });
   return Array.from(selectors);
 }
 
-function collectStateRoots(directives?: DirectiveNode[]): string[] {
+function collectStateRoots(ir: ComponentIR): string[] {
   const roots = new Set<string>();
-
-  const visit = (items?: DirectiveNode[]): void => {
-    if (!items) return;
-
-    for (const directive of items) {
-      switch (directive.kind) {
-        case 'state':
-          if (directive.path.length > 0) {
-            roots.add(directive.path[0]);
-          }
-          break;
-        case 'loop':
-          visit(directive.directives);
-          break;
-        case 'condition':
-          visit(directive.whenTrue.directives);
-          if (directive.whenFalse) {
-            visit(directive.whenFalse.directives);
-          }
-          break;
-        case 'event':
-          visit(directive.directives);
-          break;
-        case 'keyed-list':
-          visit(directive.directives);
-          break;
-        case 'append':
-          visit(directive.directives);
-          break;
-        case 'while':
-          visit(directive.directives);
-          break;
-        case 'switch':
-          for (const switchCase of directive.cases) {
-            visit(switchCase.directives);
-          }
-          if (directive.defaultCase) {
-            visit(directive.defaultCase.directives);
-          }
-          break;
-        case 'visibility':
-        case 'attribute':
-        case 'bind':
-        case 'class':
-        case 'style':
-        case 'statement':
-          break;
-      }
+  walkComponentIR(ir, (directive) => {
+    if (directive.kind === 'state' && directive.path.length > 0) {
+      roots.add(directive.path[0]);
     }
-  };
-
-  visit(directives);
+  });
   return Array.from(roots);
 }
 
-function collectInitialStateRoots(directives?: DirectiveNode[]): string[] {
+function collectInitialStateRoots(ir: ComponentIR): string[] {
   const roots = new Set<string>();
-
-  const visit = (items?: DirectiveNode[]): void => {
-    if (!items) return;
-
-    for (const directive of items) {
-      switch (directive.kind) {
-        case 'state':
-          if (directive.mode === 'init' && directive.path.length > 0) {
-            roots.add(directive.path[0]);
-          }
-          break;
-        case 'loop':
-        case 'event':
-        case 'keyed-list':
-        case 'append':
-        case 'while':
-          visit(directive.directives);
-          break;
-        case 'condition':
-          visit(directive.whenTrue.directives);
-          visit(directive.whenFalse?.directives);
-          break;
-        case 'switch':
-          for (const switchCase of directive.cases) {
-            visit(switchCase.directives);
-          }
-          visit(directive.defaultCase?.directives);
-          break;
-        case 'visibility':
-        case 'attribute':
-        case 'bind':
-        case 'class':
-        case 'style':
-        case 'statement':
-          break;
-      }
+  walkComponentIR(ir, (directive) => {
+    if (
+      directive.kind === 'state' &&
+      directive.mode === 'init' &&
+      directive.path.length > 0
+    ) {
+      roots.add(directive.path[0]);
     }
-  };
-
-  visit(directives);
+  });
   return Array.from(roots);
+}
+
+// State init/derive directives can appear anywhere in the IR (top level,
+// inside branches, or embedded in markup). They are hoisted to the top of
+// render() so declared state is initialized before any template uses it.
+function collectLifecycleStateDirectives(ir: ComponentIR): {
+  init: StateDirective[];
+  derive: StateDirective[];
+} {
+  const init: StateDirective[] = [];
+  const derive: StateDirective[] = [];
+  walkComponentIR(ir, (directive) => {
+    if (directive.kind !== 'state') {
+      return;
+    }
+    if (directive.mode === 'init') {
+      init.push(directive);
+    } else if (directive.mode === 'derive') {
+      derive.push(directive);
+    }
+  });
+  return { init, derive };
 }
 
 export function compileComponents(
@@ -577,7 +336,7 @@ function compileComponentElement(
   warnings.push(...renderWarnings);
 
   const inputNames = new Set(metadata.inputs.map((input) => input.propName));
-  for (const stateName of collectInitialStateRoots(renderIR.directives)) {
+  for (const stateName of collectInitialStateRoots(renderIR)) {
     if (
       isReservedComponentProperty(stateName) ||
       isNativeElementProperty(element, stateName)
@@ -618,14 +377,14 @@ function compileComponentElement(
     codeSnippets: [classCode, registrationCode],
     errors,
     warnings,
-    requiresRuntime: containsRuntimeDependency(renderIR.directives),
+    requiresRuntime: containsRuntimeDependency(renderIR),
     artifact: {
       name: metadata.tagName,
       className: metadata.className,
       tagName: metadata.tagName,
       shadowMode: metadata.shadowMode,
       inputs: metadata.inputs.map((input) => ({ ...input })),
-      events: collectEmittedEventNames(renderIR.directives).map((name) => ({
+      events: collectEmittedEventNames(renderIR).map((name) => ({
         name,
       })),
       code: [classCode, registrationCode].join('\n\n'),
@@ -967,31 +726,48 @@ function buildComponentClass(
   const componentInterpolationVars = Array.from(
     new Set([
       ...metadata.inputs.map((input) => input.propName),
-      ...collectStateRoots(renderIR.directives),
+      ...collectStateRoots(renderIR),
     ])
   );
   const inputNames = new Set(metadata.inputs.map((input) => input.propName));
-  const reactiveStateRoots = collectInitialStateRoots(
-    renderIR.directives
-  ).filter((name) => !inputNames.has(name));
+  const reactiveStateRoots = collectInitialStateRoots(renderIR).filter(
+    (name) => !inputNames.has(name)
+  );
   const hasDynamicTemplateValues = templateNodesHaveInterpolations(
     renderIR.templateNodes,
     [],
     componentInterpolationVars
   );
   const hasStaticTemplate =
-    templateHTML.trim().length > 0 && !hasDynamicTemplateValues;
-  const hasEventDirectives = containsEvent(renderIR.directives);
-  const hasStateDirectives = containsState(renderIR.directives);
+    templateHTML.trim().length > 0 &&
+    !hasDynamicTemplateValues &&
+    !templateNodesHaveDirectives(renderIR.templateNodes);
+  const hasEventDirectives = containsEvent(renderIR);
+  const hasStateDirectives = containsState(renderIR);
   const preservesFocus = metadata.inputs.length > 0 || hasStateDirectives;
-  const controlledSelectors = collectControlledSelectors(renderIR.directives);
+  const controlledSelectors = collectControlledSelectors(renderIR);
+  const directiveCounter = { value: 0 };
+  const renderDirectiveChild = (
+    directive: DirectiveNode,
+    targetVar: string
+  ): string[] =>
+    renderDirective(
+      directive,
+      targetVar,
+      directiveCounter,
+      '',
+      [],
+      componentInterpolationVars
+    );
   const templateStatements = hasStaticTemplate
     ? ''
     : serializeTemplateNodes(
         renderIR.templateNodes,
         renderTargetVar,
         [],
-        componentInterpolationVars
+        componentInterpolationVars,
+        renderDirectiveChild,
+        directiveCounter
       );
 
   const renderLines: string[] = [
@@ -1012,16 +788,12 @@ function buildComponentClass(
     renderLines.push(`    this.__htmsCleanupRenderListeners();`);
   }
 
-  for (const directive of renderIR.directives) {
-    if (directive.kind === 'state' && directive.mode === 'init') {
-      renderLines.push(...renderStateDirective(directive, '    '));
-    }
+  const lifecycleState = collectLifecycleStateDirectives(renderIR);
+  for (const directive of lifecycleState.init) {
+    renderLines.push(...renderStateDirective(directive, '    '));
   }
-
-  for (const directive of renderIR.directives) {
-    if (directive.kind === 'state' && directive.mode === 'derive') {
-      renderLines.push(...renderStateDirective(directive, '    '));
-    }
+  for (const directive of lifecycleState.derive) {
+    renderLines.push(...renderStateDirective(directive, '    '));
   }
 
   if (hasStaticTemplate) {
@@ -1036,7 +808,6 @@ function buildComponentClass(
     }
   }
 
-  const directiveCounter = { value: 0 };
   for (const directive of renderIR.directives) {
     if (
       directive.kind === 'state' &&
@@ -1325,24 +1096,24 @@ function buildComponentClass(
 `;
 
   const eventHelpers = hasEventDirectives
-    ? `  __htmsMarkListener(target, eventType, handler) {
+    ? `  __htmsMarkListener(target, eventType, handler, options) {
     if (!target.__htmsListeners) {
       target.__htmsListeners = [];
     }
-    target.__htmsListeners.push({ eventType, handler });
+    target.__htmsListeners.push({ eventType, handler, options });
   }
 
-  __htmsListen(target, eventType, handler) {
-    target.addEventListener(eventType, handler);
+  __htmsListen(target, eventType, handler, options) {
+    target.addEventListener(eventType, handler, options);
     this.__htmsRenderCleanups.push(() => {
-      target.removeEventListener(eventType, handler);
+      target.removeEventListener(eventType, handler, options);
     });
   }
 
   __htmsActivateListeners(target, source) {
     const listeners = source.__htmsListeners || [];
     for (const listener of listeners) {
-      this.__htmsListen(target, listener.eventType, listener.handler);
+      this.__htmsListen(target, listener.eventType, listener.handler, listener.options);
     }
   }
 
@@ -1810,6 +1581,11 @@ function renderDirective(
   }
 
   if (directive.kind === 'state') {
+    // init/derive directives are hoisted to the top of render() so state
+    // is initialized before any template or directive reads it.
+    if (directive.mode === 'init' || directive.mode === 'derive') {
+      return [];
+    }
     return renderStateDirective(directive, indent);
   }
 
@@ -1944,45 +1720,86 @@ function renderEventDirective(
   const lines: string[] = [];
   const handlerVar = `_handler${counter.value++}`;
   const eventRootVar = `_eventRoot${counter.value++}`;
+  const timerVar = `_timer${counter.value++}`;
   const innerIndent = `${indent}  `;
   const bodyIndent = `${innerIndent}    `;
+  const modifiers = directive.modifiers ?? {};
 
-  lines.push(`${indent}{`);
-  lines.push(
-    `${innerIndent}const eventTargets = ${targetVar}.querySelectorAll(${JSON.stringify(directive.selector)});`
-  );
-  lines.push(`${innerIndent}eventTargets.forEach(targetEl => {`);
-  lines.push(`${bodyIndent}const ${handlerVar} = (event) => {`);
-  lines.push(
-    `${bodyIndent}  const ${eventRootVar} = this.__htmsResolveEventRoot(event.currentTarget, ${targetVar});`
-  );
+  // The statements that run when the event fires (or after debounce).
+  const bodyLines: string[] = [
+    `const ${eventRootVar} = this.__htmsResolveEventRoot(event.currentTarget, ${targetVar});`,
+  ];
   if (directive.body.length > 0) {
-    for (const line of directive.body) {
-      lines.push(`${bodyIndent}  ${line}`);
-    }
+    bodyLines.push(...directive.body);
   } else {
-    lines.push(`${bodyIndent}  // No event body`);
+    bodyLines.push('// No event body');
   }
   if (directive.directives) {
     for (const nested of directive.directives) {
-      lines.push(
+      bodyLines.push(
         ...renderDirective(
           nested,
           eventRootVar,
           counter,
-          `${bodyIndent}  `,
+          '',
           scopeVars,
           componentInterpolationVars
         )
       );
     }
   }
-  if (directive.directives && containsState(directive.directives)) {
-    lines.push(`${bodyIndent}  this.requestUpdate();`);
+  let hasStateChange = false;
+  walkDirectives(directive.directives, (nested) => {
+    if (nested.kind === 'state') {
+      hasStateChange = true;
+    }
+  });
+  if (hasStateChange) {
+    bodyLines.push(`this.requestUpdate();`);
+  }
+
+  const listenerOptions =
+    modifiers.once || modifiers.passive
+      ? `, { once: ${modifiers.once === true}, passive: ${modifiers.passive === true} }`
+      : '';
+
+  lines.push(`${indent}{`);
+  lines.push(
+    `${innerIndent}const eventTargets = ${targetVar}.querySelectorAll(${JSON.stringify(directive.selector)});`
+  );
+  lines.push(`${innerIndent}eventTargets.forEach(targetEl => {`);
+  if (modifiers.debounceMs !== undefined) {
+    lines.push(`${bodyIndent}let ${timerVar};`);
+  }
+  lines.push(`${bodyIndent}const ${handlerVar} = (event) => {`);
+  if (modifiers.key) {
+    lines.push(
+      `${bodyIndent}  if (event.key !== ${JSON.stringify(modifiers.key)}) { return; }`
+    );
+  }
+  if (modifiers.prevent) {
+    lines.push(`${bodyIndent}  event.preventDefault();`);
+  }
+  if (modifiers.stop) {
+    lines.push(`${bodyIndent}  event.stopPropagation();`);
+  }
+  if (modifiers.debounceMs !== undefined) {
+    lines.push(`${bodyIndent}  clearTimeout(${timerVar});`);
+    lines.push(
+      `${bodyIndent}  ${timerVar} = setTimeout(() => {`
+    );
+    for (const line of bodyLines) {
+      lines.push(`${bodyIndent}    ${line}`);
+    }
+    lines.push(`${bodyIndent}  }, ${modifiers.debounceMs});`);
+  } else {
+    for (const line of bodyLines) {
+      lines.push(`${bodyIndent}  ${line}`);
+    }
   }
   lines.push(`${bodyIndent}};`);
   lines.push(
-    `${bodyIndent}this.__htmsMarkListener(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar});`
+    `${bodyIndent}this.__htmsMarkListener(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar}${listenerOptions});`
   );
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
@@ -2006,15 +1823,9 @@ function renderVisibilityDirective(
     `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
   );
   lines.push(`${innerIndent}targets.forEach(node => {`);
-  if (directive.mode === 'toggle') {
-    lines.push(
-      `${innerIndent}  node.style.display = (${condition}) ? '' : 'none';`
-    );
-  } else {
-    lines.push(
-      `${innerIndent}  node.style.display = (${condition}) ? '' : 'none';`
-    );
-  }
+  lines.push(
+    `${innerIndent}  node.style.display = (${condition}) ? '' : 'none';`
+  );
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
 
@@ -2241,7 +2052,17 @@ function fillFragment(
     template,
     fragmentVar,
     scopeVars,
-    componentInterpolationVars
+    componentInterpolationVars,
+    (nested, target) =>
+      renderDirective(
+        nested,
+        target,
+        counter,
+        '',
+        scopeVars,
+        componentInterpolationVars
+      ),
+    counter
   );
 
   if (serialized.trim().length > 0) {

@@ -87,7 +87,7 @@ export const handleWhileTag: TagHandler = (
         bodyCode += `${text}\n`;
         templateNodes.push({
           type: 'text',
-          textContent: SecurityValidator.sanitizeString(text),
+          textContent: text,
         });
         continue;
       }

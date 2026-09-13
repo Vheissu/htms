@@ -38,29 +38,24 @@ export const handleCommentTag: TagHandler = (
       }
     }
 
-    // Sanitize comment content to prevent code injection through comments
-    const sanitizedContent = SecurityValidator.sanitizeString(content);
-
     // Escape for safe comment generation - prevent comment breakout
-    const escapedContent = sanitizedContent
+    const escapedContent = content
       .replace(/\*\//g, '* /') // Prevent comment block termination
       .replace(/\/\*/g, '/ *') // Prevent comment block start
       .replace(/\n/g, '\n// '); // Handle multiline comments
 
-    // Generate safe comment
-    const code = `// ${escapedContent}`;
-
-    if (sanitizedContent !== content) {
+    if (escapedContent !== content) {
       warnings.push({
-        message: 'Comment content was sanitized for security',
+        message: 'Comment content was rewritten to prevent comment breakout',
         tag: 'COMMENT',
       });
     }
 
+    // Generate safe comment
+    const code = `// ${escapedContent}`;
+
     CompilerLogger.logDebug('Generated comment', {
       originalLength: content.length,
-      sanitizedLength: sanitizedContent.length,
-      wasEscaped: sanitizedContent !== content,
     });
 
     return { code, errors, warnings };

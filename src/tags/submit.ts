@@ -24,7 +24,7 @@ export const handleSubmitTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
+    if (!SecurityValidator.isAllowedSelector(target)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector format for target',
@@ -45,10 +45,10 @@ export const handleSubmitTag: TagHandler = (
       if (r.code) bodyCode += r.code + '\n';
     }
 
-    const sel = SecurityValidator.escapeForTemplate(target);
+    const sel = SecurityValidator.jsStringLiteral(target);
     const code = `
       try {
-        const forms = document.querySelectorAll(\`${sel}\`);
+        const forms = document.querySelectorAll(${sel});
         if (forms.length === 0) {
           console.warn('No elements found for submit target: ${sel}');
         }

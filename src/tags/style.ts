@@ -14,8 +14,7 @@ function buildValueExpr(value: string): string | null {
   if (SecurityValidator.isNumericLiteral(value)) return value;
   if (value === 'true' || value === 'false' || value === 'null') return value;
   if (SecurityValidator.isJavaScriptPath(value)) return value;
-  const escaped = SecurityValidator.escapeForTemplate(value);
-  return `"${escaped}"`;
+  return SecurityValidator.jsStringLiteral(value);
 }
 
 function isCssProperty(prop: string): boolean {
@@ -45,7 +44,7 @@ export const handleStyleTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+    if (!SecurityValidator.isAllowedSelector(selector)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector',
@@ -102,19 +101,20 @@ export const handleStyleTag: TagHandler = (
     }
 
     const isComponentContext = options.parentContext === 'component';
-    const selEsc = SecurityValidator.escapeForTemplate(selector);
+    const selEsc = SecurityValidator.jsStringLiteral(selector);
+    const propLiteral = SecurityValidator.jsStringLiteral(prop);
 
     const code = isComponentContext
       ? ''
       : `
       (function(){
         try {
-          const targets = document.querySelectorAll(\`${selEsc}\`);
+          const targets = document.querySelectorAll(${selEsc});
           targets.forEach(node => {
             ${
               isCssProperty(prop)
-                ? `node.style.setProperty('${prop}', ${valueExpr});`
-                : `node.style['${prop}'] = ${valueExpr};`
+                ? `node.style.setProperty(${propLiteral}, ${valueExpr});`
+                : `node.style[${propLiteral}] = ${valueExpr};`
             }
           });
         } catch (error) {

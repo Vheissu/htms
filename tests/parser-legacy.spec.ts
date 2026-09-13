@@ -1,5 +1,5 @@
-import { parseHTML } from '../parser';
-import { CompilerResult, ParseOptions } from '../types';
+import { parseHTML } from '../src/parser';
+import { CompilerResult, ParseOptions } from '../src/types';
 
 function compileComponent(
   markup: string,

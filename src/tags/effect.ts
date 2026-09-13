@@ -3,8 +3,20 @@ import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { handleElement } from '../handlers';
+import { getNodeLocation } from '../diagnostics';
 
 let effectCounter = 0;
+
+// Location-based ids keep compiled output deterministic; the counter is a
+// fallback for elements parsed without node locations (unit tests, DOM
+// fragments created directly).
+function stableId(prefix: string, element: Element): string {
+  const location = getNodeLocation(element);
+  if (location) {
+    return `${prefix}_${location.line}_${location.column}`;
+  }
+  return `${prefix}_${++effectCounter}`;
+}
 
 function splitStatements(source: string): string[] {
   return source
@@ -144,7 +156,7 @@ export const handleEffectTag: TagHandler = (
       ? immediateAttr.toLowerCase() !== 'false'
       : true;
     const once = onceAttr ? onceAttr.toLowerCase() === 'true' : false;
-    const effectId = `__effect_${++effectCounter}`;
+    const effectId = stableId('__effect', element);
     const runtime = ensureRuntime();
     const ownerExpr = options.componentContext ? 'this' : 'null';
 

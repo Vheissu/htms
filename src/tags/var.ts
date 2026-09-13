@@ -193,8 +193,7 @@ export const handleVarTag: TagHandler = (
     }
     // Default to string literal (escaped)
     else {
-      const escapedValue = SecurityValidator.escapeForTemplate(value);
-      processedValue = `"${escapedValue}"`;
+      processedValue = SecurityValidator.jsStringLiteral(value);
 
       warnings.push({
         message: 'Value treated as string literal and escaped for security',

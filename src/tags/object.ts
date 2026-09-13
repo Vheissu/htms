@@ -204,8 +204,7 @@ export const handleObjectTag: TagHandler = (
         }
         // Treat as string literal (escape and quote)
         else {
-          const escapedValue = SecurityValidator.escapeForTemplate(propValue);
-          processedValue = `"${escapedValue}"`;
+          processedValue = SecurityValidator.jsStringLiteral(propValue);
         }
 
         properties.push(`${propName}: ${processedValue}`);

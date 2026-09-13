@@ -1,27 +1,67 @@
-import { TemplateNode } from './ir';
+import { DirectiveNode, TemplateNode } from './ir';
 
 const IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+
+// Attributes that are boolean in HTML: presence means true, so a dynamic
+// value must toggle the attribute rather than set a literal string.
+const BOOLEAN_ATTRIBUTES = new Set([
+  'allowfullscreen',
+  'async',
+  'autofocus',
+  'autoplay',
+  'checked',
+  'controls',
+  'default',
+  'defer',
+  'disabled',
+  'formnovalidate',
+  'hidden',
+  'inert',
+  'ismap',
+  'itemscope',
+  'loop',
+  'multiple',
+  'muted',
+  'nomodule',
+  'novalidate',
+  'open',
+  'playsinline',
+  'readonly',
+  'required',
+  'reversed',
+  'selected',
+]);
+
+// Renders an embedded directive against a target element variable. The
+// returned lines use relative indentation — the caller prefixes them.
+export type DirectiveChildRenderer = (
+  directive: DirectiveNode,
+  targetVar: string
+) => string[];
 
 export function serializeTemplateNodes(
   nodes: TemplateNode[],
   targetVar: string,
   interpolationVars: string[] = [],
-  componentInterpolationVars: string[] = []
+  componentInterpolationVars: string[] = [],
+  renderDirectiveChild?: DirectiveChildRenderer,
+  nameCounter?: { value: number }
 ): string {
   if (nodes.length === 0) {
     return '';
   }
 
-  let counter = 0;
+  const counter = nameCounter ?? { value: 0 };
   const statements: string[] = [];
   for (const node of nodes) {
     statements.push(
       ...serializeNode(
         node,
         targetVar,
-        () => `_el${counter++}`,
+        () => `_el${counter.value++}`,
         interpolationVars,
-        componentInterpolationVars
+        componentInterpolationVars,
+        renderDirectiveChild
       )
     );
   }
@@ -35,6 +75,18 @@ export function templateNodesHaveInterpolations(
 ): boolean {
   return nodes.some((node) =>
     nodeHasInterpolation(node, interpolationVars, componentInterpolationVars)
+  );
+}
+
+export function templateNodesHaveDirectives(nodes: TemplateNode[]): boolean {
+  return nodes.some(
+    (node) =>
+      node.type === 'element' &&
+      (node.children ?? []).some(
+        (child) =>
+          child.type === 'directive' ||
+          (child.type === 'element' && templateNodesHaveDirectives([child]))
+      )
   );
 }
 
@@ -53,7 +105,12 @@ function nodeToHtml(node: TemplateNode): string {
         .join(' ')
     : '';
 
-  const children = node.children ? node.children.map(nodeToHtml).join('') : '';
+  const children = (node.children ?? [])
+    .filter(
+      (child): child is TemplateNode => child.type !== 'directive'
+    )
+    .map(nodeToHtml)
+    .join('');
   const openTag =
     attrs.length > 0 ? `<${node.tagName} ${attrs}>` : `<${node.tagName}>`;
   return `${openTag}${children}</${node.tagName}>`;
@@ -73,7 +130,8 @@ function serializeNode(
   targetVar: string,
   idFactory: () => string,
   interpolationVars: string[],
-  componentInterpolationVars: string[]
+  componentInterpolationVars: string[],
+  renderDirectiveChild?: DirectiveChildRenderer
 ): string[] {
   if (node.type === 'text') {
     const value = node.textContent ?? '';
@@ -86,22 +144,36 @@ function serializeNode(
   const varName = idFactory();
   if (node.namespace === 'svg') {
     statements.push(
-      `const ${varName} = document.createElementNS('http://www.w3.org/2000/svg', '${node.tagName}');`
+      `const ${varName} = document.createElementNS('http://www.w3.org/2000/svg', ${JSON.stringify(node.tagName ?? '')});`
     );
   } else if (node.namespace === 'mathml') {
     statements.push(
-      `const ${varName} = document.createElementNS('http://www.w3.org/1998/Math/MathML', '${node.tagName}');`
+      `const ${varName} = document.createElementNS('http://www.w3.org/1998/Math/MathML', ${JSON.stringify(node.tagName ?? '')});`
     );
   } else {
     statements.push(
-      `const ${varName} = document.createElement('${node.tagName}');`
+      `const ${varName} = document.createElement(${JSON.stringify(node.tagName ?? '')});`
     );
   }
 
   if (node.attributes) {
     for (const [key, value] of Object.entries(node.attributes)) {
+      const attributeLiteral = JSON.stringify(key);
+      if (BOOLEAN_ATTRIBUTES.has(key.toLowerCase())) {
+        const toggleExpression = resolveWholeAttributeInterpolation(
+          value,
+          interpolationVars,
+          componentInterpolationVars
+        );
+        if (toggleExpression) {
+          statements.push(
+            `if (${toggleExpression}) { ${varName}.setAttribute(${attributeLiteral}, ''); } else { ${varName}.removeAttribute(${attributeLiteral}); }`
+          );
+          continue;
+        }
+      }
       statements.push(
-        `${varName}.setAttribute('${key}', ${serializeTextValue(value, interpolationVars, componentInterpolationVars)});`
+        `${varName}.setAttribute(${attributeLiteral}, ${serializeTextValue(value, interpolationVars, componentInterpolationVars)});`
       );
     }
   }
@@ -112,13 +184,20 @@ function serializeNode(
         ? `${varName}.content`
         : varName;
     for (const child of node.children) {
+      if (child.type === 'directive') {
+        if (renderDirectiveChild) {
+          statements.push(...renderDirectiveChild(child.directive, childTarget));
+        }
+        continue;
+      }
       statements.push(
         ...serializeNode(
           child,
           childTarget,
           idFactory,
           interpolationVars,
-          componentInterpolationVars
+          componentInterpolationVars,
+          renderDirectiveChild
         )
       );
     }
@@ -184,6 +263,24 @@ function serializeTextValue(
   return parts.join(' + ');
 }
 
+// Returns the resolved expression when the whole attribute value is a
+// single "{expr}" interpolation, otherwise null.
+function resolveWholeAttributeInterpolation(
+  value: string,
+  interpolationVars: string[],
+  componentInterpolationVars: string[]
+): string | null {
+  const match = /^\{([^{}]+)\}$/.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  return resolveInterpolationExpression(
+    match[1].trim(),
+    new Set(interpolationVars),
+    new Set(componentInterpolationVars)
+  );
+}
+
 function nodeHasInterpolation(
   node: TemplateNode,
   interpolationVars: string[],
@@ -211,8 +308,10 @@ function nodeHasInterpolation(
     }
   }
 
-  return (node.children ?? []).some((child) =>
-    nodeHasInterpolation(child, interpolationVars, componentInterpolationVars)
+  return (node.children ?? []).some(
+    (child) =>
+      child.type !== 'directive' &&
+      nodeHasInterpolation(child, interpolationVars, componentInterpolationVars)
   );
 }
 

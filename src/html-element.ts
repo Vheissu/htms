@@ -1,9 +1,23 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from './types';
 import { SecurityValidator } from './utils/security';
 import { CompilerLogger } from './utils/logger';
+import { TemplateChild } from './component/ir';
+import { elementToTemplateNode } from './component/template-utils';
+import { getNodeLocation } from './diagnostics';
 
-// Global counter for element IDs - in production, this should be managed better
+// Location-based names keep compiled output deterministic; the counter is a
+// fallback for elements parsed without node locations (tests, direct DOM).
 const elementCounter: Map<string, number> = new Map();
+
+function elementVarName(tagName: string, element: Element): string {
+  const location = getNodeLocation(element);
+  if (location) {
+    return `${tagName}_${location.line}_${location.column}`;
+  }
+  const count = (elementCounter.get(tagName) || 0) + 1;
+  elementCounter.set(tagName, count);
+  return `${tagName}${count}`;
+}
 
 export const handleHtmlElement: TagHandler = (
   element: Element,
@@ -15,10 +29,44 @@ export const handleHtmlElement: TagHandler = (
   try {
     const tagName = element.tagName.toLowerCase();
 
+    // Component mode: convert markup to template nodes. Directive tags
+    // nested inside the element are resolved into embedded template
+    // children so they render scoped to this element.
+    if (options.componentContext) {
+      const node = elementToTemplateNode(element, (child) => {
+        const childResult = handleElement(child, {
+          ...options,
+          appendTargetVar: undefined,
+        });
+        errors.push(...childResult.errors);
+        warnings.push(...childResult.warnings);
+
+        const children: TemplateChild[] = [];
+        if (childResult.component?.template) {
+          children.push(...childResult.component.template);
+        }
+        if (childResult.component?.directives) {
+          for (const directive of childResult.component.directives) {
+            children.push({ type: 'directive', directive });
+          }
+        } else if (childResult.code) {
+          children.push({
+            type: 'directive',
+            directive: { kind: 'statement', code: childResult.code },
+          });
+        }
+        return children;
+      });
+      return {
+        code: '',
+        errors,
+        warnings,
+        component: { template: [node] },
+      };
+    }
+
     // Generate unique variable name for this element
-    const count = (elementCounter.get(tagName) || 0) + 1;
-    elementCounter.set(tagName, count);
-    const varName = `${tagName}${count}`;
+    const varName = elementVarName(tagName, element);
 
     // Start building the element creation code
     let code = `const ${varName} = document.createElement('${tagName}');\n`;
@@ -49,19 +97,7 @@ export const handleHtmlElement: TagHandler = (
         }
       }
 
-      // Sanitize attribute value
-      const sanitizedValue = SecurityValidator.sanitizeString(attr.value);
-      const escapedName = SecurityValidator.escapeForTemplate(attr.name);
-      const escapedValue = SecurityValidator.escapeForTemplate(sanitizedValue);
-
-      code += `${varName}.setAttribute('${escapedName}', '${escapedValue}');\n`;
-
-      if (attr.value !== sanitizedValue) {
-        warnings.push({
-          message: `Attribute value sanitized: ${attr.name}`,
-          tag: tagName.toUpperCase(),
-        });
-      }
+      code += `${varName}.setAttribute(${SecurityValidator.jsStringLiteral(attr.name)}, ${SecurityValidator.jsStringLiteral(attr.value)});\n`;
     }
 
     // Process text content
@@ -92,8 +128,12 @@ export const handleHtmlElement: TagHandler = (
         }
       }
 
-      const itemPattern = /\{item\}/g;
-      if (options.loopVariable && itemPattern.test(rawText)) {
+      // loopVariable is a validated JS identifier, so this is safe.
+      const itemPattern = options.loopVariable
+        ? // eslint-disable-next-line security/detect-non-literal-regexp
+          new RegExp(`\\{${options.loopVariable}\\}`, 'g')
+        : null;
+      if (itemPattern && itemPattern.test(rawText)) {
         const escaped = SecurityValidator.escapeForTemplate(rawText);
         const replaced = escaped.replace(
           itemPattern,

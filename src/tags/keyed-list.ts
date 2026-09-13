@@ -2,81 +2,34 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import {
   DirectiveNode,
   KeyedListDirective,
+  TemplateChild,
   TemplateNode,
 } from '../component/ir';
 import {
   elementToTemplateNode,
   isLowerCaseTag,
 } from '../component/template-utils';
-import { handleEventTag } from './event';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { handleElement } from '../handlers';
+import { getNodeLocation } from '../diagnostics';
 
 let keyedCounter = 0;
 
-function resolveComponentSource(source: string): string {
-  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(source) ? `this.${source}` : source;
+// Location-based ids keep compiled output deterministic; the counter is a
+// fallback for elements parsed without node locations (unit tests, DOM
+// fragments created directly).
+function stableId(prefix: string, element: Element): string {
+  const location = getNodeLocation(element);
+  if (location) {
+    return `${prefix}_${location.line}_${location.column}`;
+  }
+  return `${prefix}_${++keyedCounter}`;
 }
 
-function collectNestedComponentDirectives(
-  element: Element,
-  options: TagHandlerOptions,
-  itemVar: string,
-  errors: HandlerResult['errors'],
-  warnings: HandlerResult['warnings']
-): DirectiveNode[] {
-  const directives: DirectiveNode[] = [];
-
-  for (const child of Array.from(element.children)) {
-    if (isLowerCaseTag(child as Node)) {
-      directives.push(
-        ...collectNestedComponentDirectives(
-          child,
-          options,
-          itemVar,
-          errors,
-          warnings
-        )
-      );
-      continue;
-    }
-
-    if (child.tagName.toUpperCase() !== 'EVENT') {
-      continue;
-    }
-
-    const childResult: HandlerResult = handleEventTag(child, {
-      ...options,
-      loopVariable: itemVar,
-      parentContext: 'component',
-      componentContext: true,
-    });
-
-    if (childResult.errors.length > 0) {
-      errors.push(...childResult.errors);
-      if (options.strictMode) {
-        continue;
-      }
-    }
-
-    if (childResult.warnings.length > 0) {
-      warnings.push(...childResult.warnings);
-    }
-
-    if (childResult.component?.directives) {
-      directives.push(
-        ...childResult.component.directives.filter(
-          (directive) => directive.kind === 'event'
-        )
-      );
-    } else if (childResult.code) {
-      directives.push({ kind: 'statement', code: childResult.code });
-    }
-  }
-
-  return directives;
+function resolveComponentSource(source: string): string {
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(source) ? `this.${source}` : source;
 }
 
 export const handleKeyedListTag: TagHandler = (
@@ -102,7 +55,7 @@ export const handleKeyedListTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
+    if (!SecurityValidator.isAllowedSelector(target)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector for target',
@@ -167,14 +120,37 @@ export const handleKeyedListTag: TagHandler = (
         return { code: '', errors, warnings };
       }
 
-      const template: TemplateNode[] = [elementToTemplateNode(templateEl)];
-      const directives = collectNestedComponentDirectives(
-        templateEl,
-        options,
-        itemVar,
-        errors,
-        warnings
-      );
+      // Directive tags nested inside the item template (e.g. <event>)
+      // resolve to template children scoped to each rendered item.
+      const template: TemplateNode[] = [
+        elementToTemplateNode(templateEl, (child) => {
+          const childResult = handleElement(child, {
+            ...options,
+            loopVariable: itemVar,
+            parentContext: 'component',
+            componentContext: true,
+          });
+          errors.push(...childResult.errors);
+          warnings.push(...childResult.warnings);
+
+          const children: TemplateChild[] = [];
+          if (childResult.component?.template) {
+            children.push(...childResult.component.template);
+          }
+          if (childResult.component?.directives) {
+            for (const directive of childResult.component.directives) {
+              children.push({ type: 'directive', directive });
+            }
+          } else if (childResult.code) {
+            children.push({
+              type: 'directive',
+              directive: { kind: 'statement', code: childResult.code },
+            });
+          }
+          return children;
+        }),
+      ];
+      const directives: DirectiveNode[] = [];
 
       if (errors.length > 0 && options.strictMode) {
         return { code: '', errors, warnings };
@@ -242,8 +218,8 @@ export const handleKeyedListTag: TagHandler = (
     }
     const topVar = m[1];
 
-    const selEsc = SecurityValidator.escapeForTemplate(target);
-    const id = ++keyedCounter;
+    const selEsc = SecurityValidator.jsStringLiteral(target);
+    const id = stableId('keyed', element);
 
     const runtime = ensureRuntime();
 
@@ -258,10 +234,10 @@ ${tpl.code
         };
         var __key_${id} = function(${itemVar}, ${indexVar}){ return ${keyExpr}; };
         if (typeof window !== 'undefined' && window.__htms) {
-          window.__htms.keyedList(\`${selEsc}\`, ${ofExpr}, __render_item_${id}, __key_${id});
+          window.__htms.keyedList(${selEsc}, ${ofExpr}, __render_item_${id}, __key_${id});
         } else {
           // Fallback: rebuild
-          var c = document.querySelector(\`${selEsc}\`);
+          var c = document.querySelector(${selEsc});
           if (c) { c.textContent=''; for (var ${indexVar}=0; ${indexVar}<${ofExpr}.length; ${indexVar}++){ var ${itemVar}=${ofExpr}[${indexVar}]; c.appendChild(__render_item_${id}(${itemVar}, ${indexVar})); } }
         }
       })();`;

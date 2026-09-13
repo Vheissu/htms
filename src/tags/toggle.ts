@@ -22,7 +22,7 @@ export const handleToggleTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
+    if (!SecurityValidator.isAllowedSelector(target)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector format for target',
@@ -37,14 +37,14 @@ export const handleToggleTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    const sel = SecurityValidator.escapeForTemplate(target);
+    const sel = SecurityValidator.jsStringLiteral(target);
     const isComponentContext = options.parentContext === 'component';
     const code = isComponentContext
       ? ''
       : `
       (function(){
         try {
-          const el = document.querySelector(\`${sel}\`);
+          const el = document.querySelector(${sel});
           if (!el) { console.warn('TOGGLE target not found: ${sel}'); return; }
           el.style.display = (${condition}) ? '' : 'none';
         } catch (error) {

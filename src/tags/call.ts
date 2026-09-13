@@ -120,9 +120,9 @@ export const handleCallTag: TagHandler = (
             (arg.startsWith("'") && arg.endsWith("'"))
           ) {
             const stringContent = arg.slice(1, -1);
-            const escapedContent =
-              SecurityValidator.escapeForTemplate(stringContent);
-            validatedArgList.push(`"${escapedContent}"`);
+            validatedArgList.push(
+              SecurityValidator.jsStringLiteral(stringContent)
+            );
           }
           // Check if it's a number
           else if (SecurityValidator.isNumericLiteral(arg)) {

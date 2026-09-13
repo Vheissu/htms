@@ -21,7 +21,7 @@ export const handleSetAttrTag: TagHandler = (
       });
       return { code: '', errors, warnings };
     }
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+    if (!SecurityValidator.isAllowedSelector(selector)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector',
@@ -39,18 +39,16 @@ export const handleSetAttrTag: TagHandler = (
       );
       return { code: '', errors, warnings };
     }
-    const sel = SecurityValidator.escapeForTemplate(selector);
-    const nameEsc = SecurityValidator.escapeForTemplate(name);
-    const valEsc = SecurityValidator.escapeForTemplate(value);
+    const sel = SecurityValidator.jsStringLiteral(selector);
     const isComponentContext = options.parentContext === 'component';
     const code = isComponentContext
       ? ''
       : `
       (function(){
         try {
-          const el = document.querySelector(\`${sel}\`);
+          const el = document.querySelector(${sel});
           if (!el) { console.warn('SETATTR target not found: ${sel}'); return; }
-          el.setAttribute('${nameEsc}', '${valEsc}');
+          el.setAttribute(${SecurityValidator.jsStringLiteral(name)}, ${SecurityValidator.jsStringLiteral(value)});
         } catch (error) {
           console.error('SETATTR failed:', error);
         }
@@ -61,7 +59,7 @@ export const handleSetAttrTag: TagHandler = (
       selector,
       target: 'attribute',
       name,
-      value: JSON.stringify(valEsc),
+      value: JSON.stringify(value),
     };
 
     return {

@@ -40,7 +40,10 @@ module.exports = [
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'warn',
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
       'no-console': 'warn',
       'security/detect-eval-with-expression': 'error',
       'security/detect-non-literal-fs-filename': 'error',

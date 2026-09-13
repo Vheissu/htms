@@ -47,7 +47,7 @@ export const handleModelTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+    if (!SecurityValidator.isAllowedSelector(selector)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector',
@@ -124,8 +124,8 @@ export const handleModelTag: TagHandler = (
     };
 
     const isComponentContext = options.parentContext === 'component';
-    const selEsc = SecurityValidator.escapeForTemplate(selector);
-    const propEsc = SecurityValidator.escapeForTemplate(prop);
+    const selEsc = SecurityValidator.jsStringLiteral(selector);
+    const propEsc = SecurityValidator.jsStringLiteral(prop);
     const runtime = ensureRuntime();
     const assignment = pathAttr.startsWith('this.')
       ? pathAttr
@@ -137,9 +137,9 @@ export const handleModelTag: TagHandler = (
       (function(){
         try {
           if (typeof window !== 'undefined' && window.__htms) {
-            window.__htms.bind(\`${selEsc}\`, \`${propEsc}\`, function(){ return ${pathInfo.expr}; });
+            window.__htms.bind(${selEsc}, ${propEsc}, function(){ return ${pathInfo.expr}; });
           }
-          const targets = document.querySelectorAll(\`${selEsc}\`);
+          const targets = document.querySelectorAll(${selEsc});
           targets.forEach(node => {
             node.addEventListener('${eventAttr}', function(event){
               try {

@@ -79,9 +79,7 @@ export const handleArrayTag: TagHandler = (
         }
         // Treat as string (escape and quote)
         else {
-          const escapedValue =
-            SecurityValidator.escapeForTemplate(valueContent);
-          processedValue = `"${escapedValue}"`;
+          processedValue = SecurityValidator.jsStringLiteral(valueContent);
         }
 
         values.push(processedValue);

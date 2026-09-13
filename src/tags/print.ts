@@ -26,7 +26,7 @@ export const handlePrintTag: TagHandler = (
     }
 
     // Get and validate content
-    let content = element.textContent || '';
+    const content = element.textContent || '';
     
     if (!content.trim()) {
       warnings.push({
@@ -43,10 +43,8 @@ export const handlePrintTag: TagHandler = (
       if (options.strictMode) {
         return { code: '', errors, warnings };
       }
-      // In non-strict mode, sanitize the content
-      content = SecurityValidator.sanitizeString(content);
       warnings.push({
-        message: 'Content was sanitized due to security concerns',
+        message: 'Content failed security validation',
         tag: 'PRINT'
       });
     }
@@ -60,8 +58,13 @@ export const handlePrintTag: TagHandler = (
         return { code: '', errors, warnings };
       }
 
-      // Safe replacement: only replace exact {item} patterns
-      const itemPattern = /\{item\}/g;
+      // Safe replacement: only replace exact {loopVar} patterns.
+      // loopVariable is a validated JS identifier, so this is safe.
+      // eslint-disable-next-line security/detect-non-literal-regexp
+      const itemPattern = new RegExp(
+        `\\{${options.loopVariable}\\}`,
+        'g'
+      );
       if (itemPattern.test(content)) {
         // Escape the content for safe template literal usage
         const escapedContent = SecurityValidator.escapeForTemplate(content);

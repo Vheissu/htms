@@ -13,8 +13,7 @@ function buildValueExpr(value: string): string | null {
   if (SecurityValidator.isNumericLiteral(value)) return value;
   if (value === 'true' || value === 'false' || value === 'null') return value;
   if (SecurityValidator.isJavaScriptPath(value)) return value;
-  const escaped = SecurityValidator.escapeForTemplate(value);
-  return `"${escaped}"`;
+  return SecurityValidator.jsStringLiteral(value);
 }
 
 export const handlePushTag: TagHandler = (

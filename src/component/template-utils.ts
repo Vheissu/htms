@@ -1,6 +1,11 @@
 import { CompilerError } from '../types';
 import { SecurityValidator } from '../utils/security';
-import { TemplateNode } from './ir';
+import { TemplateChild, TemplateNode } from './ir';
+
+// Resolves a non-template child element (an HTMS directive tag such as
+// <event> or <if>) into template children: embedded directives and/or
+// nested template nodes. Returning an empty array drops the element.
+export type ChildResolver = (element: Element) => TemplateChild[];
 
 const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
@@ -204,7 +209,10 @@ export function collectTemplateSecurityErrors(
   return errors;
 }
 
-export function elementToTemplateNode(element: Element): TemplateNode {
+export function elementToTemplateNode(
+  element: Element,
+  resolveChild?: ChildResolver
+): TemplateNode {
   const attributes: Record<string, string> = {};
   for (const attr of Array.from(element.attributes)) {
     if (
@@ -215,7 +223,7 @@ export function elementToTemplateNode(element: Element): TemplateNode {
     }
   }
 
-  const children: TemplateNode[] = [];
+  const children: TemplateChild[] = [];
   for (const child of templateChildNodes(element)) {
     if (child.nodeType === 3) {
       const text = child.textContent ?? '';
@@ -226,7 +234,11 @@ export function elementToTemplateNode(element: Element): TemplateNode {
     } else if (child.nodeType === 1) {
       const elementChild = child as Element;
       if (isTemplateElement(elementChild)) {
-        children.push(elementToTemplateNode(elementChild));
+        children.push(elementToTemplateNode(elementChild, resolveChild));
+        continue;
+      }
+      if (resolveChild) {
+        children.push(...resolveChild(elementChild));
       }
     }
   }
@@ -240,7 +252,10 @@ export function elementToTemplateNode(element: Element): TemplateNode {
   };
 }
 
-export function nodeListToTemplateNodes(nodes: NodeList): TemplateNode[] {
+export function nodeListToTemplateNodes(
+  nodes: NodeList,
+  resolveChild?: ChildResolver
+): TemplateNode[] {
   const templateNodes: TemplateNode[] = [];
   for (const node of Array.from(nodes)) {
     if (node.nodeType === 3) {
@@ -250,7 +265,7 @@ export function nodeListToTemplateNodes(nodes: NodeList): TemplateNode[] {
       }
       templateNodes.push({ type: 'text', textContent: text });
     } else if (node.nodeType === 1 && isTemplateElement(node)) {
-      templateNodes.push(elementToTemplateNode(node));
+      templateNodes.push(elementToTemplateNode(node, resolveChild));
     }
   }
   return templateNodes;

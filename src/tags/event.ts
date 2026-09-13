@@ -1,29 +1,72 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
-import { DirectiveNode, EventDirective } from '../component/ir';
+import {
+  DirectiveNode,
+  EventDirective,
+  EventModifiers,
+} from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 
-const ALLOWED_EVENT_TYPES = new Set([
+const KNOWN_EVENT_TYPES = new Set([
   'click',
   'dblclick',
+  'contextmenu',
   'mousedown',
   'mouseup',
   'mouseover',
   'mouseout',
+  'mouseenter',
+  'mouseleave',
+  'mousemove',
+  'wheel',
   'keydown',
   'keyup',
   'keypress',
   'focus',
   'blur',
+  'focusin',
+  'focusout',
   'change',
   'input',
   'submit',
+  'reset',
   'load',
   'unload',
   'resize',
   'scroll',
+  'error',
+  'pointerdown',
+  'pointerup',
+  'pointermove',
+  'pointerenter',
+  'pointerleave',
+  'pointerover',
+  'pointerout',
+  'touchstart',
+  'touchend',
+  'touchmove',
+  'touchcancel',
+  'dragstart',
+  'dragend',
+  'dragover',
+  'dragenter',
+  'dragleave',
+  'drop',
+  'animationstart',
+  'animationend',
+  'animationiteration',
+  'transitionend',
+  'toggle',
+  'select',
+  'slotchange',
 ]);
+
+// Custom element/component event names: identifiers, dashes, dots and
+// colons (e.g. "todo-added", "value-changed", "app:save").
+const CUSTOM_EVENT_TYPE = /^[a-zA-Z][a-zA-Z0-9_.:-]*$/;
+
+const KEYBOARD_EVENTS = new Set(['keydown', 'keyup', 'keypress']);
 
 const SAFE_ACTIONS = new Set([
   'console.log',
@@ -34,6 +77,17 @@ const SAFE_ACTIONS = new Set([
   'confirm',
   'prompt',
 ]);
+
+function parseBooleanModifier(
+  element: Element,
+  name: string
+): boolean | undefined {
+  const raw = element.getAttribute(name);
+  if (raw === null) {
+    return undefined;
+  }
+  return raw.trim().toLowerCase() !== 'false';
+}
 
 export const handleEventTag: TagHandler = (
   element: Element,
@@ -56,18 +110,18 @@ export const handleEventTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    // Validate event type
-    if (!ALLOWED_EVENT_TYPES.has(type)) {
+    // Validate event type: known DOM events or a well-formed custom name
+    // so components can listen for events emitted via <emit>.
+    if (!KNOWN_EVENT_TYPES.has(type) && !CUSTOM_EVENT_TYPE.test(type)) {
       errors.push({
         type: 'validation',
-        message: `Invalid event type: ${type}. Allowed: ${Array.from(ALLOWED_EVENT_TYPES).join(', ')}`,
+        message: `Invalid event type: ${type}`,
         tag: 'EVENT',
       });
       return { code: '', errors, warnings };
     }
 
-    // Validate CSS selector
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(target)) {
+    if (!SecurityValidator.isAllowedSelector(target)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector format for target',
@@ -76,9 +130,46 @@ export const handleEventTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
+    const modifiers: EventModifiers = {};
+    const prevent = parseBooleanModifier(element, 'prevent');
+    if (prevent !== undefined) modifiers.prevent = prevent;
+    const stop = parseBooleanModifier(element, 'stop');
+    if (stop !== undefined) modifiers.stop = stop;
+    const once = parseBooleanModifier(element, 'once');
+    if (once !== undefined) modifiers.once = once;
+    const passive = parseBooleanModifier(element, 'passive');
+    if (passive !== undefined) modifiers.passive = passive;
+
+    const debounceAttr = element.getAttribute('debounce');
+    if (debounceAttr !== null) {
+      const parsed = Number(debounceAttr);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        errors.push({
+          type: 'validation',
+          message: `Invalid debounce value: ${debounceAttr}. Expected milliseconds.`,
+          tag: 'EVENT',
+        });
+        return { code: '', errors, warnings };
+      }
+      modifiers.debounceMs = parsed;
+    }
+
+    const keyAttr = element.getAttribute('key');
+    if (keyAttr !== null) {
+      if (!KEYBOARD_EVENTS.has(type)) {
+        warnings.push({
+          message: `key modifier only applies to keyboard events, not "${type}"`,
+          tag: 'EVENT',
+        });
+      } else {
+        modifiers.key = keyAttr;
+      }
+    }
+
     let bodyCode = '';
     const nestedDirectives: DirectiveNode[] = [];
-    const isComponentContext = options.parentContext === 'component';
+    const isComponentContext =
+      options.parentContext === 'component' || options.componentContext;
     if (element.children.length > 0) {
       for (const child of Array.from(element.children)) {
         const r = handleElement(child, options);
@@ -137,24 +228,31 @@ export const handleEventTag: TagHandler = (
       bodyCode = `${action}`;
     }
 
-    // Escape values for safe template generation
-    const escapedTarget = SecurityValidator.escapeForTemplate(target);
-    const escapedAction = action
-      ? SecurityValidator.escapeForTemplate(action)
-      : '';
+    const escapedTarget = SecurityValidator.jsStringLiteral(target);
+    const escapedType = SecurityValidator.jsStringLiteral(type);
+    const preventCall =
+      modifiers.prevent === true
+        ? 'event.preventDefault && event.preventDefault();'
+        : '';
+    const stopCall =
+      modifiers.stop === true
+        ? 'event.stopPropagation && event.stopPropagation();'
+        : '';
 
     // Generate safe event handler with error handling
     const code = isComponentContext
       ? ''
       : `
       try {
-        const eventTargets = document.querySelectorAll(\`${escapedTarget}\`);
+        const eventTargets = document.querySelectorAll(${escapedTarget});
         if (eventTargets.length === 0) {
           console.warn('No elements found for event target: ${escapedTarget}');
         }
         eventTargets.forEach(element => {
-          element.addEventListener('${type}', function(event) {
+          element.addEventListener(${escapedType}, function(event) {
             try {
+              ${preventCall}
+              ${stopCall}
 ${(bodyCode || '')
   .split('\n')
   .filter(Boolean)
@@ -177,16 +275,17 @@ ${(bodyCode || '')
       });
 
       CompilerLogger.logSecurityIssue('Potentially dangerous event action', {
-        target: escapedTarget,
+        target,
         type,
-        action: escapedAction,
+        action,
       });
     }
 
     CompilerLogger.logDebug('Generated event handler', {
-      target: escapedTarget,
+      target,
       type,
-      action: escapedAction,
+      action,
+      modifiers,
       isSafeAction: action
         ? SAFE_ACTIONS.has(action.split('(')[0].trim())
         : true,
@@ -201,6 +300,8 @@ ${(bodyCode || '')
         .map((line) => line.replace(/\s+$/, ''))
         .filter((line) => line.trim().length > 0),
       directives: nestedDirectives.length > 0 ? nestedDirectives : undefined,
+      modifiers:
+        Object.keys(modifiers).length > 0 ? modifiers : undefined,
     };
 
     return {

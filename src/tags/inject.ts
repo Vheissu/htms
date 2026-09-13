@@ -4,13 +4,14 @@ import { CompilerLogger } from '../utils/logger';
 
 export const handleInjectTag: TagHandler = (
   element: Element,
-  options: TagHandlerOptions = {}
+  _options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
   const warnings: HandlerResult['warnings'] = [];
 
-  // SECURITY WARNING: This tag is inherently dangerous and should be disabled by default
-  if (!process.env.HTMS_ALLOW_INJECT_TAG && options.strictMode !== false) {
+  // SECURITY WARNING: This tag is inherently dangerous and disabled by
+  // default regardless of strict mode — it requires the env opt-in.
+  if (process.env.HTMS_ALLOW_INJECT_TAG !== 'true') {
     errors.push({
       type: 'security',
       message:
@@ -34,7 +35,7 @@ export const handleInjectTag: TagHandler = (
     }
 
     // Validate selector - must be a simple CSS selector
-    if (!/^[a-zA-Z0-9_#.[\]=":() -]+$/.test(selector)) {
+    if (!SecurityValidator.isAllowedSelector(selector)) {
       errors.push({
         type: 'validation',
         message: 'Invalid CSS selector format',
@@ -66,11 +67,10 @@ export const handleInjectTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    // Sanitize the content
-    const sanitizedContent = SecurityValidator.sanitizeString(content);
-    const escapedSelector = SecurityValidator.escapeForTemplate(selector);
-    const escapedContent =
-      SecurityValidator.escapeForTemplate(sanitizedContent);
+    // Content is assigned through textContent, so it never reaches an HTML
+    // parser — no entity escaping needed, just safe JS string embedding.
+    const escapedSelector = SecurityValidator.jsStringLiteral(selector);
+    const escapedContent = SecurityValidator.jsStringLiteral(content);
 
     warnings.push({
       message: 'INJECT tag poses security risks. Content has been sanitized.',
@@ -80,13 +80,13 @@ export const handleInjectTag: TagHandler = (
     // Generate safer code using textContent instead of innerHTML
     const code = `
       try {
-        const injectElements = document.querySelectorAll(\`${escapedSelector}\`);
+        const injectElements = document.querySelectorAll(${escapedSelector});
         if (injectElements.length === 0) {
           console.warn('No elements found for selector: ${escapedSelector}');
         }
         injectElements.forEach(element => {
           // Using textContent for security - no HTML parsing
-          element.textContent = \`${escapedContent}\`;
+          element.textContent = ${escapedContent};
         });
       } catch (error) {
         console.error('INJECT operation failed:', error);
@@ -94,9 +94,8 @@ export const handleInjectTag: TagHandler = (
     `;
 
     CompilerLogger.logSecurityIssue('INJECT tag used (security risk)', {
-      selector: escapedSelector,
+      selector,
       contentLength: content.length,
-      sanitized: content !== sanitizedContent,
     });
 
     return { code, errors, warnings };

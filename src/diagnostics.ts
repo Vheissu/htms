@@ -1,6 +1,6 @@
 import { CompilerError, CompilerWarning } from './types';
 
-interface SourceLocation {
+export interface SourceLocation {
   line: number;
   column: number;
 }
@@ -38,6 +38,10 @@ export function addNodeLocation<T extends Diagnostic>(
   }
   diagnostic.source = 'input';
   return diagnostic;
+}
+
+export function getNodeLocation(node: Node): SourceLocation | undefined {
+  return nodeLocations.get(node);
 }
 
 export function addNodeLocations<T extends Diagnostic>(

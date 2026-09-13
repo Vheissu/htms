@@ -126,8 +126,7 @@ export const handleSetTag: TagHandler = (
           // variable or dotted path reference
           processedValue = value;
         } else {
-          const escaped = SecurityValidator.escapeForTemplate(value);
-          processedValue = `"${escaped}"`;
+          processedValue = SecurityValidator.jsStringLiteral(value);
         }
       }
     }

@@ -1,7 +1,9 @@
+import * as acorn from 'acorn';
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
+import { getNodeLocation } from '../diagnostics';
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const ALLOWED_PARSERS = new Set([
@@ -14,6 +16,29 @@ const ALLOWED_PARSERS = new Set([
 const ALLOWED_CREDENTIALS = new Set(['omit', 'same-origin', 'include']);
 
 let fetchCounter = 0;
+
+// Location-based ids keep compiled output deterministic; the counter is a
+// fallback for elements parsed without node locations (unit tests, DOM
+// fragments created directly).
+function stableId(prefix: string, element: Element): string {
+  const location = getNodeLocation(element);
+  if (location) {
+    return `${prefix}_${location.line}_${location.column}`;
+  }
+  return `${prefix}_${++fetchCounter}`;
+}
+
+// `url` accepts a JS expression (e.g. `'/api'` or `this.endpoint`). When the
+// attribute does not parse as an expression, treat it as a literal URL so
+// `url="/api"` produces fetch('/api') instead of a broken regex literal.
+function expressionOrLiteral(value: string): string {
+  try {
+    acorn.parseExpressionAt(value, 0, { ecmaVersion: 'latest' });
+    return value;
+  } catch {
+    return SecurityValidator.jsStringLiteral(value);
+  }
+}
 
 function validateStatePath(path: string): string[] | null {
   if (!path) {
@@ -225,8 +250,9 @@ export const handleFetchTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
+    const urlCode = expressionOrLiteral(urlExpr);
     const dependencySet = new Set<string>();
-    dependencySet.add(urlExpr);
+    dependencySet.add(urlCode);
     if (bodyAttr) dependencySet.add(bodyAttr);
     if (headersAttr) dependencySet.add(headersAttr);
     if (whenAttr) dependencySet.add(whenAttr);
@@ -257,7 +283,7 @@ export const handleFetchTag: TagHandler = (
       ? immediateAttr.toLowerCase() !== 'false'
       : true;
     const once = onceAttr ? onceAttr.toLowerCase() === 'true' : false;
-    const fetchId = `__fetch_${++fetchCounter}`;
+    const fetchId = stableId('__fetch', element);
     const runtime = ensureRuntime();
     const isComponent = !!options.componentContext;
 
@@ -340,7 +366,7 @@ ${assignErrorClear ? `            ${assignErrorClear.replace(/\n/g, '\n         
             }
             var execute = async function(){
               try {
-                const response = await fetch(${urlExpr}, init);
+                const response = await fetch(${urlCode}, init);
                 if (!response.ok) {
                   throw new Error('Request failed with status ' + response.status);
                 }

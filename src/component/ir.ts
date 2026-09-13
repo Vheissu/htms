@@ -3,9 +3,19 @@ export interface TemplateNode {
   tagName?: string;
   namespace?: 'html' | 'svg' | 'mathml';
   attributes?: Record<string, string>;
-  children?: TemplateNode[];
+  children?: TemplateChild[];
   textContent?: string;
 }
+
+// A directive embedded as a child of a template element. Rendered in
+// document order with the parent element as the directive target, so
+// `<div><event .../></div>` scopes the event to that div's subtree.
+export interface DirectiveTemplateChild {
+  type: 'directive';
+  directive: DirectiveNode;
+}
+
+export type TemplateChild = TemplateNode | DirectiveTemplateChild;
 
 export interface ArrayLoopDirective {
   kind: 'loop';
@@ -41,12 +51,22 @@ export interface ConditionDirective {
   };
 }
 
+export interface EventModifiers {
+  prevent?: boolean;
+  stop?: boolean;
+  once?: boolean;
+  passive?: boolean;
+  debounceMs?: number;
+  key?: string;
+}
+
 export interface EventDirective {
   kind: 'event';
   selector: string;
   eventType: string;
   body: string[];
   directives?: DirectiveNode[];
+  modifiers?: EventModifiers;
 }
 
 export interface VisibilityDirective {
@@ -175,4 +195,95 @@ export function createEmptyComponentIR(): ComponentIR {
     templateNodes: [],
     directives: [],
   };
+}
+
+export type DirectiveVisitor = (directive: DirectiveNode) => void;
+
+// Visit every directive in a tree, including directives nested inside
+// branches, loop bodies, and template children.
+export function walkDirectives(
+  directives: readonly DirectiveNode[] | undefined,
+  visit: DirectiveVisitor
+): void {
+  if (!directives) return;
+  for (const directive of directives) {
+    visit(directive);
+    walkDirectiveContent(directive, visit);
+  }
+}
+
+function walkDirectiveContent(
+  directive: DirectiveNode,
+  visit: DirectiveVisitor
+): void {
+  switch (directive.kind) {
+    case 'loop':
+    case 'while':
+      walkTemplateNodes(directive.template, visit);
+      walkDirectives(directive.directives, visit);
+      break;
+    case 'condition':
+      walkTemplateNodes(directive.whenTrue.template, visit);
+      walkDirectives(directive.whenTrue.directives, visit);
+      if (directive.whenFalse) {
+        walkTemplateNodes(directive.whenFalse.template, visit);
+        walkDirectives(directive.whenFalse.directives, visit);
+      }
+      break;
+    case 'event':
+      walkDirectives(directive.directives, visit);
+      break;
+    case 'keyed-list':
+    case 'append':
+      walkTemplateNodes(directive.template, visit);
+      walkDirectives(directive.directives, visit);
+      break;
+    case 'switch':
+      for (const switchCase of directive.cases) {
+        walkTemplateNodes(switchCase.template, visit);
+        walkDirectives(switchCase.directives, visit);
+      }
+      if (directive.defaultCase) {
+        walkTemplateNodes(directive.defaultCase.template, visit);
+        walkDirectives(directive.defaultCase.directives, visit);
+      }
+      break;
+    case 'state':
+    case 'visibility':
+    case 'attribute':
+    case 'bind':
+    case 'class':
+    case 'style':
+    case 'statement':
+      break;
+  }
+}
+
+// Visit every directive embedded as a child of the given template nodes.
+export function walkTemplateNodes(
+  nodes: readonly TemplateNode[] | undefined,
+  visit: DirectiveVisitor
+): void {
+  if (!nodes) return;
+  for (const node of nodes) {
+    if (node.type !== 'element' || !node.children) continue;
+    for (const child of node.children) {
+      if (child.type === 'directive') {
+        visit(child.directive);
+        walkDirectiveContent(child.directive, visit);
+      } else {
+        walkTemplateNodes([child], visit);
+      }
+    }
+  }
+}
+
+// Visit every directive reachable from a component IR — top-level
+// directives and directives embedded inside template markup.
+export function walkComponentIR(
+  ir: ComponentIR,
+  visit: DirectiveVisitor
+): void {
+  walkTemplateNodes(ir.templateNodes, visit);
+  walkDirectives(ir.directives, visit);
 }

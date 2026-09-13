@@ -1,4 +1,4 @@
-import { SecurityValidator } from '../utils/security';
+import { SecurityValidator } from '../src/utils/security';
 
 describe('SecurityValidator', () => {
   describe('literal and expression helpers', () => {

@@ -71,11 +71,7 @@ export const handleSpliceTag: TagHandler = (
         const parsed = JSON.parse(valuesAttr);
         if (!Array.isArray(parsed))
           throw new Error('values must be JSON array');
-        valueExpressions = parsed.map((v) =>
-          typeof v === 'string'
-            ? `"${SecurityValidator.escapeForTemplate(v)}"`
-            : String(v)
-        );
+        valueExpressions = parsed.map((v) => JSON.stringify(v));
         tail = valueExpressions.length
           ? ', ' + valueExpressions.join(', ')
           : '';
