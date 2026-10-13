@@ -111,8 +111,8 @@ export function createProgram(): Command {
 
   program
     .command('compile')
-    .description('Compile HTML file to JavaScript')
-    .argument('<input>', 'Input HTML file path')
+    .description('Compile HTML files to JavaScript')
+    .argument('<inputs...>', 'Input HTML file paths')
     .option('-o, --output <path>', 'Output file path')
     .option('--format <format>', 'Output format (esm|cjs|iife)', 'esm')
     .option('--strict', 'Enable strict mode', false)
@@ -127,19 +127,34 @@ export function createProgram(): Command {
       'Compilation mode (only component supported)',
       'component'
     )
-    .action(async (input: string, options: CompileCommandOptions) => {
+    .action(async (inputs: string[], options: CompileCommandOptions) => {
       const normalized = normalizeCompileOptions(options);
       if (!normalized.value) {
         printOptionErrors(normalized.errors);
         process.exit(1);
       }
+      if (inputs.length > 1 && normalized.value.outputPath) {
+        printOptionErrors([
+          '--output can only be used with a single input file; each file is written next to its source',
+        ]);
+        process.exit(1);
+      }
 
-      const result = await compileAndReport(
-        input,
-        normalized.value,
-        '✅ Successfully compiled to'
-      );
-      if (!result.success) {
+      let failures = 0;
+      for (const input of inputs) {
+        const result = await compileAndReport(
+          input,
+          normalized.value,
+          '✅ Successfully compiled to'
+        );
+        if (!result.success) {
+          failures += 1;
+        }
+      }
+      if (failures > 0) {
+        if (inputs.length > 1) {
+          console.error(`❌ ${failures} of ${inputs.length} files failed`);
+        }
         process.exit(1);
       }
     });
@@ -262,21 +277,29 @@ export function createProgram(): Command {
 
   program
     .command('validate')
-    .description('Check an HTMS file without writing compiled output')
-    .argument('<input>', 'Input HTML file path')
-    .action(async (input: string) => {
-      const result = await validateFile(input, DEFAULT_MAX_SIZE);
-      const context = { filePath: input, source: result.source };
-      if (!result.success) {
-        printCompilationErrors(result.errors, context);
+    .description('Check HTMS files without writing compiled output')
+    .argument('<inputs...>', 'Input HTML file paths')
+    .action(async (inputs: string[]) => {
+      let failures = 0;
+      for (const input of inputs) {
+        const result = await validateFile(input, DEFAULT_MAX_SIZE);
+        const context = { filePath: input, source: result.source };
+        if (!result.success) {
+          printCompilationErrors(result.errors, context);
+          printWarnings(result.warnings, context);
+          failures += 1;
+          continue;
+        }
+
         printWarnings(result.warnings, context);
+        const componentCount = result.components?.length ?? 0;
+        const noun = componentCount === 1 ? 'component' : 'components';
+        const label = inputs.length > 1 ? ` (${displayPath(input)})` : '';
+        console.log(`✅ Valid HTMS: ${componentCount} ${noun}${label}`);
+      }
+      if (failures > 0) {
         process.exit(1);
       }
-
-      printWarnings(result.warnings, context);
-      const componentCount = result.components?.length ?? 0;
-      const noun = componentCount === 1 ? 'component' : 'components';
-      console.log(`✅ Valid HTMS: ${componentCount} ${noun}`);
     });
 
   return program;
@@ -617,13 +640,30 @@ async function runWatch(
     void compileAndReport(input, options, '🔁 Recompiled to');
   }, 100);
 
-  const watcher = fs.watch(input, { persistent: true }, () => schedule());
+  const watcher = watchSourceFile(input, schedule);
   const shutdown = (): void => {
     watcher.close();
     process.exit(0);
   };
 
   process.on('SIGINT', shutdown);
+}
+
+// Watches the file's directory rather than the file itself. Many editors
+// save by writing a temporary file and renaming it over the original,
+// which replaces the inode and silently ends a direct fs.watch.
+function watchSourceFile(filePath: string, onChange: () => void): fs.FSWatcher {
+  const resolved = path.resolve(filePath);
+  const fileName = path.basename(resolved);
+  return fs.watch(
+    path.dirname(resolved),
+    { persistent: true },
+    (_event, changed) => {
+      if (!changed || changed.toString() === fileName) {
+        onChange();
+      }
+    }
+  );
 }
 
 function isWithinRoot(rootDir: string, filePath: string): boolean {
@@ -829,9 +869,7 @@ async function runDevServer(
     void compileAndReload('🔁 Recompiled to');
   }, 100);
 
-  const watcher = fs.watch(resolvedInput, { persistent: true }, () =>
-    schedule()
-  );
+  const watcher = watchSourceFile(resolvedInput, schedule);
   const shutdown = (): void => {
     watcher.close();
     clients.forEach((client) => client.end());
