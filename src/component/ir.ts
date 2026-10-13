@@ -3,9 +3,50 @@ export interface TemplateNode {
   tagName?: string;
   namespace?: 'html' | 'svg' | 'mathml';
   attributes?: Record<string, string>;
+  // Inline directive attributes (on:click, bind:value, class:x, style:x, if).
+  bindings?: TemplateBinding[];
   children?: TemplateChild[];
   textContent?: string;
 }
+
+export interface EventBinding {
+  kind: 'event';
+  eventType: string;
+  code: string;
+  modifiers: EventModifiers;
+}
+
+export interface ModelBinding {
+  kind: 'model';
+  property: string;
+  eventType: string;
+  path: string;
+  numeric: boolean;
+}
+
+export interface ClassBinding {
+  kind: 'class';
+  className: string;
+  expression: string;
+}
+
+export interface StyleBinding {
+  kind: 'style';
+  property: string;
+  expression: string;
+}
+
+export interface ConditionalBinding {
+  kind: 'if';
+  expression: string;
+}
+
+export type TemplateBinding =
+  | EventBinding
+  | ModelBinding
+  | ClassBinding
+  | StyleBinding
+  | ConditionalBinding;
 
 // A directive embedded as a child of a template element. Rendered in
 // document order with the parent element as the directive target, so
@@ -30,7 +71,8 @@ export interface ArrayLoopDirective {
 export interface RangeLoopDirective {
   kind: 'loop';
   mode: 'range';
-  count: number;
+  // A numeric literal or an expression evaluated on each render.
+  count: string;
   indexVar: string;
   template: TemplateNode[];
   directives?: DirectiveNode[];
@@ -59,6 +101,7 @@ export interface EventModifiers {
   debounceMs?: number;
   key?: string;
   self?: boolean;
+  capture?: boolean;
 }
 
 export interface EventDirective {
@@ -163,6 +206,15 @@ export interface StateDirective {
   values?: string[];
 }
 
+// A <function> inside a component: compiled to a class method.
+export interface MethodDirective {
+  kind: 'method';
+  name: string;
+  params: string[];
+  async: boolean;
+  body: DirectiveNode[];
+}
+
 export interface StatementDirective {
   kind: 'statement';
   code: string;
@@ -184,6 +236,7 @@ export type DirectiveNode =
   | ClassDirective
   | StyleDirective
   | StateDirective
+  | MethodDirective
   | StatementDirective;
 
 export interface ComponentIR {
@@ -233,6 +286,9 @@ function walkDirectiveContent(
       break;
     case 'event':
       walkDirectives(directive.directives, visit);
+      break;
+    case 'method':
+      walkDirectives(directive.body, visit);
       break;
     case 'keyed-list':
     case 'append':
@@ -287,4 +343,52 @@ export function walkComponentIR(
 ): void {
   walkTemplateNodes(ir.templateNodes, visit);
   walkDirectives(ir.directives, visit);
+}
+
+function directiveTemplates(directive: DirectiveNode): TemplateNode[][] {
+  switch (directive.kind) {
+    case 'loop':
+    case 'while':
+    case 'keyed-list':
+    case 'append':
+      return [directive.template];
+    case 'condition':
+      return directive.whenFalse
+        ? [directive.whenTrue.template, directive.whenFalse.template]
+        : [directive.whenTrue.template];
+    case 'switch':
+      return [
+        ...directive.cases.map((switchCase) => switchCase.template),
+        ...(directive.defaultCase ? [directive.defaultCase.template] : []),
+      ];
+    default:
+      return [];
+  }
+}
+
+// Visit every template element reachable from a component IR, including
+// markup inside loops, branches and other directives.
+export function walkTemplateElements(
+  ir: ComponentIR,
+  visit: (node: TemplateNode) => void
+): void {
+  const visitNodes = (nodes: readonly TemplateNode[] | undefined): void => {
+    for (const node of nodes ?? []) {
+      if (node.type !== 'element') continue;
+      visit(node);
+      // Embedded directives are reached through walkComponentIR below.
+      visitNodes(
+        (node.children ?? []).filter(
+          (child): child is TemplateNode => child.type !== 'directive'
+        )
+      );
+    }
+  };
+  const visitDirective = (directive: DirectiveNode): void => {
+    for (const templates of directiveTemplates(directive)) {
+      visitNodes(templates);
+    }
+  };
+  visitNodes(ir.templateNodes);
+  walkComponentIR(ir, visitDirective);
 }

@@ -84,6 +84,12 @@ export interface ComponentEventArtifact {
   name: string;
 }
 
+export interface ComponentMethodArtifact {
+  name: string;
+  params: string[];
+  async: boolean;
+}
+
 export interface ComponentArtifact {
   name: string;
   className: string;
@@ -91,6 +97,7 @@ export interface ComponentArtifact {
   shadowMode: 'open' | 'closed' | 'none';
   inputs: ComponentInputArtifact[];
   events: ComponentEventArtifact[];
+  methods?: ComponentMethodArtifact[];
   code: string;
 }
 

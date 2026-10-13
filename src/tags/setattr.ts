@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { AttributeDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 
 export const handleSetAttrTag: TagHandler = (
@@ -54,12 +55,26 @@ export const handleSetAttrTag: TagHandler = (
         }
       })();`;
     CompilerLogger.logDebug('Generated setattr', { selector, name });
+    // expr="..." sets a computed value; null/undefined/false remove the
+    // attribute and true sets it empty (boolean attributes).
+    const exprAttr = element.getAttribute('expr')?.trim();
+    if (exprAttr) {
+      const exprErrors = SecurityValidator.validateContent(exprAttr);
+      if (exprErrors.length > 0) {
+        errors.push(
+          ...exprErrors.map((error) => ({ ...error, tag: 'SETATTR' }))
+        );
+        return { code: '', errors, warnings };
+      }
+    }
     const directive: AttributeDirective = {
       kind: 'attribute',
       selector,
       target: 'attribute',
       name,
-      value: JSON.stringify(value),
+      value: exprAttr
+        ? handlerScope(options).expression(exprAttr)
+        : JSON.stringify(value),
     };
 
     return {

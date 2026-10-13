@@ -3,7 +3,6 @@ import { elementsToComponentCode } from './renderer';
 import {
   ComponentIR,
   DirectiveNode,
-  EventModifiers,
   LoopDirective,
   ConditionDirective,
   EventDirective,
@@ -18,11 +17,15 @@ import {
   StyleDirective,
   StateDirective,
   TemplateNode,
+  MethodDirective,
   walkComponentIR,
   walkDirectives,
+  walkTemplateElements,
 } from './ir';
 import {
+  renderEventPreamble,
   serializeTemplateNodes,
+  URL_ATTRIBUTES,
   templateNodesHaveDirectives,
   templateNodesHaveInterpolations,
   templateNodesToHTML,
@@ -125,7 +128,36 @@ function containsEvent(ir: ComponentIR): boolean {
       found = true;
     }
   });
+  walkTemplateElements(ir, (node) => {
+    if (
+      node.bindings?.some(
+        (binding) => binding.kind === 'event' || binding.kind === 'model'
+      )
+    ) {
+      found = true;
+    }
+  });
   return found;
+}
+
+function containsBindings(ir: ComponentIR): boolean {
+  let found = false;
+  walkTemplateElements(ir, (node) => {
+    if ((node.bindings?.length ?? 0) > 0) {
+      found = true;
+    }
+  });
+  return found;
+}
+
+function collectMethods(ir: ComponentIR): MethodDirective[] {
+  const methods: MethodDirective[] = [];
+  walkComponentIR(ir, (directive) => {
+    if (directive.kind === 'method') {
+      methods.push(directive);
+    }
+  });
+  return methods;
 }
 
 function containsRuntimeDependency(ir: ComponentIR): boolean {
@@ -368,6 +400,35 @@ function compileComponentElement(
     }
   }
 
+  const stateRoots = new Set(collectInitialStateRoots(renderIR));
+  const methodNames = new Set<string>();
+  for (const method of collectMethods(renderIR)) {
+    if (
+      isReservedComponentProperty(method.name) ||
+      isNativeElementProperty(element, method.name)
+    ) {
+      errors.push({
+        type: 'validation',
+        message: `Method "${method.name}" conflicts with the custom element runtime`,
+        tag: 'FUNCTION',
+        hint: 'Choose a name that is not an HTMLElement property, e.g. "save" rather than "click".',
+      });
+    } else if (inputNames.has(method.name) || stateRoots.has(method.name)) {
+      errors.push({
+        type: 'validation',
+        message: `Method "${method.name}" has the same name as a prop or state field`,
+        tag: 'FUNCTION',
+      });
+    } else if (methodNames.has(method.name)) {
+      errors.push({
+        type: 'validation',
+        message: `Duplicate method "${method.name}"`,
+        tag: 'FUNCTION',
+      });
+    }
+    methodNames.add(method.name);
+  }
+
   addNodeLocations(errors, element);
   addNodeLocations(warnings, element);
 
@@ -375,7 +436,12 @@ function compileComponentElement(
     return { codeSnippets: [], errors, warnings, requiresRuntime: false };
   }
 
-  const classCode = buildComponentClass(metadata, renderIR, renderTargetVar);
+  const classCode = buildComponentClass(
+    metadata,
+    renderIR,
+    renderTargetVar,
+    componentFields
+  );
   const registrationCode = `if (!customElements.get('${metadata.tagName}')) {\n  customElements.define('${metadata.tagName}', ${metadata.className});\n}`;
 
   CompilerLogger.logInfo('Component compiled', {
@@ -397,6 +463,11 @@ function compileComponentElement(
       inputs: metadata.inputs.map((input) => ({ ...input })),
       events: collectEmittedEventNames(renderIR).map((name) => ({
         name,
+      })),
+      methods: collectMethods(renderIR).map((method) => ({
+        name: method.name,
+        params: [...method.params],
+        async: method.async,
       })),
       code: [classCode, registrationCode].join('\n\n'),
     },
@@ -716,7 +787,8 @@ function resolveComponentInputs(
 function buildComponentClass(
   metadata: ComponentMetadata,
   renderIR: ComponentIR,
-  renderTargetVar: string
+  renderTargetVar: string,
+  componentFields: ReadonlySet<string> = new Set()
 ): string {
   const observedGetter =
     metadata.observedAttributes.length > 0
@@ -793,6 +865,8 @@ function buildComponentClass(
     new Set([
       ...metadata.inputs.map((input) => input.propName),
       ...collectStateRoots(renderIR),
+      ...collectMethods(renderIR).map((method) => method.name),
+      ...componentFields,
     ])
   );
   const inputNames = new Set(metadata.inputs.map((input) => input.propName));
@@ -810,7 +884,10 @@ function buildComponentClass(
     !templateNodesHaveDirectives(renderIR.templateNodes);
   const hasEventDirectives = containsEvent(renderIR);
   const hasStateDirectives = containsState(renderIR);
-  const preservesFocus = metadata.inputs.length > 0 || hasStateDirectives;
+  const preservesFocus =
+    metadata.inputs.length > 0 ||
+    hasStateDirectives ||
+    containsBindings(renderIR);
   const controlledSelectors = collectControlledSelectors(renderIR);
   const directiveCounter = { value: 0 };
   const renderDirectiveChild = (
@@ -1131,6 +1208,28 @@ function buildComponentClass(
       composed: true,
       cancelable: false
     }, options)));
+  }
+
+  __htmsAfterMethod() {
+    // Methods may mutate nested state; re-render afterwards unless the
+    // method was called while rendering (e.g. from an interpolation).
+    if (!this.__htmsRendering) {
+      this.__htmsRequestRender();
+    }
+  }
+
+  __htmsSafeUrl(value) {
+    const text = value == null ? '' : String(value);
+    const normalized = text.replace(/[\\u0000-\\u0020]/g, '').toLowerCase();
+    if (
+      normalized.startsWith('javascript:') ||
+      normalized.startsWith('vbscript:') ||
+      normalized.startsWith('data:text/html')
+    ) {
+      console.warn('HTMS blocked an unsafe URL:', text);
+      return 'about:blank';
+    }
+    return text;
   }
 
   __htmsToText(value) {
@@ -1520,8 +1619,8 @@ ${
       return null;
     }
 
-    let controlled = false;
-    if (typeof candidate.matches === 'function') {
+    let controlled = candidate.__htmsControlled === true;
+    if (!controlled && typeof candidate.matches === 'function') {
       for (const selector of controlledSelectors) {
         try {
           if (candidate.matches(selector)) {
@@ -1603,6 +1702,30 @@ ${
 `
     : '';
 
+  const methodsCode = collectMethods(renderIR)
+    .map((method) => {
+      const bodyLines = method.body.flatMap((directive) =>
+        renderDirective(
+          directive,
+          '(this.__htmsRoot || this)',
+          directiveCounter,
+          '      ',
+          method.params,
+          componentInterpolationVars
+        )
+      );
+      return `  ${method.async ? 'async ' : ''}${method.name}(${method.params.join(', ')}) {
+    try {
+${bodyLines.join('\n')}
+    } finally {
+      this.__htmsAfterMethod();
+    }
+  }
+
+`;
+    })
+    .join('');
+
   const statePropertyInitialization = reactiveStateRoots
     .map(
       (stateName) =>
@@ -1612,7 +1735,7 @@ ${
   const renderBody = renderLines.map((line) => `  ${line}`).join('\n');
 
   return `class ${metadata.className} extends HTMLElement {
-${staticTemplateProperty}${inputHelpers}${stateHelpers}${updateHelpers}${eventHelpers}${reconciliationHelpers}${renderRootHelper}${focusHelpers}  constructor() {
+${staticTemplateProperty}${methodsCode}${inputHelpers}${stateHelpers}${updateHelpers}${eventHelpers}${reconciliationHelpers}${renderRootHelper}${focusHelpers}  constructor() {
     super();
     this.__htmsRoot = null;
     this.__htmsProps = Object.create(null);
@@ -1819,8 +1942,10 @@ function renderLoopDirective(
     }
   } else {
     loopScopeVars.push(directive.indexVar);
+    const countVar = `_count${counter.value++}`;
+    lines.push(`${indent}const ${countVar} = ${directive.count};`);
     lines.push(
-      `${indent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${directive.count}; ${directive.indexVar}++) {`
+      `${indent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${countVar}; ${directive.indexVar}++) {`
     );
   }
 
@@ -1957,9 +2082,12 @@ function renderEventDirective(
   // `once` flag, pending debounce timers) lives on the mounted element and
   // the component, keyed by this directive's id.
   const listenerId = JSON.stringify(timerVar);
+  const globalTarget = GLOBAL_EVENT_TARGETS.get(directive.selector.trim());
   lines.push(`${indent}{`);
   lines.push(
-    `${innerIndent}const eventTargets = ${targetVar}.querySelectorAll(${JSON.stringify(directive.selector)});`
+    globalTarget
+      ? `${innerIndent}const eventTargets = typeof window === 'undefined' ? [] : [${globalTarget}];`
+      : `${innerIndent}const eventTargets = ${targetVar}.querySelectorAll(${JSON.stringify(directive.selector)});`
   );
   lines.push(`${innerIndent}eventTargets.forEach(targetEl => {`);
   lines.push(`${bodyIndent}const ${handlerVar} = (event) => {`);
@@ -1978,8 +2106,13 @@ function renderEventDirective(
     }
   }
   lines.push(`${bodyIndent}};`);
+  // Window, document and host listeners attach directly for this render;
+  // element listeners are marked on the fresh node and attached to the
+  // live node during reconciliation.
   lines.push(
-    `${bodyIndent}this.__htmsMarkListener(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar}${listenerOptions});`
+    globalTarget
+      ? `${bodyIndent}this.__htmsListen(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar}${listenerOptions});`
+      : `${bodyIndent}this.__htmsMarkListener(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar}${listenerOptions});`
   );
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
@@ -1987,37 +2120,13 @@ function renderEventDirective(
   return lines;
 }
 
-// Key filter, `once` guard and prevent/stop calls shared by <event>
-// directives and inline on:event attributes.
-export function renderEventPreamble(
-  modifiers: EventModifiers,
-  listenerId: string,
-  indent: string
-): string[] {
-  const lines: string[] = [];
-  if (modifiers.key) {
-    lines.push(
-      `${indent}if (event.key !== ${JSON.stringify(modifiers.key)}) { return; }`
-    );
-  }
-  if (modifiers.self) {
-    lines.push(
-      `${indent}if (event.target !== event.currentTarget) { return; }`
-    );
-  }
-  if (modifiers.once) {
-    lines.push(
-      `${indent}if (!this.__htmsClaimOnce(event.currentTarget, ${listenerId})) { return; }`
-    );
-  }
-  if (modifiers.prevent) {
-    lines.push(`${indent}event.preventDefault();`);
-  }
-  if (modifiers.stop) {
-    lines.push(`${indent}event.stopPropagation();`);
-  }
-  return lines;
-}
+// <event target="window"> and friends listen outside the render root.
+const GLOBAL_EVENT_TARGETS = new Map([
+  ['window', 'window'],
+  ['document', 'document'],
+  [':host', 'this'],
+  ['host', 'this'],
+]);
 
 function renderVisibilityDirective(
   directive: VisibilityDirective,
@@ -2062,9 +2171,22 @@ function renderAttributeDirective(
   );
   lines.push(`${innerIndent}targets.forEach(node => {`);
   if (directive.target === 'attribute') {
-    lines.push(`${innerIndent}  node.setAttribute(${name}, ${value});`);
+    lines.push(`${innerIndent}  const attributeValue = ${value};`);
+    lines.push(
+      `${innerIndent}  if (attributeValue == null || attributeValue === false) { node.removeAttribute(${name}); }`
+    );
+    const safeValue = URL_ATTRIBUTES.has(directive.name.toLowerCase())
+      ? `this.__htmsSafeUrl(attributeValue)`
+      : 'String(attributeValue)';
+    lines.push(
+      `${innerIndent}  else { node.setAttribute(${name}, attributeValue === true ? '' : ${safeValue}); }`
+    );
   } else {
-    lines.push(`${innerIndent}  const propertyValue = ${value};`);
+    lines.push(
+      URL_ATTRIBUTES.has((directive.path?.[0] ?? directive.name).toLowerCase())
+        ? `${innerIndent}  const propertyValue = this.__htmsSafeUrl(${value});`
+        : `${innerIndent}  const propertyValue = ${value};`
+    );
     if (directive.path && directive.path.length > 1) {
       const pathAccess = directive.path
         .map((segment) => `['${segment}']`)

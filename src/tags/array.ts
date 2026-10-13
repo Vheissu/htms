@@ -92,6 +92,20 @@ export const handleArrayTag: TagHandler = (
     }
 
     const arrayLiteral = `[${values.join(', ')}]`;
+    if (options.componentContext) {
+      // Inside a component the literal declares component state, like <var>.
+      return {
+        code: '',
+        errors,
+        warnings,
+        component: {
+          directives: [
+            { kind: 'state', mode: 'init', path: [name], value: arrayLiteral },
+          ],
+        },
+      };
+    }
+
     const code = `const ${name} = ${arrayLiteral};`;
 
     CompilerLogger.logDebug('Generated array declaration', {

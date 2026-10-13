@@ -10,6 +10,8 @@ import { handlerScope, withLocals } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 
+const MAX_COUNT = 10000;
+
 export const handleRepeatTag: TagHandler = (
   element: Element,
   options: TagHandlerOptions = {}
@@ -63,6 +65,7 @@ export const handleRepeatTag: TagHandler = (
     }
     let loopVariable = itemAttr || 'item';
     let countNum: number | null = null;
+    let dynamicCount: string | null = null;
     const componentDirectives: DirectiveNode[] = [];
     const componentTemplateChildren: TemplateNode[] = [];
     let componentSource = variable ?? '';
@@ -119,6 +122,31 @@ export const handleRepeatTag: TagHandler = (
       } else {
         loopCode = `for (const ${loopVariable} of ${variable}) {`;
       }
+    } else if (
+      count &&
+      options.componentContext &&
+      !SecurityValidator.isNumericLiteral(count.trim())
+    ) {
+      // count="rating" — evaluated on each render and clamped to 0..10000.
+      const exprErrors = SecurityValidator.validateContent(count);
+      if (exprErrors.length > 0) {
+        errors.push(
+          ...exprErrors.map((error) => ({ ...error, tag: 'REPEAT' }))
+        );
+        return { code: '', errors, warnings };
+      }
+      if (indexVar) {
+        const idxErrors =
+          SecurityValidator.validateJavaScriptIdentifier(indexVar);
+        if (idxErrors.length > 0) {
+          errors.push(
+            ...idxErrors.map((error) => ({ ...error, tag: 'REPEAT' }))
+          );
+          return { code: '', errors, warnings };
+        }
+      }
+      loopVariable = indexVar || 'i';
+      dynamicCount = `Math.min(${MAX_COUNT}, Math.max(0, Math.floor(Number(${handlerScope(options).expression(count.trim())}) || 0)))`;
     } else if (count) {
       // Numeric iteration mode
       const countErrors = SecurityValidator.validateNumericValue(count);
@@ -146,7 +174,7 @@ export const handleRepeatTag: TagHandler = (
         });
       }
 
-      loopVariable = 'i'; // use index for numeric loops
+      loopVariable = indexVar || 'i'; // use index for numeric loops
       loopCode = `for (let ${loopVariable} = 0; ${loopVariable} < ${countNum}; ${loopVariable}++) {`;
     }
 
@@ -277,11 +305,11 @@ export const handleRepeatTag: TagHandler = (
           template: componentTemplateChildren,
           directives: componentDirectives,
         }
-      : countNum !== null
+      : countNum !== null || dynamicCount !== null
         ? {
             kind: 'loop',
             mode: 'range',
-            count: countNum,
+            count: dynamicCount ?? String(countNum),
             indexVar: loopVariable,
             template: componentTemplateChildren,
             directives: componentDirectives,

@@ -1,6 +1,7 @@
-import { CompilerError } from '../types';
+import { CompilerError, CompilerWarning } from '../types';
 import { SecurityValidator } from '../utils/security';
-import { TemplateChild, TemplateNode } from './ir';
+import { TemplateBinding, TemplateChild, TemplateNode } from './ir';
+import { isBindingAttribute, parseBindingAttribute } from './bindings';
 
 // Resolves a non-template child element (an HTMS directive tag such as
 // <event> or <if>) into template children: embedded directives and/or
@@ -214,15 +215,36 @@ function templateChildNodes(element: Element): Node[] {
   return Array.from(element.childNodes);
 }
 
+// Checks a markup subtree: attribute names and values, text content and
+// inline binding syntax. Directive tags nested in the markup are skipped;
+// their handlers validate them.
 export function collectTemplateSecurityErrors(
   element: Element
 ): CompilerError[] {
   const errors: CompilerError[] = [];
+  const tag = element.tagName.toUpperCase();
 
   for (const attr of Array.from(element.attributes)) {
+    if (isBindingAttribute(attr.name)) {
+      errors.push(
+        ...SecurityValidator.validateContent(attr.value).map((error) => ({
+          ...error,
+          tag,
+        }))
+      );
+      const parsed = parseBindingAttribute(attr.name, attr.value, element);
+      if (parsed.error) {
+        errors.push({
+          type: 'validation',
+          message: parsed.error,
+          tag,
+        });
+      }
+      continue;
+    }
     errors.push(
       ...SecurityValidator.validateHtmlAttribute(attr.name, attr.value).map(
-        (error) => ({ ...error, tag: element.tagName.toUpperCase() })
+        (error) => ({ ...error, tag })
       )
     );
   }
@@ -233,11 +255,11 @@ export function collectTemplateSecurityErrors(
         ...SecurityValidator.validateContent(child.textContent).map(
           (error) => ({
             ...error,
-            tag: element.tagName.toUpperCase(),
+            tag,
           })
         )
       );
-    } else if (child.nodeType === 1) {
+    } else if (child.nodeType === 1 && isTemplateElement(child)) {
       errors.push(...collectTemplateSecurityErrors(child as Element));
     }
   }
@@ -245,12 +267,43 @@ export function collectTemplateSecurityErrors(
   return errors;
 }
 
+// Invalid binding syntax is always an error. Security findings are errors
+// in strict mode and warnings otherwise (the offending attribute or text is
+// dropped from the output either way).
+export function partitionTemplateErrors(
+  found: CompilerError[],
+  strictMode: boolean
+): { errors: CompilerError[]; warnings: CompilerWarning[] } {
+  const errors: CompilerError[] = [];
+  const warnings: CompilerWarning[] = [];
+  for (const error of found) {
+    if (strictMode || error.type === 'validation') {
+      errors.push(error);
+    } else {
+      warnings.push({ message: error.message, tag: error.tag });
+    }
+  }
+  return { errors, warnings };
+}
+
 export function elementToTemplateNode(
   element: Element,
   resolveChild?: ChildResolver
 ): TemplateNode {
   const attributes: Record<string, string> = {};
+  const bindings: TemplateBinding[] = [];
   for (const attr of Array.from(element.attributes)) {
+    if (isBindingAttribute(attr.name)) {
+      // Invalid bindings are reported by collectTemplateSecurityErrors.
+      const parsed = parseBindingAttribute(attr.name, attr.value, element);
+      if (
+        parsed.binding &&
+        SecurityValidator.validateContent(attr.value).length === 0
+      ) {
+        bindings.push(parsed.binding);
+      }
+      continue;
+    }
     if (
       SecurityValidator.validateHtmlAttribute(attr.name, attr.value).length ===
       0
@@ -286,6 +339,7 @@ export function elementToTemplateNode(
     tagName: element.localName,
     namespace: templateNamespace(element),
     attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
+    bindings: bindings.length > 0 ? bindings : undefined,
     children: children.length > 0 ? children : undefined,
   };
 }

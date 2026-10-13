@@ -1,5 +1,6 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 
 export const handleObjectTag: TagHandler = (
@@ -191,7 +192,11 @@ export const handleObjectTag: TagHandler = (
           }
         }
         // Check if it's a variable reference
-        else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propValue)) {
+        // (inside a component only when it names a field; otherwise text)
+        else if (
+          /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propValue) &&
+          (handlerScope(options).isReference?.(propValue) ?? true)
+        ) {
           const varErrors =
             SecurityValidator.validateJavaScriptIdentifier(propValue);
           if (varErrors.length > 0) {
@@ -200,7 +205,7 @@ export const handleObjectTag: TagHandler = (
             );
             continue;
           }
-          processedValue = propValue;
+          processedValue = handlerScope(options).expression(propValue);
         }
         // Treat as string literal (escape and quote)
         else {
@@ -217,6 +222,20 @@ export const handleObjectTag: TagHandler = (
     }
 
     const objectLiteral = `{${properties.join(', ')}}`;
+    if (options.componentContext) {
+      // Inside a component the literal declares component state, like <var>.
+      return {
+        code: '',
+        errors,
+        warnings,
+        component: {
+          directives: [
+            { kind: 'state', mode: 'init', path: [name], value: objectLiteral },
+          ],
+        },
+      };
+    }
+
     const code = `const ${name} = ${objectLiteral};`;
 
     CompilerLogger.logDebug('Generated object declaration', {

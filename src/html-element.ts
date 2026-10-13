@@ -2,7 +2,11 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from './types';
 import { SecurityValidator } from './utils/security';
 import { CompilerLogger } from './utils/logger';
 import { TemplateChild } from './component/ir';
-import { elementToTemplateNode } from './component/template-utils';
+import {
+  collectTemplateSecurityErrors,
+  elementToTemplateNode,
+  partitionTemplateErrors,
+} from './component/template-utils';
 import { getNodeLocation } from './diagnostics';
 
 // Location-based names keep compiled output deterministic; the counter is a
@@ -33,6 +37,12 @@ export const handleHtmlElement: TagHandler = (
     // nested inside the element are resolved into embedded template
     // children so they render scoped to this element.
     if (options.componentContext) {
+      const findings = partitionTemplateErrors(
+        collectTemplateSecurityErrors(element),
+        options.strictMode ?? false
+      );
+      errors.push(...findings.errors);
+      warnings.push(...findings.warnings);
       const node = elementToTemplateNode(element, (child) => {
         const childResult = handleElement(child, {
           ...options,

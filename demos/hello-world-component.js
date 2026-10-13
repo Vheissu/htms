@@ -33,6 +33,22 @@ class HelloWorldComponent extends HTMLElement {
       cancelable: false
     }, options)));
   }
+  __htmsAfterMethod() {
+    // Methods may mutate nested state; re-render afterwards unless the
+    // method was called while rendering (e.g. from an interpolation).
+    if (!this.__htmsRendering) {
+      this.__htmsRequestRender();
+    }
+  }
+  __htmsSafeUrl(value) {
+    const text = value == null ? '' : String(value);
+    const normalized = text.replace(/[\u0000-\u0020]/g, '').toLowerCase();
+    if (normalized.startsWith('javascript:') || normalized.startsWith('vbscript:') || normalized.startsWith('data:text/html')) {
+      console.warn('HTMS blocked an unsafe URL:', text);
+      return 'about:blank';
+    }
+    return text;
+  }
   __htmsToText(value) {
     return value == null ? '' : String(value);
   }

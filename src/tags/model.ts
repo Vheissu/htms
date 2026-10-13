@@ -85,12 +85,18 @@ export const handleModelTag: TagHandler = (
     }
 
     const trim = trimAttr ? trimAttr.toLowerCase() === 'true' : false;
-    const sourceExpr =
+    const numberAttr = element.getAttribute('number');
+    const numeric = numberAttr !== null && numberAttr.toLowerCase() !== 'false';
+    const rawSource =
       prop === 'checked'
         ? 'event.currentTarget.checked'
         : prop === 'value' && trim
           ? 'event.currentTarget.value.trim()'
           : `event.currentTarget.${prop}`;
+    // number="true" stores numbers (empty input → null) instead of strings.
+    const sourceExpr = numeric
+      ? `(${rawSource} === '' ? null : Number(${rawSource}))`
+      : rawSource;
 
     const exprErrors = SecurityValidator.validateContent(pathInfo.expr);
     if (exprErrors.length > 0) {

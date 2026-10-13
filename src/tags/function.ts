@@ -2,6 +2,64 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
+import { DirectiveNode, MethodDirective } from '../component/ir';
+import { handlerScope, withLocals } from '../component/scope';
+
+// Inside a component, <function name="save" params="item"> becomes a class
+// method. Text is the method body; child tags (<set>, <push>, ...) run in
+// document order with it. Bare field names resolve to `this.<field>`.
+function buildComponentMethod(
+  element: Element,
+  name: string,
+  params: string[],
+  options: TagHandlerOptions,
+  diagnostics: Pick<HandlerResult, 'errors' | 'warnings'>
+): HandlerResult {
+  const { errors, warnings } = diagnostics;
+  const scope = handlerScope(options);
+  const childOptions = withLocals(options, ...params);
+  const body: DirectiveNode[] = [];
+  let pendingText = '';
+  const flushText = (): void => {
+    if (pendingText.trim()) {
+      body.push({
+        kind: 'statement',
+        code: scope.statements(pendingText.trim(), params),
+      });
+    }
+    pendingText = '';
+  };
+
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === 3) {
+      pendingText += node.textContent ?? '';
+      continue;
+    }
+    if (node.nodeType !== 1) {
+      continue;
+    }
+    flushText();
+    const result = handleElement(node as Element, childOptions);
+    errors.push(...result.errors);
+    warnings.push(...result.warnings);
+    if (result.component?.directives) {
+      body.push(...result.component.directives);
+    } else if (result.code) {
+      body.push({ kind: 'statement', code: result.code });
+    }
+  }
+  flushText();
+
+  const asyncAttr = element.getAttribute('async');
+  const method: MethodDirective = {
+    kind: 'method',
+    name,
+    params,
+    async: asyncAttr !== null && asyncAttr.toLowerCase() !== 'false',
+    body,
+  };
+  return { code: '', errors, warnings, component: { directives: [method] } };
+}
 
 export const handleFunctionTag: TagHandler = (
   element: Element,
@@ -77,6 +135,13 @@ export const handleFunctionTag: TagHandler = (
         });
         return { code: '', errors, warnings };
       }
+    }
+
+    if (options.componentContext) {
+      return buildComponentMethod(element, name, paramList, options, {
+        errors,
+        warnings,
+      });
     }
 
     // Generate function with safe body (do not sanitize JS code; rely on validation above)

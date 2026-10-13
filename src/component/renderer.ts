@@ -14,6 +14,7 @@ import { ComponentIR, createEmptyComponentIR, TemplateChild } from './ir';
 import {
   collectTemplateSecurityErrors,
   elementToTemplateNode,
+  partitionTemplateErrors,
   templateTextValue,
 } from './template-utils';
 import { addNodeLocations } from '../diagnostics';
@@ -133,21 +134,16 @@ export function elementsToComponentCode(
     };
 
     if (coreIsStandardHtmlElement(element) && !treatAsCustom) {
-      const templateErrors = collectTemplateSecurityErrors(element);
-      if (templateErrors.length > 0) {
+      const templateFindings = partitionTemplateErrors(
+        collectTemplateSecurityErrors(element),
+        strictMode
+      );
+      warnings.push(...addNodeLocations(templateFindings.warnings, element));
+      if (templateFindings.errors.length > 0) {
+        errors.push(...addNodeLocations(templateFindings.errors, element));
         if (strictMode) {
-          errors.push(...addNodeLocations(templateErrors, element));
           continue;
         }
-        warnings.push(
-          ...addNodeLocations(
-            templateErrors.map((error) => ({
-              message: error.message,
-              tag: error.tag,
-            })),
-            element
-          )
-        );
       }
       ir.templateNodes.push(elementToTemplateNode(element, resolveChild));
       continue;

@@ -1,5 +1,14 @@
-import { DirectiveNode, TemplateNode } from './ir';
-import { expressionReferences, scopeExpression } from './scope';
+import {
+  DirectiveNode,
+  EventModifiers,
+  TemplateBinding,
+  TemplateNode,
+} from './ir';
+import {
+  expressionReferences,
+  scopeExpression,
+  scopeStatements,
+} from './scope';
 
 const IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
@@ -31,6 +40,15 @@ const BOOLEAN_ATTRIBUTES = new Set([
   'required',
   'reversed',
   'selected',
+]);
+
+export const URL_ATTRIBUTES = new Set([
+  'action',
+  'formaction',
+  'href',
+  'poster',
+  'src',
+  'xlink:href',
 ]);
 
 // Renders an embedded directive against a target element variable. The
@@ -83,11 +101,12 @@ export function templateNodesHaveDirectives(nodes: TemplateNode[]): boolean {
   return nodes.some(
     (node) =>
       node.type === 'element' &&
-      (node.children ?? []).some(
-        (child) =>
-          child.type === 'directive' ||
-          (child.type === 'element' && templateNodesHaveDirectives([child]))
-      )
+      ((node.bindings?.length ?? 0) > 0 ||
+        (node.children ?? []).some(
+          (child) =>
+            child.type === 'directive' ||
+            (child.type === 'element' && templateNodesHaveDirectives([child]))
+        ))
   );
 }
 
@@ -204,8 +223,34 @@ function serializeNode(
           continue;
         }
       }
+      const serialized = serializeTextValue(
+        value,
+        interpolationVars,
+        componentInterpolationVars
+      );
+      // Interpolated URLs are checked at runtime so data can't smuggle in a
+      // javascript: URL.
+      const attributeValue =
+        URL_ATTRIBUTES.has(key.toLowerCase()) &&
+        serialized !== JSON.stringify(value)
+          ? `this.__htmsSafeUrl(${serialized})`
+          : serialized;
       statements.push(
-        `${varName}.setAttribute(${attributeLiteral}, ${serializeTextValue(value, interpolationVars, componentInterpolationVars)});`
+        `${varName}.setAttribute(${attributeLiteral}, ${attributeValue});`
+      );
+    }
+  }
+
+  const bindings = node.bindings ?? [];
+  for (const binding of bindings) {
+    if (binding.kind === 'event') {
+      statements.push(
+        ...renderEventBinding(
+          binding,
+          varName,
+          interpolationVars,
+          componentInterpolationVars
+        )
       );
     }
   }
@@ -237,8 +282,129 @@ function serializeNode(
     }
   }
 
+  // Property-style bindings run after children exist (a <select> needs its
+  // options before its value can be set).
+  for (const binding of bindings) {
+    if (binding.kind !== 'event' && binding.kind !== 'if') {
+      statements.push(
+        ...renderPropertyBinding(
+          binding,
+          varName,
+          interpolationVars,
+          componentInterpolationVars
+        )
+      );
+    }
+  }
+
   statements.push(`${targetVar}.appendChild(${varName});`);
+
+  const condition = bindings.find((binding) => binding.kind === 'if');
+  if (condition) {
+    const expression = scopeExpression(
+      condition.expression,
+      new Set(componentInterpolationVars),
+      interpolationVars
+    );
+    return [
+      `if (${expression}) {`,
+      ...statements.map((line) => `  ${line}`),
+      '}',
+    ];
+  }
   return statements;
+}
+
+function renderEventBinding(
+  binding: Extract<TemplateBinding, { kind: 'event' }>,
+  varName: string,
+  interpolationVars: string[],
+  componentInterpolationVars: string[]
+): string[] {
+  const listenerId = JSON.stringify(`${varName}:${binding.eventType}`);
+  const body = scopeStatements(
+    binding.code,
+    new Set(componentInterpolationVars),
+    [...interpolationVars, 'event']
+  );
+  // Inline handlers may mutate nested state (todos.push(x)); always ask
+  // for an update, which is batched and cheap when nothing changed.
+  const run = [`${body.replace(/;?\s*$/, ';')}`, 'this.requestUpdate();'];
+  const lines = [
+    `this.__htmsMarkListener(${varName}, ${JSON.stringify(binding.eventType)}, (event) => {`,
+  ];
+  lines.push(...renderEventPreamble(binding.modifiers, listenerId, '  '));
+  if (binding.modifiers.debounceMs !== undefined) {
+    lines.push(
+      `  this.__htmsDebounce(event, ${listenerId}, ${binding.modifiers.debounceMs}, (event) => {`,
+      ...run.map((line) => `    ${line}`),
+      '  });'
+    );
+  } else {
+    lines.push(...run.map((line) => `  ${line}`));
+  }
+  lines.push(`}${listenerOptions(binding.modifiers)});`);
+  return lines;
+}
+
+function listenerOptions(modifiers: EventModifiers): string {
+  const entries: string[] = [];
+  if (modifiers.once) entries.push('once: true');
+  if (modifiers.passive) entries.push('passive: true');
+  if (modifiers.capture) entries.push('capture: true');
+  return entries.length > 0 ? `, { ${entries.join(', ')} }` : '';
+}
+
+function renderPropertyBinding(
+  binding: Exclude<TemplateBinding, { kind: 'event' } | { kind: 'if' }>,
+  varName: string,
+  interpolationVars: string[],
+  componentInterpolationVars: string[]
+): string[] {
+  const fields = new Set(componentInterpolationVars);
+  const scoped = (expression: string): string =>
+    scopeExpression(expression, fields, interpolationVars);
+
+  if (binding.kind === 'class') {
+    return [
+      `${varName}.classList.toggle(${JSON.stringify(binding.className)}, !!(${scoped(binding.expression)}));`,
+    ];
+  }
+
+  if (binding.kind === 'style') {
+    const property = JSON.stringify(binding.property);
+    return [
+      `{`,
+      `  const styleValue = ${scoped(binding.expression)};`,
+      `  if (styleValue == null || styleValue === false) { ${varName}.style.removeProperty(${property}); }`,
+      `  else { ${varName}.style.setProperty(${property}, String(styleValue)); }`,
+      `}`,
+    ];
+  }
+
+  // Two-way binding: write state into the property on render, write the
+  // property back into state on input.
+  const property = JSON.stringify(binding.property);
+  const target = scoped(binding.path);
+  const read =
+    binding.property === 'value'
+      ? `(${target} == null ? '' : ${target})`
+      : target;
+  const source = binding.numeric
+    ? `(event.currentTarget.value === '' ? null : Number(event.currentTarget.value))`
+    : `event.currentTarget[${property}]`;
+  return [
+    `{`,
+    `  const boundValue = ${read};`,
+    `  ${varName}[${property}] = boundValue;`,
+    `  this.__htmsMarkProperty(${varName}, [${property}], boundValue);`,
+    `  this.__htmsMarkProperty(${varName}, ['__htmsControlled'], true);`,
+    `}`,
+    `this.__htmsMarkListener(${varName}, ${JSON.stringify(binding.eventType)}, (event) => {`,
+    `  ${target} = ${source};`,
+    `  this.requestUpdate();`,
+    `});`,
+  ];
 }
 
 interface InterpolationToken {
@@ -464,4 +630,36 @@ function resolveExpressionInterpolation(
 
 function optionalPath(segments: string[]): string {
   return segments.join('?.');
+}
+
+// Key filter, `once` guard and prevent/stop calls shared by <event>
+// directives and inline on:event attributes.
+export function renderEventPreamble(
+  modifiers: EventModifiers,
+  listenerId: string,
+  indent: string
+): string[] {
+  const lines: string[] = [];
+  if (modifiers.key) {
+    lines.push(
+      `${indent}if (event.key !== ${JSON.stringify(modifiers.key)}) { return; }`
+    );
+  }
+  if (modifiers.self) {
+    lines.push(
+      `${indent}if (event.target !== event.currentTarget) { return; }`
+    );
+  }
+  if (modifiers.once) {
+    lines.push(
+      `${indent}if (!this.__htmsClaimOnce(event.currentTarget, ${listenerId})) { return; }`
+    );
+  }
+  if (modifiers.prevent) {
+    lines.push(`${indent}event.preventDefault();`);
+  }
+  if (modifiers.stop) {
+    lines.push(`${indent}event.stopPropagation();`);
+  }
+  return lines;
 }

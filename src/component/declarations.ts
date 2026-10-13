@@ -35,15 +35,24 @@ function renderComponentDeclaration(artifact: ComponentArtifact): string {
   const properties = artifact.inputs
     .map((input) => `  ${input.propName}: ${declarationType(input.type)};`)
     .join('\n');
+  const methods = (artifact.methods ?? [])
+    .map(
+      (method) =>
+        `  ${method.name}(${method.params.map((param) => `${param}?: unknown`).join(', ')}): ${method.async ? 'Promise<unknown>' : 'unknown'};`
+    )
+    .join('\n');
 
   return `export interface ${eventMapName} {
 ${eventEntries}
 }
 
 export declare class ${artifact.className} extends HTMLElement {
-${properties ? `${properties}\n` : ''}  readonly updateComplete: Promise<void>;
+${properties ? `${properties}\n` : ''}${methods ? `${methods}\n` : ''}  readonly updateComplete: Promise<void>;
   readonly renderError: unknown;
   requestUpdate(): Promise<void>;
+  $(selector: string): Element | null;
+  $$(selector: string): Element[];
+  emit(name: string, detail?: unknown, options?: CustomEventInit): boolean;
   addEventListener<K extends keyof ${eventMapName}>(
     type: K,
     listener: (this: ${artifact.className}, event: ${eventMapName}[K]) => unknown,

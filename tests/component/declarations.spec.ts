@@ -11,6 +11,7 @@ describe('Component declarations', () => {
           props="heading:string, count:number, active:boolean, data:json"
         >
           <button id="save">Save</button>
+          <function name="reset" params="value">count = value;</function>
           <event target="#save" type="click">
             <emit name="card-saved" detail="this.data"></emit>
           </event>
@@ -30,6 +31,7 @@ describe('Component declarations', () => {
     expect(declarations).toContain('data: unknown | null;');
     expect(declarations).toContain('"card-saved": CustomEvent<unknown>;');
     expect(declarations).toContain('"typed-card": TypedCardComponent;');
+    expect(declarations).toContain('reset(value?: unknown): unknown;');
 
     const files = new Map<string, string>([
       ['/typed-card.d.ts', declarations],
@@ -38,6 +40,7 @@ describe('Component declarations', () => {
         `
           const card = document.createElement('typed-card');
           card.count = 2;
+          card.reset(3);
           card.active = true;
           card.addEventListener('card-saved', event => {
             const detail: unknown = event.detail;

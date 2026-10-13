@@ -6,8 +6,10 @@ import {
   TemplateNode,
 } from '../component/ir';
 import {
+  collectTemplateSecurityErrors,
   elementToTemplateNode,
   isLowerCaseTag,
+  partitionTemplateErrors,
 } from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope, withLocals } from '../component/scope';
@@ -120,6 +122,13 @@ export const handleKeyedListTag: TagHandler = (
         });
         return { code: '', errors, warnings };
       }
+
+      const findings = partitionTemplateErrors(
+        collectTemplateSecurityErrors(templateEl),
+        options.strictMode ?? false
+      );
+      errors.push(...findings.errors);
+      warnings.push(...findings.warnings);
 
       // Directive tags nested inside the item template (e.g. <event>)
       // resolve to template children scoped to each rendered item.
