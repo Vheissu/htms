@@ -386,9 +386,7 @@ describe('Tag handlers', () => {
 
       expect(result.errors).toHaveLength(0);
       expect(result.code).toContain('owner: owner');
-      expect(result.code).toContain(
-        'deps: [function(){ return user.id; }, function(){ return token; }]'
-      );
+      expect(result.code).toContain('deps: [() => (user.id), () => (token)]');
       expect(result.code).toContain('immediate: false');
       expect(result.code).toContain('once: true');
       expect(result.code).toContain('cleanupFlag = true');
@@ -401,7 +399,7 @@ describe('Tag handlers', () => {
       const result = handleEffectTag(element, { strictMode: true });
 
       expect(result.errors).toHaveLength(0);
-      expect(result.code).toContain('cleanup: function()');
+      expect(result.code).toContain('cleanup: () =>');
       expect(result.code).toContain('tearDown()');
     });
 

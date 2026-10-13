@@ -79,7 +79,11 @@ async function readSourceFile(
   inputPath: string,
   maxSize: number
 ): Promise<SourceFileOutcome> {
-  const validationErrors = SecurityValidator.validateFilePath(inputPath);
+  // The user names the file, so a relative path such as ../app/card.html is
+  // legitimate. Validate where it resolves rather than how it is spelled.
+  const validationErrors = SecurityValidator.validateFilePath(
+    path.resolve(inputPath)
+  );
   if (validationErrors.length > 0) {
     CompilerLogger.logValidationError('Invalid input file path', {
       input: inputPath,
@@ -158,15 +162,8 @@ async function readSourceFile(
     return { errors: [fileError] };
   }
 
-  const contentErrors = SecurityValidator.validateContent(source);
-  if (contentErrors.length > 0) {
-    CompilerLogger.logSecurityIssue('Dangerous content detected', {
-      input: inputPath,
-      errors: contentErrors,
-    });
-    return { source, errors: contentErrors };
-  }
-
+  // Content is security-checked by the compiler itself, which honours
+  // strict mode and reports source locations.
   return { source, errors: [] };
 }
 
@@ -232,7 +229,9 @@ export async function compileFile(
   }
 
   const outputPath = resolveOutputPath(inputPath, options.outputPath);
-  const outputValidationErrors = SecurityValidator.validateFilePath(outputPath);
+  const outputValidationErrors = SecurityValidator.validateFilePath(
+    path.resolve(outputPath)
+  );
   if (outputValidationErrors.length > 0) {
     CompilerLogger.logValidationError('Invalid output file path', {
       outputPath,
@@ -249,7 +248,7 @@ export async function compileFile(
     ? generateComponentDeclarations(result.components ?? [])
     : undefined;
   const declarationValidationErrors = declarationPath
-    ? SecurityValidator.validateFilePath(declarationPath)
+    ? SecurityValidator.validateFilePath(path.resolve(declarationPath))
     : [];
   if (declarationValidationErrors.length > 0) {
     CompilerLogger.logValidationError('Invalid declaration output path', {
@@ -424,7 +423,7 @@ export async function createStarterComponent(
 
   const outputPath = path.resolve(options.outputPath ?? `${tagName}.html`);
   const pathErrors = [
-    ...SecurityValidator.validateFilePath(outputPath),
+    ...SecurityValidator.validateFilePath(path.resolve(outputPath)),
     ...SecurityValidator.validateFileExtension(outputPath, ['html', 'htm']),
   ];
   if (pathErrors.length > 0) {

@@ -201,16 +201,9 @@
           record.depsFns = deps;
           record.run = typeof spec.run === 'function' ? spec.run : record.run;
           record.cleanupFactory = typeof spec.cleanup === 'function' ? spec.cleanup : record.cleanupFactory;
-          record.once = !!spec.once;
-          record.disposed = false;
-          if (spec.immediate !== false) {
-            record.dirty = true;
-          }
-          if (spec.immediate === false && !record.initialized) {
-            record.skipInitial = true;
-          } else if (spec.immediate !== false) {
-            record.skipInitial = false;
-          }
+          record.once = !!spec.once;  // Re-registration happens on every render. `immediate` only
+                                      // governs the first run; afterwards the effect re-runs when its
+                                      // dependencies change (or on every flush when it has none).
         }
         this.scheduleFlush();
         return {
@@ -278,14 +271,6 @@
   }
 }());
 class EffectFetchDemoComponent extends HTMLElement {
-  static get __htmsTemplate() {
-    if (!this.__templateCache) {
-      const template = document.createElement('template');
-      template.innerHTML = '<div class="demo"><button id="load">Load Quote</button><p id="status">Status: Idle</p><blockquote id="quote"></blockquote><p id="error" class="error"></p></div>';
-      this.__templateCache = template;
-    }
-    return this.__templateCache;
-  }
   __htmsDefineStateProperty(propName) {
     const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
     const ownValue = hadOwnValue ? this[propName] : undefined;
@@ -359,7 +344,11 @@ class EffectFetchDemoComponent extends HTMLElement {
     const value = valueFactory();
     switch (op) {
     case '+=':
-      target[key] = (typeof current === 'number' ? current : 0) + value;
+      if (current == null) {
+        target[key] = typeof value === 'string' ? value : 0 + value;
+      } else {
+        target[key] = current + value;
+      }
       break;
     case '-=':
       target[key] = (typeof current === 'number' ? current : 0) - value;
@@ -448,25 +437,26 @@ class EffectFetchDemoComponent extends HTMLElement {
       console.error('HTMS component render failed:', error);
     }
   }
-  __htmsMarkListener(target, eventType, handler) {
+  __htmsMarkListener(target, eventType, handler, options) {
     if (!target.__htmsListeners) {
       target.__htmsListeners = [];
     }
     target.__htmsListeners.push({
       eventType,
-      handler
+      handler,
+      options
     });
   }
-  __htmsListen(target, eventType, handler) {
-    target.addEventListener(eventType, handler);
+  __htmsListen(target, eventType, handler, options) {
+    target.addEventListener(eventType, handler, options);
     this.__htmsRenderCleanups.push(() => {
-      target.removeEventListener(eventType, handler);
+      target.removeEventListener(eventType, handler, options);
     });
   }
   __htmsActivateListeners(target, source) {
     const listeners = source.__htmsListeners || [];
     for (const listener of listeners) {
-      this.__htmsListen(target, listener.eventType, listener.handler);
+      this.__htmsListen(target, listener.eventType, listener.handler, listener.options);
     }
   }
   __htmsResolveEventRoot(currentTarget, sourceScope) {
@@ -481,6 +471,61 @@ class EffectFetchDemoComponent extends HTMLElement {
       return eventRoot;
     }
     return this.__htmsRoot || this;
+  }
+  __htmsClaimOnce(target, id) {
+    if (!target) {
+      return true;
+    }
+    if (!target.__htmsOnceFired) {
+      target.__htmsOnceFired = new Set();
+    }
+    if (target.__htmsOnceFired.has(id)) {
+      return false;
+    }
+    target.__htmsOnceFired.add(id);
+    return true;
+  }
+  __htmsDebounce(event, id, delay, callback) {
+    const target = event.currentTarget;
+    const deferred = this.__htmsDeferEvent(event);
+    let timers = this.__htmsTimers.get(target);
+    if (!timers) {
+      timers = new Map();
+      this.__htmsTimers.set(target, timers);
+    }
+    clearTimeout(timers.get(id));
+    timers.set(id, setTimeout(() => {
+      timers.delete(id);
+      if (timers.size === 0) {
+        this.__htmsTimers.delete(target);
+      }
+      callback(deferred);
+    }, delay));
+  }
+  __htmsDeferEvent(event) {
+    // currentTarget is reset to null once dispatch ends; keep the value the
+    // handler saw so deferred bodies can still read event.currentTarget.
+    const currentTarget = event.currentTarget;
+    if (typeof Proxy !== 'function') {
+      return event;
+    }
+    return new Proxy(event, {
+      get(target, property) {
+        if (property === 'currentTarget') {
+          return currentTarget;
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+    });
+  }
+  __htmsClearTimers() {
+    for (const timers of this.__htmsTimers.values()) {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+    }
+    this.__htmsTimers.clear();
   }
   __htmsCleanupRenderListeners() {
     const cleanups = this.__htmsRenderCleanups;
@@ -542,17 +587,54 @@ class EffectFetchDemoComponent extends HTMLElement {
     }
     return this.__htmsNodesMatch(reference, source) ? reference : null;
   }
+  __htmsAttributeSnapshot(node) {
+    const snapshot = Object.create(null);
+    for (const attr of Array.from(node.attributes)) {
+      snapshot[attr.name] = attr.value;
+    }
+    return snapshot;
+  }
+  __htmsRecordAttributes(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    node.__htmsAttrs = this.__htmsAttributeSnapshot(node);
+    Array.from(node.querySelectorAll('*')).forEach(child => {
+      child.__htmsAttrs = this.__htmsAttributeSnapshot(child);
+    });
+  }
   __htmsSyncAttributes(target, source) {
-    Array.from(target.attributes).forEach(attr => {
-      if (!source.hasAttribute(attr.name)) {
-        target.removeAttribute(attr.name);
+    const next = this.__htmsAttributeSnapshot(source);
+    const previous = target.__htmsAttrs;
+    if (!previous) {
+      // First sync of an adopted node (server-rendered markup): match the
+      // rendered output exactly.
+      Array.from(target.attributes).forEach(attr => {
+        if (!(attr.name in next)) {
+          target.removeAttribute(attr.name);
+        }
+      });
+      for (const name in next) {
+        if (target.getAttribute(name) !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
       }
-    });
-    Array.from(source.attributes).forEach(attr => {
-      if (target.getAttribute(attr.name) !== attr.value) {
-        target.setAttribute(attr.name, attr.value);
+    } else {
+      // Only touch attributes whose rendered value changed. Attributes the
+      // browser or other code changed (an opened <details>, a class added by
+      // a library) survive unrelated re-renders.
+      for (const name in previous) {
+        if (!(name in next)) {
+          target.removeAttribute(name);
+        }
       }
-    });
+      for (const name in next) {
+        if (previous[name] !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
+      }
+    }
+    target.__htmsAttrs = next;
   }
   __htmsActivateTree(node) {
     if (node.nodeType !== Node.ELEMENT_NODE) {
@@ -602,6 +684,7 @@ class EffectFetchDemoComponent extends HTMLElement {
       if (!match) {
         targetParent.insertBefore(source, reference);
         source.__htmsMountedNode = source;
+        this.__htmsRecordAttributes(source);
         this.__htmsActivateTree(source);
         reference = source.nextSibling;
         continue;
@@ -729,6 +812,7 @@ class EffectFetchDemoComponent extends HTMLElement {
     this.__htmsUpdatePromise = Promise.resolve();
     this.__htmsLastError = null;
     this.__htmsRenderCleanups = [];
+    this.__htmsTimers = new Map();
     this.__htmsDefineStateProperty('state');
   }
   connectedCallback() {
@@ -741,6 +825,7 @@ class EffectFetchDemoComponent extends HTMLElement {
     this.__htmsRenderScheduled = false;
     this.__htmsFinishUpdate();
     this.__htmsCleanupRenderListeners();
+    this.__htmsClearTimers();
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
@@ -757,15 +842,36 @@ class EffectFetchDemoComponent extends HTMLElement {
       const componentRoot = document.createDocumentFragment();
       const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, []);
       this.__htmsCleanupRenderListeners();
-      this.__htmsInitState(['state'], () => {
-      });
-      const staticFragment = EffectFetchDemoComponent.__htmsTemplate.content.cloneNode(true);
-      componentRoot.appendChild(staticFragment);
+      this.__htmsInitState(['state'], () => ({}));
+      {
+        const resolved = this.__htmsResolvePath(['status']);
+        resolved.target[resolved.key] = this.state.loading ? 'Loading...' : this.state.error ? 'Error' : this.state.quote ? 'Loaded' : 'Idle';
+      }
+      const _el0 = document.createElement('div');
+      _el0.setAttribute('class', 'demo');
+      const _el1 = document.createElement('button');
+      _el1.setAttribute('id', 'load');
+      _el1.appendChild(document.createTextNode('Load Quote'));
+      _el0.appendChild(_el1);
+      const _el2 = document.createElement('p');
+      _el2.setAttribute('id', 'status');
+      _el2.appendChild(document.createTextNode('Status: ' + (this.status == null ? '' : String(this.status))));
+      _el0.appendChild(_el2);
+      const _el3 = document.createElement('blockquote');
+      _el3.setAttribute('id', 'quote');
+      _el3.appendChild(document.createTextNode(this.state?.quote?.text == null ? '' : String(this.state?.quote?.text)));
+      _el0.appendChild(_el3);
+      const _el4 = document.createElement('p');
+      _el4.setAttribute('id', 'error');
+      _el4.setAttribute('class', 'error');
+      _el4.appendChild(document.createTextNode(this.state?.error == null ? '' : String(this.state?.error)));
+      _el0.appendChild(_el4);
+      componentRoot.appendChild(_el0);
       {
         const eventTargets = componentRoot.querySelectorAll('#load');
         eventTargets.forEach(targetEl => {
-          const _handler0 = event => {
-            const _eventRoot1 = this.__htmsResolveEventRoot(event.currentTarget, componentRoot);
+          const _handler5 = event => {
+            const _eventRoot6 = this.__htmsResolveEventRoot(event.currentTarget, componentRoot);
             // No event body
             this.__htmsSetState([
               'state',
@@ -773,10 +879,10 @@ class EffectFetchDemoComponent extends HTMLElement {
             ], '=', () => Date.now());
             this.requestUpdate();
           };
-          this.__htmsMarkListener(targetEl, 'click', _handler0);
+          this.__htmsMarkListener(targetEl, 'click', _handler5);
         });
       }
-      (function (owner) {
+      (owner => {
         if (typeof window !== 'undefined' && window.__HTMS_SSR__) {
           return;
         }
@@ -786,85 +892,22 @@ class EffectFetchDemoComponent extends HTMLElement {
         }
         runtime.registerEffect({
           owner: owner,
-          id: '__effect_4',
+          id: '__fetch_19_3',
           deps: [
-            function () {
-              return owner && owner.state && owner.state.loading;
-            },
-            function () {
-              return owner && owner.state && owner.state.quote;
-            },
-            function () {
-              return owner && owner.state && owner.state.error;
-            }
-          ],
-          immediate: true,
-          once: false,
-          run: function () {
-            try {
-              const host = owner;
-              if (!host || !host.__htmsRoot) {
-                return;
-              }
-              const root = host.__htmsRoot;
-              const state = host.state || {};
-              const statusEl = root.querySelector('#status');
-              const quoteEl = root.querySelector('#quote');
-              const errorEl = root.querySelector('#error');
-              if (statusEl) {
-                if (state.loading) {
-                  statusEl.textContent = 'Status: Loading...';
-                } else if (state.error) {
-                  statusEl.textContent = 'Status: Error';
-                } else if (state.quote) {
-                  statusEl.textContent = 'Status: Loaded';
-                } else {
-                  statusEl.textContent = 'Status: Idle';
-                }
-              }
-              if (quoteEl) {
-                quoteEl.textContent = state.quote ? state.quote.text : '';
-              }
-              if (errorEl) {
-                errorEl.textContent = state.error || '';
-              }
-            } catch (error) {
-              console.error('EFFECT run failed:', error);
-            }
-          }
-        });
-      }(this));
-      (function (owner) {
-        if (typeof window !== 'undefined' && window.__HTMS_SSR__) {
-          return;
-        }
-        var runtime = typeof window !== 'undefined' ? window.__htms : null;
-        if (!runtime) {
-          return;
-        }
-        runtime.registerEffect({
-          owner: owner,
-          id: '__fetch_2',
-          deps: [
-            function () {
-              return 'https://example.com/demo-quote.json';
-            },
-            function () {
-              return Boolean(owner && owner.state && owner.state.loadNonce);
-            },
-            function () {
-              return owner && owner.state && owner.state.loadNonce;
-            }
+            () => 'https://example.com/demo-quote.json',
+            () => Boolean(this.state.loadNonce),
+            () => this.state.loadNonce
           ],
           immediate: false,
           once: false,
-          run: function () {
-            var shouldRun = Boolean(owner && owner.state && owner.state.loadNonce);
+          run: () => {
+            var shouldRun = Boolean(this.state.loadNonce);
             if (!shouldRun) {
               return function () {
               };
             }
             var controller = typeof AbortController === 'function' ? new AbortController() : null;
+            var aborted = false;
             if (!owner) {
               return;
             }
@@ -883,17 +926,31 @@ class EffectFetchDemoComponent extends HTMLElement {
             }
             target = target['state'];
             target['error'] = null;
+            if (owner && typeof owner.requestUpdate === 'function') {
+              owner.requestUpdate();
+            }
             var init = { method: 'GET' };
+            if (init.body !== undefined && init.body !== null && typeof init.body === 'object' && Object.getPrototypeOf(init.body) !== null && (Array.isArray(init.body) || Object.getPrototypeOf(init.body) === Object.prototype)) {
+              init.body = JSON.stringify(init.body);
+              var headers = new Headers(init.headers || {});
+              if (!headers.has('Content-Type')) {
+                headers.set('Content-Type', 'application/json');
+              }
+              init.headers = headers;
+            }
             if (controller && typeof controller.signal !== 'undefined') {
               init.signal = controller.signal;
             }
-            var execute = async function () {
+            var execute = async () => {
               try {
                 const response = await fetch('https://example.com/demo-quote.json', init);
                 if (!response.ok) {
                   throw new Error('Request failed with status ' + response.status);
                 }
-                const data = await response.json();
+                const data = response.status === 204 ? null : await response.json();
+                if (aborted) {
+                  return;
+                }
                 if (!owner) {
                   return;
                 }
@@ -913,6 +970,11 @@ class EffectFetchDemoComponent extends HTMLElement {
                 target = target['state'];
                 target['error'] = null;
               } catch (error) {
+                // A superseded or disconnected request must not overwrite the
+                // state owned by its replacement.
+                if (aborted) {
+                  return;
+                }
                 if (!owner) {
                   return;
                 }
@@ -924,35 +986,38 @@ class EffectFetchDemoComponent extends HTMLElement {
                 target['error'] = error instanceof Error && error.message ? error.message : String(error);
                 console.error('FETCH request failed:', error);
               } finally {
-                if (!owner) {
-                  return;
-                }
-                var target = owner;
-                if (target['state'] == null || typeof target['state'] !== 'object') {
-                  target['state'] = {};
-                }
-                target = target['state'];
-                target['loading'] = false;
-                if (runtime) {
-                  runtime.notify();
-                }
-                if (owner && typeof owner.requestUpdate === 'function') {
-                  owner.requestUpdate();
-                } else if (owner && typeof owner.render === 'function') {
-                  owner.render();
+                if (!aborted) {
+                  if (!owner) {
+                    return;
+                  }
+                  var target = owner;
+                  if (target['state'] == null || typeof target['state'] !== 'object') {
+                    target['state'] = {};
+                  }
+                  target = target['state'];
+                  target['loading'] = false;
+                  if (runtime) {
+                    runtime.notify();
+                  }
+                  if (owner && typeof owner.requestUpdate === 'function') {
+                    owner.requestUpdate();
+                  } else if (owner && typeof owner.render === 'function') {
+                    owner.render();
+                  }
                 }
               }
             };
             execute();
             return function () {
+              aborted = true;
               if (controller && typeof controller.abort === 'function') {
                 controller.abort();
               }
             };
           }
         });
-      }(this));
-      (function (owner) {
+      })(this);
+      (owner => {
         if (typeof window !== 'undefined' && window.__HTMS_SSR__) {
           return;
         }
@@ -962,39 +1027,23 @@ class EffectFetchDemoComponent extends HTMLElement {
         }
         runtime.registerEffect({
           owner: owner,
-          id: '__effect_5',
-          deps: [
-            function () {
-              return owner && owner.state && owner.state.loading;
-            },
-            function () {
-              return owner && owner.state && owner.state.quote;
-            },
-            function () {
-              return owner && owner.state && owner.state.error;
-            }
-          ],
-          immediate: true,
+          id: '__effect_31_3',
+          deps: [() => this.status],
+          immediate: false,
           once: false,
-          run: function () {
+          run: () => {
             try {
-              if (!owner || typeof owner.__htmsSetState !== 'function') {
-                return;
-              }
-              const state = owner.state || {};
-              const finished = !state.loading && (state.quote || state.error);
-              if (finished && state.loadNonce) {
-                owner.__htmsSetState([
-                  'state',
-                  'loadNonce'
-                ], '=', () => null);
-              }
+              this.dispatchEvent(new CustomEvent('status-change', {
+                detail: this.status,
+                bubbles: true,
+                composed: true
+              }));
             } catch (error) {
               console.error('EFFECT run failed:', error);
             }
           }
         });
-      }(this));
+      })(this);
       this.__htmsReconcileChildren(root, componentRoot);
       this.__htmsRestoreFocus(root, __htmsFocusSnapshot);
     } catch (error) {

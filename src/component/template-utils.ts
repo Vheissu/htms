@@ -157,6 +157,42 @@ const HTMS_DIRECTIVE_TAGS = new Set([
   'while',
 ]);
 
+// Elements whose whitespace is significant and must be kept verbatim.
+const WHITESPACE_PRESERVING_TAGS = new Set(['pre', 'textarea', 'listing']);
+
+export function preservesWhitespace(element: Element | null): boolean {
+  let current: Element | null = element;
+  while (current) {
+    if (WHITESPACE_PRESERVING_TAGS.has(current.localName)) {
+      return true;
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
+// Decides what a source text node contributes to the template. Text with
+// visible characters is kept as written. Whitespace-only text is dropped at
+// the edges of its parent and when it spans a line break (source
+// formatting), but a single space between two inline siblings is kept, so
+// `<b>Hi</b> <em>there</em>` still renders "Hi there".
+export function templateTextValue(node: Node): string | null {
+  const text = node.textContent ?? '';
+  if (text.length === 0) {
+    return null;
+  }
+  if (preservesWhitespace(node.parentElement)) {
+    return text;
+  }
+  if (text.trim().length > 0) {
+    return text;
+  }
+  if (/[\n\r]/.test(text) || !node.previousSibling || !node.nextSibling) {
+    return null;
+  }
+  return ' ';
+}
+
 function templateNamespace(element: Element): TemplateNode['namespace'] {
   if (element.namespaceURI === SVG_NAMESPACE) {
     return 'svg';
@@ -226,8 +262,8 @@ export function elementToTemplateNode(
   const children: TemplateChild[] = [];
   for (const child of templateChildNodes(element)) {
     if (child.nodeType === 3) {
-      const text = child.textContent ?? '';
-      if (text.trim().length === 0) {
+      const text = templateTextValue(child);
+      if (text === null) {
         continue;
       }
       children.push({ type: 'text', textContent: text });
@@ -245,7 +281,9 @@ export function elementToTemplateNode(
 
   return {
     type: 'element',
-    tagName: element.tagName.toLowerCase(),
+    // localName keeps SVG/MathML case (linearGradient, foreignObject);
+    // HTML element local names are already lower case.
+    tagName: element.localName,
     namespace: templateNamespace(element),
     attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
     children: children.length > 0 ? children : undefined,
@@ -259,8 +297,8 @@ export function nodeListToTemplateNodes(
   const templateNodes: TemplateNode[] = [];
   for (const node of Array.from(nodes)) {
     if (node.nodeType === 3) {
-      const text = node.textContent ?? '';
-      if (text.trim().length === 0) {
+      const text = templateTextValue(node);
+      if (text === null) {
         continue;
       }
       templateNodes.push({ type: 'text', textContent: text });

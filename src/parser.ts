@@ -227,6 +227,29 @@ function validateASTSecurity(ast: unknown): CompilerError[] {
       });
     }
 
+    // setTimeout('code') / setInterval('code') evaluate their argument.
+    if (
+      node.type === 'CallExpression' &&
+      isTimerCallee((node as { callee?: unknown }).callee)
+    ) {
+      const [firstArgument] =
+        (node as { arguments?: Array<{ type?: string; value?: unknown }> })
+          .arguments ?? [];
+      if (
+        firstArgument &&
+        ((firstArgument.type === 'Literal' &&
+          typeof firstArgument.value === 'string') ||
+          firstArgument.type === 'TemplateLiteral' ||
+          firstArgument.type === 'BinaryExpression')
+      ) {
+        errors.push({
+          type: 'security',
+          message:
+            'setTimeout/setInterval with a string argument is not allowed; pass a function',
+        });
+      }
+    }
+
     // Check for Function constructor calls
     if (
       node.type === 'NewExpression' &&
@@ -247,6 +270,27 @@ function validateASTSecurity(ast: unknown): CompilerError[] {
 
   traverse(ast);
   return errors;
+}
+
+const TIMER_FUNCTIONS = new Set(['setTimeout', 'setInterval']);
+
+function isTimerCallee(callee: unknown): boolean {
+  if (!callee || typeof callee !== 'object') return false;
+  const node = callee as {
+    type?: string;
+    name?: string;
+    computed?: boolean;
+    property?: { type?: string; name?: string };
+  };
+  if (node.type === 'Identifier') {
+    return TIMER_FUNCTIONS.has(node.name ?? '');
+  }
+  return (
+    node.type === 'MemberExpression' &&
+    !node.computed &&
+    node.property?.type === 'Identifier' &&
+    TIMER_FUNCTIONS.has(node.property.name ?? '')
+  );
 }
 
 function wrapInModuleFormat(code: string, format: string): string {

@@ -63,25 +63,26 @@ class FlashBoxComponent extends HTMLElement {
       console.error('HTMS component render failed:', error);
     }
   }
-  __htmsMarkListener(target, eventType, handler) {
+  __htmsMarkListener(target, eventType, handler, options) {
     if (!target.__htmsListeners) {
       target.__htmsListeners = [];
     }
     target.__htmsListeners.push({
       eventType,
-      handler
+      handler,
+      options
     });
   }
-  __htmsListen(target, eventType, handler) {
-    target.addEventListener(eventType, handler);
+  __htmsListen(target, eventType, handler, options) {
+    target.addEventListener(eventType, handler, options);
     this.__htmsRenderCleanups.push(() => {
-      target.removeEventListener(eventType, handler);
+      target.removeEventListener(eventType, handler, options);
     });
   }
   __htmsActivateListeners(target, source) {
     const listeners = source.__htmsListeners || [];
     for (const listener of listeners) {
-      this.__htmsListen(target, listener.eventType, listener.handler);
+      this.__htmsListen(target, listener.eventType, listener.handler, listener.options);
     }
   }
   __htmsResolveEventRoot(currentTarget, sourceScope) {
@@ -96,6 +97,61 @@ class FlashBoxComponent extends HTMLElement {
       return eventRoot;
     }
     return this.__htmsRoot || this;
+  }
+  __htmsClaimOnce(target, id) {
+    if (!target) {
+      return true;
+    }
+    if (!target.__htmsOnceFired) {
+      target.__htmsOnceFired = new Set();
+    }
+    if (target.__htmsOnceFired.has(id)) {
+      return false;
+    }
+    target.__htmsOnceFired.add(id);
+    return true;
+  }
+  __htmsDebounce(event, id, delay, callback) {
+    const target = event.currentTarget;
+    const deferred = this.__htmsDeferEvent(event);
+    let timers = this.__htmsTimers.get(target);
+    if (!timers) {
+      timers = new Map();
+      this.__htmsTimers.set(target, timers);
+    }
+    clearTimeout(timers.get(id));
+    timers.set(id, setTimeout(() => {
+      timers.delete(id);
+      if (timers.size === 0) {
+        this.__htmsTimers.delete(target);
+      }
+      callback(deferred);
+    }, delay));
+  }
+  __htmsDeferEvent(event) {
+    // currentTarget is reset to null once dispatch ends; keep the value the
+    // handler saw so deferred bodies can still read event.currentTarget.
+    const currentTarget = event.currentTarget;
+    if (typeof Proxy !== 'function') {
+      return event;
+    }
+    return new Proxy(event, {
+      get(target, property) {
+        if (property === 'currentTarget') {
+          return currentTarget;
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+    });
+  }
+  __htmsClearTimers() {
+    for (const timers of this.__htmsTimers.values()) {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+    }
+    this.__htmsTimers.clear();
   }
   __htmsCleanupRenderListeners() {
     const cleanups = this.__htmsRenderCleanups;
@@ -157,17 +213,54 @@ class FlashBoxComponent extends HTMLElement {
     }
     return this.__htmsNodesMatch(reference, source) ? reference : null;
   }
+  __htmsAttributeSnapshot(node) {
+    const snapshot = Object.create(null);
+    for (const attr of Array.from(node.attributes)) {
+      snapshot[attr.name] = attr.value;
+    }
+    return snapshot;
+  }
+  __htmsRecordAttributes(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    node.__htmsAttrs = this.__htmsAttributeSnapshot(node);
+    Array.from(node.querySelectorAll('*')).forEach(child => {
+      child.__htmsAttrs = this.__htmsAttributeSnapshot(child);
+    });
+  }
   __htmsSyncAttributes(target, source) {
-    Array.from(target.attributes).forEach(attr => {
-      if (!source.hasAttribute(attr.name)) {
-        target.removeAttribute(attr.name);
+    const next = this.__htmsAttributeSnapshot(source);
+    const previous = target.__htmsAttrs;
+    if (!previous) {
+      // First sync of an adopted node (server-rendered markup): match the
+      // rendered output exactly.
+      Array.from(target.attributes).forEach(attr => {
+        if (!(attr.name in next)) {
+          target.removeAttribute(attr.name);
+        }
+      });
+      for (const name in next) {
+        if (target.getAttribute(name) !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
       }
-    });
-    Array.from(source.attributes).forEach(attr => {
-      if (target.getAttribute(attr.name) !== attr.value) {
-        target.setAttribute(attr.name, attr.value);
+    } else {
+      // Only touch attributes whose rendered value changed. Attributes the
+      // browser or other code changed (an opened <details>, a class added by
+      // a library) survive unrelated re-renders.
+      for (const name in previous) {
+        if (!(name in next)) {
+          target.removeAttribute(name);
+        }
       }
-    });
+      for (const name in next) {
+        if (previous[name] !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
+      }
+    }
+    target.__htmsAttrs = next;
   }
   __htmsActivateTree(node) {
     if (node.nodeType !== Node.ELEMENT_NODE) {
@@ -217,6 +310,7 @@ class FlashBoxComponent extends HTMLElement {
       if (!match) {
         targetParent.insertBefore(source, reference);
         source.__htmsMountedNode = source;
+        this.__htmsRecordAttributes(source);
         this.__htmsActivateTree(source);
         reference = source.nextSibling;
         continue;
@@ -259,6 +353,7 @@ class FlashBoxComponent extends HTMLElement {
     this.__htmsUpdatePromise = Promise.resolve();
     this.__htmsLastError = null;
     this.__htmsRenderCleanups = [];
+    this.__htmsTimers = new Map();
   }
   connectedCallback() {
     this.__htmsEnsureRenderRoot();
@@ -270,6 +365,7 @@ class FlashBoxComponent extends HTMLElement {
     this.__htmsRenderScheduled = false;
     this.__htmsFinishUpdate();
     this.__htmsCleanupRenderListeners();
+    this.__htmsClearTimers();
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }

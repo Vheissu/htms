@@ -109,7 +109,6 @@ describe('SecurityValidator', () => {
         'setTimeout("alert(1)", 1000)',
         '<script>alert(1)</script>',
         'onclick="alert(1)"',
-        '../../../etc/passwd',
         'javascript:alert(1)',
       ];
 
@@ -127,6 +126,11 @@ describe('SecurityValidator', () => {
         'const x = 42;',
         '<div>Safe HTML</div>',
         'Math.max(1, 2, 3)',
+        // Relative URLs and timers with function arguments are not code
+        // injection; only file arguments are checked for traversal.
+        '<a href="../docs/index.html">Docs</a>',
+        'Edit /etc/hosts to add the alias',
+        'setTimeout(() => this.save(), 300)',
       ];
 
       for (const content of safe) {

@@ -58,6 +58,7 @@ export interface EventModifiers {
   passive?: boolean;
   debounceMs?: number;
   key?: string;
+  self?: boolean;
 }
 
 export interface EventDirective {

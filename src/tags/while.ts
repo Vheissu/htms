@@ -3,6 +3,7 @@ import { DirectiveNode, TemplateNode, WhileDirective } from '../component/ir';
 import {
   elementToTemplateNode,
   isLowerCaseTag,
+  templateTextValue,
 } from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
@@ -71,8 +72,8 @@ export const handleWhileTag: TagHandler = (
 
     for (const node of Array.from(element.childNodes)) {
       if (node.nodeType === 3) {
-        const text = node.textContent ?? '';
-        if (!text.trim()) {
+        const text = templateTextValue(node);
+        if (text === null) {
           continue;
         }
         const textErrors = SecurityValidator.validateContent(text);

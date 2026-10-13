@@ -391,7 +391,7 @@ async function renderFile(
 ): Promise<{ success: boolean; outputPath?: string }> {
   const inputPath = path.resolve(input);
   const pathErrors = [
-    ...SecurityValidator.validateFilePath(inputPath),
+    ...SecurityValidator.validateFilePath(path.resolve(inputPath)),
     ...SecurityValidator.validateFileExtension(inputPath, ['html', 'htm']),
   ];
   if (pathErrors.length > 0) {
@@ -421,7 +421,9 @@ async function renderFile(
         `${path.basename(inputPath, path.extname(inputPath))}.ssr.html`
       )
   );
-  const outputErrors = SecurityValidator.validateFilePath(outputPath);
+  const outputErrors = SecurityValidator.validateFilePath(
+    path.resolve(outputPath)
+  );
   if (outputErrors.length > 0) {
     printCompilationErrors(outputErrors, { filePath: outputPath });
     return { success: false };

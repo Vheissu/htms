@@ -1,63 +1,34 @@
 <component name="effect-fetch-demo">
   <var name="state" value="{}" mutable="true"></var>
+  <derive
+    name="status"
+    expr="this.state.loading ? 'Loading...' : this.state.error ? 'Error' : this.state.quote ? 'Loaded' : 'Idle'">
+  </derive>
 
   <div class="demo">
     <button id="load">Load Quote</button>
-    <p id="status">Status: Idle</p>
-    <blockquote id="quote"></blockquote>
-    <p id="error" class="error"></p>
+    <p id="status">Status: {status}</p>
+    <blockquote id="quote">{state.quote.text}</blockquote>
+    <p id="error" class="error">{state.error}</p>
   </div>
 
   <event target="#load" type="click">
     <set name="state.loadNonce" expr="Date.now()"></set>
   </event>
 
-  <effect deps="owner && owner.state && owner.state.loading, owner && owner.state && owner.state.quote, owner && owner.state && owner.state.error" immediate="true">
-    const host = owner;
-    if (!host || !host.__htmsRoot) { return; }
-    const root = host.__htmsRoot;
-    const state = host.state || {};
-    const statusEl = root.querySelector('#status');
-    const quoteEl = root.querySelector('#quote');
-    const errorEl = root.querySelector('#error');
-
-    if (statusEl) {
-      if (state.loading) {
-        statusEl.textContent = 'Status: Loading...';
-      } else if (state.error) {
-        statusEl.textContent = 'Status: Error';
-      } else if (state.quote) {
-        statusEl.textContent = 'Status: Loaded';
-      } else {
-        statusEl.textContent = 'Status: Idle';
-      }
-    }
-
-    if (quoteEl) {
-      quoteEl.textContent = state.quote ? state.quote.text : '';
-    }
-
-    if (errorEl) {
-      errorEl.textContent = state.error || '';
-    }
-  </effect>
-
   <fetch
     url="'https://example.com/demo-quote.json'"
     into="state.quote"
     loading="state.loading"
     error="state.error"
-    deps="owner && owner.state && owner.state.loadNonce"
-    when="Boolean(owner && owner.state && owner.state.loadNonce)"
+    deps="this.state.loadNonce"
+    when="Boolean(this.state.loadNonce)"
     immediate="false">
   </fetch>
 
-  <effect deps="owner && owner.state && owner.state.loading, owner && owner.state && owner.state.quote, owner && owner.state && owner.state.error" immediate="true">
-    if (!owner || typeof owner.__htmsSetState !== 'function') { return; }
-    const state = owner.state || {};
-    const finished = !state.loading && (state.quote || state.error);
-    if (finished && state.loadNonce) {
-      owner.__htmsSetState(['state', 'loadNonce'], '=', () => null);
-    }
+  <!-- Effects are for side effects outside the template: here, telling the
+       page that the request status changed. -->
+  <effect deps="this.status" immediate="false">
+    this.dispatchEvent(new CustomEvent('status-change', { detail: this.status, bubbles: true, composed: true }));
   </effect>
 </component>

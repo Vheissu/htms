@@ -91,12 +91,42 @@ export function templateNodesHaveDirectives(nodes: TemplateNode[]): boolean {
 }
 
 export function templateNodesToHTML(nodes: TemplateNode[]): string {
-  return nodes.map(nodeToHtml).join('');
+  return nodes.map((node) => nodeToHtml(node)).join('');
 }
 
-function nodeToHtml(node: TemplateNode): string {
+// Elements with no closing tag. Serializing `<br></br>` would make the HTML
+// parser insert a second <br>.
+const VOID_ELEMENTS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'source',
+  'track',
+  'wbr',
+]);
+
+// Raw text elements: the parser does not decode entities inside them, so
+// their text must be emitted verbatim (only a closing tag needs breaking).
+const RAW_TEXT_ELEMENTS = new Set(['style', 'script']);
+
+function nodeToHtml(node: TemplateNode, parent?: TemplateNode): string {
   if (node.type === 'text') {
-    return escapeHtml(node.textContent ?? '');
+    const text = node.textContent ?? '';
+    if (
+      parent?.namespace !== 'svg' &&
+      parent?.namespace !== 'mathml' &&
+      RAW_TEXT_ELEMENTS.has(parent?.tagName ?? '')
+    ) {
+      return text.replace(/<\/(style|script)/gi, '<\\/$1');
+    }
+    return escapeHtml(text);
   }
 
   const attrs = node.attributes
@@ -106,13 +136,14 @@ function nodeToHtml(node: TemplateNode): string {
     : '';
 
   const children = (node.children ?? [])
-    .filter(
-      (child): child is TemplateNode => child.type !== 'directive'
-    )
-    .map(nodeToHtml)
+    .filter((child): child is TemplateNode => child.type !== 'directive')
+    .map((child) => nodeToHtml(child, node))
     .join('');
   const openTag =
     attrs.length > 0 ? `<${node.tagName} ${attrs}>` : `<${node.tagName}>`;
+  if (node.namespace === 'html' && VOID_ELEMENTS.has(node.tagName ?? '')) {
+    return openTag;
+  }
   return `${openTag}${children}</${node.tagName}>`;
 }
 
@@ -186,7 +217,9 @@ function serializeNode(
     for (const child of node.children) {
       if (child.type === 'directive') {
         if (renderDirectiveChild) {
-          statements.push(...renderDirectiveChild(child.directive, childTarget));
+          statements.push(
+            ...renderDirectiveChild(child.directive, childTarget)
+          );
         }
         continue;
       }
@@ -360,17 +393,23 @@ function resolveInterpolationExpression(
     return null;
   }
 
+  // Paths are null-safe: `{user.name}` renders empty text while `user` is
+  // still undefined instead of failing the whole render.
   if (localRoots.has(segments[0])) {
-    return token;
+    return optionalPath(segments);
   }
 
   if (segments[0] === 'this' && segments.length > 1) {
-    return token;
+    return `this.${optionalPath(segments.slice(1))}`;
   }
 
   if (componentRoots.has(segments[0])) {
-    return `this.${token}`;
+    return `this.${optionalPath(segments)}`;
   }
 
   return null;
+}
+
+function optionalPath(segments: string[]): string {
+  return segments.join('?.');
 }

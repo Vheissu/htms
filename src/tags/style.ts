@@ -2,19 +2,10 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { StyleDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { valueAttributeToExpression } from '../utils/values';
 
 function buildValueExpr(value: string): string | null {
-  if (!value) return 'undefined';
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value;
-  }
-  if (SecurityValidator.isNumericLiteral(value)) return value;
-  if (value === 'true' || value === 'false' || value === 'null') return value;
-  if (SecurityValidator.isJavaScriptPath(value)) return value;
-  return SecurityValidator.jsStringLiteral(value);
+  return valueAttributeToExpression(value, { allowReferences: false });
 }
 
 function isCssProperty(prop: string): boolean {

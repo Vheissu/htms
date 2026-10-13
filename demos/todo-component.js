@@ -5,7 +5,7 @@ class TodoBoxComponent extends HTMLElement {
   static get __htmsTemplate() {
     if (!this.__templateCache) {
       const template = document.createElement('template');
-      template.innerHTML = '<div class="todo"><h2>HTMS Todo</h2><div class="input-row"><input type="text" id="newTodo" placeholder="Add a task"></input><button id="addBtn" type="button">Add</button></div><ul id="todoList"></ul></div>';
+      template.innerHTML = '<div class="todo"><h2>HTMS Todo</h2><div class="input-row"><input type="text" id="newTodo" placeholder="Add a task"><button id="addBtn" type="button">Add</button></div><ul id="todoList"></ul></div>';
       this.__templateCache = template;
     }
     return this.__templateCache;
@@ -83,7 +83,11 @@ class TodoBoxComponent extends HTMLElement {
     const value = valueFactory();
     switch (op) {
     case '+=':
-      target[key] = (typeof current === 'number' ? current : 0) + value;
+      if (current == null) {
+        target[key] = typeof value === 'string' ? value : 0 + value;
+      } else {
+        target[key] = current + value;
+      }
       break;
     case '-=':
       target[key] = (typeof current === 'number' ? current : 0) - value;
@@ -172,25 +176,26 @@ class TodoBoxComponent extends HTMLElement {
       console.error('HTMS component render failed:', error);
     }
   }
-  __htmsMarkListener(target, eventType, handler) {
+  __htmsMarkListener(target, eventType, handler, options) {
     if (!target.__htmsListeners) {
       target.__htmsListeners = [];
     }
     target.__htmsListeners.push({
       eventType,
-      handler
+      handler,
+      options
     });
   }
-  __htmsListen(target, eventType, handler) {
-    target.addEventListener(eventType, handler);
+  __htmsListen(target, eventType, handler, options) {
+    target.addEventListener(eventType, handler, options);
     this.__htmsRenderCleanups.push(() => {
-      target.removeEventListener(eventType, handler);
+      target.removeEventListener(eventType, handler, options);
     });
   }
   __htmsActivateListeners(target, source) {
     const listeners = source.__htmsListeners || [];
     for (const listener of listeners) {
-      this.__htmsListen(target, listener.eventType, listener.handler);
+      this.__htmsListen(target, listener.eventType, listener.handler, listener.options);
     }
   }
   __htmsResolveEventRoot(currentTarget, sourceScope) {
@@ -205,6 +210,61 @@ class TodoBoxComponent extends HTMLElement {
       return eventRoot;
     }
     return this.__htmsRoot || this;
+  }
+  __htmsClaimOnce(target, id) {
+    if (!target) {
+      return true;
+    }
+    if (!target.__htmsOnceFired) {
+      target.__htmsOnceFired = new Set();
+    }
+    if (target.__htmsOnceFired.has(id)) {
+      return false;
+    }
+    target.__htmsOnceFired.add(id);
+    return true;
+  }
+  __htmsDebounce(event, id, delay, callback) {
+    const target = event.currentTarget;
+    const deferred = this.__htmsDeferEvent(event);
+    let timers = this.__htmsTimers.get(target);
+    if (!timers) {
+      timers = new Map();
+      this.__htmsTimers.set(target, timers);
+    }
+    clearTimeout(timers.get(id));
+    timers.set(id, setTimeout(() => {
+      timers.delete(id);
+      if (timers.size === 0) {
+        this.__htmsTimers.delete(target);
+      }
+      callback(deferred);
+    }, delay));
+  }
+  __htmsDeferEvent(event) {
+    // currentTarget is reset to null once dispatch ends; keep the value the
+    // handler saw so deferred bodies can still read event.currentTarget.
+    const currentTarget = event.currentTarget;
+    if (typeof Proxy !== 'function') {
+      return event;
+    }
+    return new Proxy(event, {
+      get(target, property) {
+        if (property === 'currentTarget') {
+          return currentTarget;
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+    });
+  }
+  __htmsClearTimers() {
+    for (const timers of this.__htmsTimers.values()) {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+    }
+    this.__htmsTimers.clear();
   }
   __htmsCleanupRenderListeners() {
     const cleanups = this.__htmsRenderCleanups;
@@ -266,17 +326,54 @@ class TodoBoxComponent extends HTMLElement {
     }
     return this.__htmsNodesMatch(reference, source) ? reference : null;
   }
+  __htmsAttributeSnapshot(node) {
+    const snapshot = Object.create(null);
+    for (const attr of Array.from(node.attributes)) {
+      snapshot[attr.name] = attr.value;
+    }
+    return snapshot;
+  }
+  __htmsRecordAttributes(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    node.__htmsAttrs = this.__htmsAttributeSnapshot(node);
+    Array.from(node.querySelectorAll('*')).forEach(child => {
+      child.__htmsAttrs = this.__htmsAttributeSnapshot(child);
+    });
+  }
   __htmsSyncAttributes(target, source) {
-    Array.from(target.attributes).forEach(attr => {
-      if (!source.hasAttribute(attr.name)) {
-        target.removeAttribute(attr.name);
+    const next = this.__htmsAttributeSnapshot(source);
+    const previous = target.__htmsAttrs;
+    if (!previous) {
+      // First sync of an adopted node (server-rendered markup): match the
+      // rendered output exactly.
+      Array.from(target.attributes).forEach(attr => {
+        if (!(attr.name in next)) {
+          target.removeAttribute(attr.name);
+        }
+      });
+      for (const name in next) {
+        if (target.getAttribute(name) !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
       }
-    });
-    Array.from(source.attributes).forEach(attr => {
-      if (target.getAttribute(attr.name) !== attr.value) {
-        target.setAttribute(attr.name, attr.value);
+    } else {
+      // Only touch attributes whose rendered value changed. Attributes the
+      // browser or other code changed (an opened <details>, a class added by
+      // a library) survive unrelated re-renders.
+      for (const name in previous) {
+        if (!(name in next)) {
+          target.removeAttribute(name);
+        }
       }
-    });
+      for (const name in next) {
+        if (previous[name] !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
+      }
+    }
+    target.__htmsAttrs = next;
   }
   __htmsActivateTree(node) {
     if (node.nodeType !== Node.ELEMENT_NODE) {
@@ -326,6 +423,7 @@ class TodoBoxComponent extends HTMLElement {
       if (!match) {
         targetParent.insertBefore(source, reference);
         source.__htmsMountedNode = source;
+        this.__htmsRecordAttributes(source);
         this.__htmsActivateTree(source);
         reference = source.nextSibling;
         continue;
@@ -453,6 +551,7 @@ class TodoBoxComponent extends HTMLElement {
     this.__htmsUpdatePromise = Promise.resolve();
     this.__htmsLastError = null;
     this.__htmsRenderCleanups = [];
+    this.__htmsTimers = new Map();
     this.__htmsDefineStateProperty('todos');
     this.__htmsDefineStateProperty('nextTodo');
   }
@@ -466,6 +565,7 @@ class TodoBoxComponent extends HTMLElement {
     this.__htmsRenderScheduled = false;
     this.__htmsFinishUpdate();
     this.__htmsCleanupRenderListeners();
+    this.__htmsClearTimers();
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
@@ -494,18 +594,18 @@ class TodoBoxComponent extends HTMLElement {
             // No event body
             this.__htmsSetState(['nextTodo'], '=', () => this.__htmsRoot.querySelector('#newTodo').value.trim());
             if (this.nextTodo.length > 0) {
-              const _frag2 = document.createDocumentFragment();
+              const _frag3 = document.createDocumentFragment();
               this.__htmsPushState(['todos'], () => this.nextTodo);
               {
-                const targets = _frag2.querySelectorAll('#newTodo');
+                const targets = _frag3.querySelectorAll('#newTodo');
                 targets.forEach(node => {
                   const propertyValue = '';
                   node['value'] = propertyValue;
                   this.__htmsMarkProperty(node, ['value'], propertyValue);
                 });
               }
-              this.__htmsSetState(['nextTodo'], '=', () => '\'\'');
-              _eventRoot1.appendChild(_frag2);
+              this.__htmsSetState(['nextTodo'], '=', () => '');
+              _eventRoot1.appendChild(_frag3);
             }
             this.requestUpdate();
           };
@@ -515,63 +615,63 @@ class TodoBoxComponent extends HTMLElement {
       {
         const eventTargets = componentRoot.querySelectorAll('#newTodo');
         eventTargets.forEach(targetEl => {
-          const _handler3 = event => {
-            const _eventRoot4 = this.__htmsResolveEventRoot(event.currentTarget, componentRoot);
+          const _handler4 = event => {
+            const _eventRoot5 = this.__htmsResolveEventRoot(event.currentTarget, componentRoot);
             // No event body
             if (event.key === 'Enter') {
-              const _frag5 = document.createDocumentFragment();
+              const _frag7 = document.createDocumentFragment();
               this.__htmsSetState(['nextTodo'], '=', () => event.currentTarget.value.trim());
               if (this.nextTodo.length > 0) {
-                const _frag6 = document.createDocumentFragment();
+                const _frag8 = document.createDocumentFragment();
                 this.__htmsPushState(['todos'], () => this.nextTodo);
-                this.__htmsSetState(['nextTodo'], '=', () => '\'\'');
+                this.__htmsSetState(['nextTodo'], '=', () => '');
                 {
-                  const targets = _frag6.querySelectorAll('#newTodo');
+                  const targets = _frag8.querySelectorAll('#newTodo');
                   targets.forEach(node => {
                     const propertyValue = '';
                     node['value'] = propertyValue;
                     this.__htmsMarkProperty(node, ['value'], propertyValue);
                   });
                 }
-                _frag5.appendChild(_frag6);
+                _frag7.appendChild(_frag8);
               }
-              _eventRoot4.appendChild(_frag5);
+              _eventRoot5.appendChild(_frag7);
             }
             this.requestUpdate();
           };
-          this.__htmsMarkListener(targetEl, 'keypress', _handler3);
+          this.__htmsMarkListener(targetEl, 'keypress', _handler4);
         });
       }
-      const _source8 = this.todos;
-      const _items9 = Array.isArray(_source8) ? _source8 : [];
-      for (let i = 0; i < _items9.length; i++) {
-        const item = _items9[i];
-        const _frag7 = document.createDocumentFragment();
-        const _el0 = document.createElement('li');
-        _el0.setAttribute('class', 'todo-item');
-        const _el1 = document.createElement('span');
-        _el1.appendChild(document.createTextNode(item == null ? '' : String(item)));
-        _el0.appendChild(_el1);
-        const _el2 = document.createElement('button');
-        _el2.setAttribute('class', 'remove');
-        _el2.setAttribute('type', 'button');
-        _el2.setAttribute('aria-label', 'Remove');
-        _el2.appendChild(document.createTextNode('\u2715'));
-        _el0.appendChild(_el2);
-        _frag7.appendChild(_el0);
+      const _source10 = this.todos;
+      const _items11 = Array.isArray(_source10) ? _source10 : [];
+      for (let i = 0; i < _items11.length; i++) {
+        const item = _items11[i];
+        const _frag9 = document.createDocumentFragment();
+        const _el12 = document.createElement('li');
+        _el12.setAttribute('class', 'todo-item');
+        const _el13 = document.createElement('span');
+        _el13.appendChild(document.createTextNode(item == null ? '' : String(item)));
+        _el12.appendChild(_el13);
+        const _el14 = document.createElement('button');
+        _el14.setAttribute('class', 'remove');
+        _el14.setAttribute('type', 'button');
+        _el14.setAttribute('aria-label', 'Remove');
+        _el14.appendChild(document.createTextNode('\u2715'));
+        _el12.appendChild(_el14);
         {
-          const eventTargets = _frag7.querySelectorAll('.remove');
+          const eventTargets = _el12.querySelectorAll('.remove');
           eventTargets.forEach(targetEl => {
-            const _handler10 = event => {
-              const _eventRoot11 = this.__htmsResolveEventRoot(event.currentTarget, _frag7);
+            const _handler15 = event => {
+              const _eventRoot16 = this.__htmsResolveEventRoot(event.currentTarget, _el12);
               // No event body
               this.__htmsSpliceState(['todos'], () => i, () => 1, () => []);
               this.requestUpdate();
             };
-            this.__htmsMarkListener(targetEl, 'click', _handler10);
+            this.__htmsMarkListener(targetEl, 'click', _handler15);
           });
         }
-        componentRoot.appendChild(_frag7);
+        _frag9.appendChild(_el12);
+        componentRoot.appendChild(_frag9);
       }
       this.__htmsReconcileChildren(root, componentRoot);
       this.__htmsRestoreFocus(root, __htmsFocusSnapshot);

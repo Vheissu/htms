@@ -46,6 +46,12 @@ export interface TagHandlerOptions {
   // When set, newly created HTML elements should append to this container var
   appendTargetVar?: string;
   componentContext?: boolean;
+  // Component fields (props, state, methods) known before handlers run.
+  // Bare identifiers matching these compile to `this.<name>`.
+  componentFields?: ReadonlySet<string>;
+  // Names bound locally around the handler (loop item/index, `event`), which
+  // shadow component fields.
+  localNames?: readonly string[];
 }
 
 export interface HandlerResult {

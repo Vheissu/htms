@@ -2,11 +2,14 @@ import validator from 'validator';
 import * as acorn from 'acorn';
 import { CompilerError } from '../types';
 
+// Content patterns that indicate code injection or executable markup.
+// Timers are only eval-like with a string argument, and file-system paths
+// are only meaningful for file arguments (see validateFilePath), so
+// `setTimeout(() => ...)` and `<a href="../docs">` are not flagged.
 const DANGEROUS_PATTERNS = [
   /\beval\s*\(/,
+  /\bset(?:Timeout|Interval)\s*\(\s*['"`]/,
   /\bFunction\s*\(/,
-  /\bsetTimeout\s*\(/,
-  /\bsetInterval\s*\(/,
   /document\.write/,
   /innerHTML\s*=/,
   /outerHTML\s*=/,
@@ -18,10 +21,6 @@ const DANGEROUS_PATTERNS = [
   // known handler names so legitimate attributes like `once` or `one` are
   // not false positives; validateHtmlAttribute rejects `on*` names anyway.
   /(?:^|[\s<])on(?:abort|auxclick|blur|cancel|click|close|contextmenu|copy|cut|dblclick|drag(?:start|end|enter|leave|over|drop)?|error|focus(?:in|out)?|input|key(?:down|press|up)|load|mouse(?:down|up|move|over|out|enter|leave|wheel)|pointer(?:down|up|move|over|out|enter|leave|cancel)|reset|resize|scroll|select|submit|touch(?:start|end|move|cancel)|wheel)\s*=/i,
-  /\.\.\//,
-  /~\//,
-  /\/proc\//,
-  /\/etc\//,
 ];
 
 // Known DOM event-handler content attributes (onclick, onload, ...).

@@ -14,6 +14,7 @@ import { ComponentIR, createEmptyComponentIR, TemplateChild } from './ir';
 import {
   collectTemplateSecurityErrors,
   elementToTemplateNode,
+  templateTextValue,
 } from './template-utils';
 import { addNodeLocations } from '../diagnostics';
 
@@ -37,8 +38,8 @@ export function elementsToComponentCode(
 
   for (const node of Array.from(componentElement.childNodes)) {
     if (node.nodeType === 3) {
-      const textContent = node.textContent?.trim();
-      if (!textContent) {
+      const textContent = templateTextValue(node);
+      if (textContent === null) {
         continue;
       }
       const contentErrors = SecurityValidator.validateContent(textContent);

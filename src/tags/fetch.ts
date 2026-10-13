@@ -289,7 +289,7 @@ export const handleFetchTag: TagHandler = (
 
     const depsCode =
       dependencies.length > 0
-        ? `[${dependencies.map((dep) => `function(){ return ${dep}; }`).join(', ')}]`
+        ? `[${dependencies.map((dep) => `() => (${dep})`).join(', ')}]`
         : '[]';
 
     const requestInitEntries: string[] = [`method: '${methodAttr}'`];
@@ -342,7 +342,9 @@ export const handleFetchTag: TagHandler = (
 
     const guardExpression = whenAttr ? `(${whenAttr})` : 'true';
 
-    const registrationCode = `(function(owner){
+    // Arrow functions keep `this` bound to the component, so url, body and
+    // headers expressions can read component fields.
+    const registrationCode = `((owner) => {
         if (typeof window !== 'undefined' && window.__HTMS_SSR__) { return; }
         var runtime = typeof window !== 'undefined' ? window.__htms : null;
         if (!runtime) { return; }
@@ -352,44 +354,62 @@ export const handleFetchTag: TagHandler = (
           deps: ${depsCode},
           immediate: ${immediate ? 'true' : 'false'},
           once: ${once ? 'true' : 'false'},
-          run: function(){
+          run: () => {
             var shouldRun = ${guardExpression};
             if (!shouldRun) {
               return function(){};
             }
             var controller = (typeof AbortController === 'function') ? new AbortController() : null;
+            var aborted = false;
 ${setLoadingTrue ? `            ${setLoadingTrue.replace(/\n/g, '\n            ')}\n` : ''}
 ${assignErrorClear ? `            ${assignErrorClear.replace(/\n/g, '\n            ')}\n` : ''}
-            var init = ${initLiteral};
+${setLoadingTrue || assignErrorClear ? `            if (owner && typeof owner.requestUpdate === 'function') {\n              owner.requestUpdate();\n            }\n` : ''}            var init = ${initLiteral};
+            if (init.body !== undefined && init.body !== null && typeof init.body === 'object' &&
+                Object.getPrototypeOf(init.body) !== null &&
+                (Array.isArray(init.body) || Object.getPrototypeOf(init.body) === Object.prototype)) {
+              init.body = JSON.stringify(init.body);
+              var headers = new Headers(init.headers || {});
+              if (!headers.has('Content-Type')) {
+                headers.set('Content-Type', 'application/json');
+              }
+              init.headers = headers;
+            }
             if (controller && typeof controller.signal !== 'undefined') {
               init.signal = controller.signal;
             }
-            var execute = async function(){
+            var execute = async () => {
               try {
                 const response = await fetch(${urlCode}, init);
                 if (!response.ok) {
                   throw new Error('Request failed with status ' + response.status);
                 }
-                ${parserLine}
+                ${parseAttr === 'json' ? `const data = response.status === 204 ? null : await response.json();` : parserLine}
+                if (aborted) { return; }
 ${assignData ? `                ${assignData.replace(/\n/g, '\n                ')}\n` : ''}
 ${assignErrorClear ? `                ${assignErrorClear.replace(/\n/g, '\n                ')}\n` : ''}
               } catch (error) {
+                // A superseded or disconnected request must not overwrite the
+                // state owned by its replacement.
+                if (aborted) { return; }
 ${assignError ? `                ${assignError.replace(/\n/g, '\n                ')}\n` : ''}
                 console.error('FETCH request failed:', error);
               } finally {
-${setLoadingFalse ? `                ${setLoadingFalse.replace(/\n/g, '\n                ')}\n` : ''}
-                if (runtime) {
-                  runtime.notify();
-                }
-                if (owner && typeof owner.requestUpdate === 'function') {
-                  owner.requestUpdate();
-                } else if (owner && typeof owner.render === 'function') {
-                  owner.render();
+                if (!aborted) {
+${setLoadingFalse ? `                  ${setLoadingFalse.replace(/\n/g, '\n                  ')}\n` : ''}
+                  if (runtime) {
+                    runtime.notify();
+                  }
+                  if (owner && typeof owner.requestUpdate === 'function') {
+                    owner.requestUpdate();
+                  } else if (owner && typeof owner.render === 'function') {
+                    owner.render();
+                  }
                 }
               }
             };
             execute();
             return function(){
+              aborted = true;
               if (controller && typeof controller.abort === 'function') {
                 controller.abort();
               }

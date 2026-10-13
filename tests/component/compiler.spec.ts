@@ -1007,7 +1007,7 @@ describe('Component compiler', () => {
       </component>
     `);
     expect(code).toContain('fetch(');
-    expect(code).toContain('}(this));');
+    expect(code).toContain('})(this);');
     expect(code).toContain("target['state']");
     expect(code).toContain('this.render();');
   });

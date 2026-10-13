@@ -257,7 +257,7 @@ describe('Repeat loop variable', () => {
       </component>
     `);
     expect(code).toContain('const todo =');
-    expect(code).toContain('todo.title');
+    expect(code).toContain('todo?.title');
   });
 
   it('rejects an invalid item variable name', () => {
@@ -280,7 +280,9 @@ describe('Repeat loop variable', () => {
     );
     expect(result.success).toBe(true);
     expect(
-      result.warnings.some((warning) => /Empty loop body/i.test(warning.message))
+      result.warnings.some((warning) =>
+        /Empty loop body/i.test(warning.message)
+      )
     ).toBe(false);
   });
 });

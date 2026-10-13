@@ -3,6 +3,7 @@ import { elementsToComponentCode } from './renderer';
 import {
   ComponentIR,
   DirectiveNode,
+  EventModifiers,
   LoopDirective,
   ConditionDirective,
   EventDirective,
@@ -991,7 +992,11 @@ function buildComponentClass(
     const value = valueFactory();
     switch (op) {
       case '+=':
-        target[key] = (typeof current === 'number' ? current : 0) + value;
+        if (current == null) {
+          target[key] = typeof value === 'string' ? value : 0 + value;
+        } else {
+          target[key] = current + value;
+        }
         break;
       case '-=':
         target[key] = (typeof current === 'number' ? current : 0) - value;
@@ -1133,6 +1138,65 @@ function buildComponentClass(
     return this.__htmsRoot || this;
   }
 
+  __htmsClaimOnce(target, id) {
+    if (!target) {
+      return true;
+    }
+    if (!target.__htmsOnceFired) {
+      target.__htmsOnceFired = new Set();
+    }
+    if (target.__htmsOnceFired.has(id)) {
+      return false;
+    }
+    target.__htmsOnceFired.add(id);
+    return true;
+  }
+
+  __htmsDebounce(event, id, delay, callback) {
+    const target = event.currentTarget;
+    const deferred = this.__htmsDeferEvent(event);
+    let timers = this.__htmsTimers.get(target);
+    if (!timers) {
+      timers = new Map();
+      this.__htmsTimers.set(target, timers);
+    }
+    clearTimeout(timers.get(id));
+    timers.set(id, setTimeout(() => {
+      timers.delete(id);
+      if (timers.size === 0) {
+        this.__htmsTimers.delete(target);
+      }
+      callback(deferred);
+    }, delay));
+  }
+
+  __htmsDeferEvent(event) {
+    // currentTarget is reset to null once dispatch ends; keep the value the
+    // handler saw so deferred bodies can still read event.currentTarget.
+    const currentTarget = event.currentTarget;
+    if (typeof Proxy !== 'function') {
+      return event;
+    }
+    return new Proxy(event, {
+      get(target, property) {
+        if (property === 'currentTarget') {
+          return currentTarget;
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+    });
+  }
+
+  __htmsClearTimers() {
+    for (const timers of this.__htmsTimers.values()) {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+    }
+    this.__htmsTimers.clear();
+  }
+
   __htmsCleanupRenderListeners() {
     const cleanups = this.__htmsRenderCleanups;
     this.__htmsRenderCleanups = [];
@@ -1205,17 +1269,56 @@ function buildComponentClass(
     return this.__htmsNodesMatch(reference, source) ? reference : null;
   }
 
+  __htmsAttributeSnapshot(node) {
+    const snapshot = Object.create(null);
+    for (const attr of Array.from(node.attributes)) {
+      snapshot[attr.name] = attr.value;
+    }
+    return snapshot;
+  }
+
+  __htmsRecordAttributes(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    node.__htmsAttrs = this.__htmsAttributeSnapshot(node);
+    Array.from(node.querySelectorAll('*')).forEach(child => {
+      child.__htmsAttrs = this.__htmsAttributeSnapshot(child);
+    });
+  }
+
   __htmsSyncAttributes(target, source) {
-    Array.from(target.attributes).forEach(attr => {
-      if (!source.hasAttribute(attr.name)) {
-        target.removeAttribute(attr.name);
+    const next = this.__htmsAttributeSnapshot(source);
+    const previous = target.__htmsAttrs;
+    if (!previous) {
+      // First sync of an adopted node (server-rendered markup): match the
+      // rendered output exactly.
+      Array.from(target.attributes).forEach(attr => {
+        if (!(attr.name in next)) {
+          target.removeAttribute(attr.name);
+        }
+      });
+      for (const name in next) {
+        if (target.getAttribute(name) !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
       }
-    });
-    Array.from(source.attributes).forEach(attr => {
-      if (target.getAttribute(attr.name) !== attr.value) {
-        target.setAttribute(attr.name, attr.value);
+    } else {
+      // Only touch attributes whose rendered value changed. Attributes the
+      // browser or other code changed (an opened <details>, a class added by
+      // a library) survive unrelated re-renders.
+      for (const name in previous) {
+        if (!(name in next)) {
+          target.removeAttribute(name);
+        }
       }
-    });
+      for (const name in next) {
+        if (previous[name] !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
+      }
+    }
+    target.__htmsAttrs = next;
   }
 
   __htmsActivateTree(node) {
@@ -1287,6 +1390,7 @@ ${
       if (!match) {
         targetParent.insertBefore(source, reference);
         source.__htmsMountedNode = source;
+        this.__htmsRecordAttributes(source);
         this.__htmsActivateTree(source);
         reference = source.nextSibling;
         continue;
@@ -1433,7 +1537,7 @@ ${staticTemplateProperty}${inputHelpers}${stateHelpers}${updateHelpers}${eventHe
     this.__htmsResolveUpdate = null;
     this.__htmsUpdatePromise = Promise.resolve();
     this.__htmsLastError = null;
-${hasEventDirectives ? `    this.__htmsRenderCleanups = [];\n` : ''}
+${hasEventDirectives ? `    this.__htmsRenderCleanups = [];\n    this.__htmsTimers = new Map();\n` : ''}
 ${shadowInit}
 ${statePropertyInitialization ? `${statePropertyInitialization}\n` : ''}${inputInitialization ? `${inputInitialization}\n` : ''}  }
 
@@ -1446,7 +1550,7 @@ ${metadata.shadowMode === 'none' ? '' : `    this.__htmsEnsureRenderRoot();\n`} 
     this.__htmsConnected = false;
     this.__htmsRenderScheduled = false;
     this.__htmsFinishUpdate();
-${hasEventDirectives ? `    this.__htmsCleanupRenderListeners();\n` : ''}
+${hasEventDirectives ? `    this.__htmsCleanupRenderListeners();\n    this.__htmsClearTimers();\n` : ''}
     if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
       window.__htms.disposeEffectsFor(this);
     }
@@ -1763,35 +1867,25 @@ function renderEventDirective(
       ? `, { once: ${modifiers.once === true}, passive: ${modifiers.passive === true} }`
       : '';
 
+  // Listeners are re-created on every render, so per-listener state (the
+  // `once` flag, pending debounce timers) lives on the mounted element and
+  // the component, keyed by this directive's id.
+  const listenerId = JSON.stringify(timerVar);
   lines.push(`${indent}{`);
   lines.push(
     `${innerIndent}const eventTargets = ${targetVar}.querySelectorAll(${JSON.stringify(directive.selector)});`
   );
   lines.push(`${innerIndent}eventTargets.forEach(targetEl => {`);
-  if (modifiers.debounceMs !== undefined) {
-    lines.push(`${bodyIndent}let ${timerVar};`);
-  }
   lines.push(`${bodyIndent}const ${handlerVar} = (event) => {`);
-  if (modifiers.key) {
-    lines.push(
-      `${bodyIndent}  if (event.key !== ${JSON.stringify(modifiers.key)}) { return; }`
-    );
-  }
-  if (modifiers.prevent) {
-    lines.push(`${bodyIndent}  event.preventDefault();`);
-  }
-  if (modifiers.stop) {
-    lines.push(`${bodyIndent}  event.stopPropagation();`);
-  }
+  lines.push(...renderEventPreamble(modifiers, listenerId, `${bodyIndent}  `));
   if (modifiers.debounceMs !== undefined) {
-    lines.push(`${bodyIndent}  clearTimeout(${timerVar});`);
     lines.push(
-      `${bodyIndent}  ${timerVar} = setTimeout(() => {`
+      `${bodyIndent}  this.__htmsDebounce(event, ${listenerId}, ${modifiers.debounceMs}, (event) => {`
     );
     for (const line of bodyLines) {
       lines.push(`${bodyIndent}    ${line}`);
     }
-    lines.push(`${bodyIndent}  }, ${modifiers.debounceMs});`);
+    lines.push(`${bodyIndent}  });`);
   } else {
     for (const line of bodyLines) {
       lines.push(`${bodyIndent}  ${line}`);
@@ -1804,6 +1898,38 @@ function renderEventDirective(
   lines.push(`${innerIndent}});`);
   lines.push(`${indent}}`);
 
+  return lines;
+}
+
+// Key filter, `once` guard and prevent/stop calls shared by <event>
+// directives and inline on:event attributes.
+export function renderEventPreamble(
+  modifiers: EventModifiers,
+  listenerId: string,
+  indent: string
+): string[] {
+  const lines: string[] = [];
+  if (modifiers.key) {
+    lines.push(
+      `${indent}if (event.key !== ${JSON.stringify(modifiers.key)}) { return; }`
+    );
+  }
+  if (modifiers.self) {
+    lines.push(
+      `${indent}if (event.target !== event.currentTarget) { return; }`
+    );
+  }
+  if (modifiers.once) {
+    lines.push(
+      `${indent}if (!this.__htmsClaimOnce(event.currentTarget, ${listenerId})) { return; }`
+    );
+  }
+  if (modifiers.prevent) {
+    lines.push(`${indent}event.preventDefault();`);
+  }
+  if (modifiers.stop) {
+    lines.push(`${indent}event.stopPropagation();`);
+  }
   return lines;
 }
 
@@ -2158,7 +2284,7 @@ function renderBindDirective(
   );
   lines.push(`${innerIndent}  } catch (error) {`);
   lines.push(
-    `${innerIndent}    console.error('BIND evaluation failed for ${directive.selector}', error);`
+    `${innerIndent}    console.error(${JSON.stringify(`BIND evaluation failed for ${directive.selector}`)}, error);`
   );
   lines.push(`${innerIndent}  }`);
   lines.push(`${innerIndent}});`);
@@ -2266,7 +2392,7 @@ function renderStateDirective(
   switch (directive.mode) {
     case 'init':
       lines.push(
-        `${indent}this.__htmsInitState(${pathLiteral}, () => ${directive.value ?? 'undefined'});`
+        `${indent}this.__htmsInitState(${pathLiteral}, () => (${directive.value ?? 'undefined'}));`
       );
       break;
     case 'derive':
@@ -2275,23 +2401,23 @@ function renderStateDirective(
         `${indent}  const resolved = this.__htmsResolvePath(${pathLiteral});`
       );
       lines.push(
-        `${indent}  resolved.target[resolved.key] = ${directive.value ?? 'undefined'};`
+        `${indent}  resolved.target[resolved.key] = (${directive.value ?? 'undefined'});`
       );
       lines.push(`${indent}}`);
       break;
     case 'set':
       lines.push(
-        `${indent}this.__htmsSetState(${pathLiteral}, '${directive.op ?? '='}', () => ${directive.op === '++' || directive.op === '--' ? 'undefined' : (directive.value ?? 'undefined')});`
+        `${indent}this.__htmsSetState(${pathLiteral}, '${directive.op ?? '='}', () => (${directive.op === '++' || directive.op === '--' ? 'undefined' : (directive.value ?? 'undefined')}));`
       );
       break;
     case 'push':
       lines.push(
-        `${indent}this.__htmsPushState(${pathLiteral}, () => ${directive.value ?? 'undefined'});`
+        `${indent}this.__htmsPushState(${pathLiteral}, () => (${directive.value ?? 'undefined'}));`
       );
       break;
     case 'splice':
       lines.push(
-        `${indent}this.__htmsSpliceState(${pathLiteral}, () => ${directive.index ?? '0'}, () => ${directive.deleteCount ?? '0'}, () => [${(directive.values ?? []).join(', ')}]);`
+        `${indent}this.__htmsSpliceState(${pathLiteral}, () => (${directive.index ?? '0'}), () => (${directive.deleteCount ?? '0'}), () => [${(directive.values ?? []).join(', ')}]);`
       );
       break;
   }

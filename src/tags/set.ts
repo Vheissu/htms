@@ -2,6 +2,8 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { StateDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { handlerScope } from '../component/scope';
+import { valueAttributeToExpression } from '../utils/values';
 
 const ALLOWED_OPS = new Set(['=', '+=', '-=', '*=', '/=', '++', '--']);
 
@@ -73,61 +75,9 @@ export const handleSetTag: TagHandler = (
           return { code: '', errors, warnings };
         }
 
-        // Reuse VAR value processing rules
-        if (value.startsWith('[') && value.endsWith(']')) {
-          try {
-            const parsed = JSON.parse(value);
-            if (!Array.isArray(parsed)) throw new Error('not array');
-            processedValue = JSON.stringify(parsed);
-          } catch {
-            errors.push({
-              type: 'validation',
-              message: 'Invalid JSON array literal',
-              tag: 'SET',
-            });
-            return { code: '', errors, warnings };
-          }
-        } else if (value.startsWith('{') && value.endsWith('}')) {
-          try {
-            const parsed = JSON.parse(value);
-            if (
-              typeof parsed !== 'object' ||
-              Array.isArray(parsed) ||
-              parsed === null
-            )
-              throw new Error('not object');
-            for (const key of Object.keys(parsed)) {
-              const keyErrs =
-                SecurityValidator.validateJavaScriptIdentifier(key);
-              if (keyErrs.length > 0) {
-                errors.push(...keyErrs.map((e) => ({ ...e, tag: 'SET' })));
-                return { code: '', errors, warnings };
-              }
-            }
-            processedValue = JSON.stringify(parsed);
-          } catch {
-            errors.push({
-              type: 'validation',
-              message: 'Invalid JSON object literal',
-              tag: 'SET',
-            });
-            return { code: '', errors, warnings };
-          }
-        } else if (SecurityValidator.isNumericLiteral(value)) {
-          const numErrors = SecurityValidator.validateNumericValue(value);
-          if (numErrors.length > 0) {
-            errors.push(...numErrors.map((e) => ({ ...e, tag: 'SET' })));
-            return { code: '', errors, warnings };
-          }
-          processedValue = value;
-        } else if (value === 'true' || value === 'false' || value === 'null') {
-          processedValue = value;
-        } else if (SecurityValidator.isJavaScriptPath(value)) {
-          // variable or dotted path reference
-          processedValue = value;
-        } else {
-          processedValue = SecurityValidator.jsStringLiteral(value);
-        }
+        processedValue = valueAttributeToExpression(value, {
+          isReference: handlerScope(options).isReference,
+        });
       }
     }
 

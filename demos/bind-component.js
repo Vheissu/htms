@@ -116,17 +116,54 @@ class BindBoxComponent extends HTMLElement {
     }
     return this.__htmsNodesMatch(reference, source) ? reference : null;
   }
+  __htmsAttributeSnapshot(node) {
+    const snapshot = Object.create(null);
+    for (const attr of Array.from(node.attributes)) {
+      snapshot[attr.name] = attr.value;
+    }
+    return snapshot;
+  }
+  __htmsRecordAttributes(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    node.__htmsAttrs = this.__htmsAttributeSnapshot(node);
+    Array.from(node.querySelectorAll('*')).forEach(child => {
+      child.__htmsAttrs = this.__htmsAttributeSnapshot(child);
+    });
+  }
   __htmsSyncAttributes(target, source) {
-    Array.from(target.attributes).forEach(attr => {
-      if (!source.hasAttribute(attr.name)) {
-        target.removeAttribute(attr.name);
+    const next = this.__htmsAttributeSnapshot(source);
+    const previous = target.__htmsAttrs;
+    if (!previous) {
+      // First sync of an adopted node (server-rendered markup): match the
+      // rendered output exactly.
+      Array.from(target.attributes).forEach(attr => {
+        if (!(attr.name in next)) {
+          target.removeAttribute(attr.name);
+        }
+      });
+      for (const name in next) {
+        if (target.getAttribute(name) !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
       }
-    });
-    Array.from(source.attributes).forEach(attr => {
-      if (target.getAttribute(attr.name) !== attr.value) {
-        target.setAttribute(attr.name, attr.value);
+    } else {
+      // Only touch attributes whose rendered value changed. Attributes the
+      // browser or other code changed (an opened <details>, a class added by
+      // a library) survive unrelated re-renders.
+      for (const name in previous) {
+        if (!(name in next)) {
+          target.removeAttribute(name);
+        }
       }
-    });
+      for (const name in next) {
+        if (previous[name] !== next[name]) {
+          target.setAttribute(name, next[name]);
+        }
+      }
+    }
+    target.__htmsAttrs = next;
   }
   __htmsActivateTree(node) {
     return;
@@ -169,6 +206,7 @@ class BindBoxComponent extends HTMLElement {
       if (!match) {
         targetParent.insertBefore(source, reference);
         source.__htmsMountedNode = source;
+        this.__htmsRecordAttributes(source);
         this.__htmsActivateTree(source);
         reference = source.nextSibling;
         continue;

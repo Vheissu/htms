@@ -2,12 +2,9 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import {
   elementToTemplateNode,
   isLowerCaseTag,
+  templateTextValue,
 } from '../component/template-utils';
-import {
-  DirectiveNode,
-  TemplateChild,
-  TemplateNode,
-} from '../component/ir';
+import { DirectiveNode, TemplateChild, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
@@ -167,7 +164,20 @@ export const handleRepeatTag: TagHandler = (
 
     // Process child elements that might reference the loop variable
     let childCode = '';
-    for (const child of Array.from(element.children)) {
+    for (const childNode of Array.from(element.childNodes)) {
+      if (childNode.nodeType === 3) {
+        const text = options.componentContext
+          ? templateTextValue(childNode)
+          : null;
+        if (text !== null) {
+          componentTemplateChildren.push({ type: 'text', textContent: text });
+        }
+        continue;
+      }
+      if (childNode.nodeType !== 1) {
+        continue;
+      }
+      const child = childNode as Element;
       const childOptions: TagHandlerOptions = {
         ...options,
         loopVariable,

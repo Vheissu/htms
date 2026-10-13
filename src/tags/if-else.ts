@@ -2,6 +2,7 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import {
   elementToTemplateNode,
   isLowerCaseTag,
+  templateTextValue,
 } from '../component/template-utils';
 import { DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
@@ -63,8 +64,8 @@ function collectBranchContent(
 
   for (const childNode of Array.from(element.childNodes)) {
     if (childNode.nodeType === 3) {
-      const text = childNode.textContent ?? '';
-      if (text.trim().length === 0) {
+      const text = templateTextValue(childNode);
+      if (text === null) {
         continue;
       }
       const textErrors = SecurityValidator.validateContent(text);

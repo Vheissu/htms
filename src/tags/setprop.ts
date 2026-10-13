@@ -2,22 +2,12 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { AttributeDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { valueAttributeToExpression } from '../utils/values';
 
 const BLOCKED_PROPERTY_SINKS = new Set(['innerhtml', 'outerhtml', 'srcdoc']);
 
 function buildValueExpr(value: string): string | null {
-  if (!value) return 'undefined';
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value;
-  }
-  if (SecurityValidator.isNumericLiteral(value)) return value;
-  if (value === 'true' || value === 'false' || value === 'null') return value;
-  if (SecurityValidator.isJavaScriptPath(value)) return value;
-  // Fallback to string literal
-  return SecurityValidator.jsStringLiteral(value);
+  return valueAttributeToExpression(value, { allowReferences: false });
 }
 
 export const handleSetPropTag: TagHandler = (

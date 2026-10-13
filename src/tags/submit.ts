@@ -2,6 +2,8 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
+import { DirectiveNode, EventDirective } from '../component/ir';
+import { withLocals } from '../component/scope';
 
 export const handleSubmitTag: TagHandler = (
   element: Element,
@@ -35,14 +37,47 @@ export const handleSubmitTag: TagHandler = (
 
     // Build body from child tags
     let bodyCode = '';
+    const isComponentContext =
+      options.parentContext === 'component' || options.componentContext;
+    const nestedDirectives: DirectiveNode[] = [];
+    const childOptions = isComponentContext
+      ? withLocals(options, 'event')
+      : options;
     for (const child of Array.from(element.children)) {
-      const r = handleElement(child, options);
+      const r = handleElement(child, childOptions);
       if (r.errors.length > 0) {
         errors.push(...r.errors.map((error) => ({ ...error, tag: 'SUBMIT' })));
         if (options.strictMode) return { code: '', errors, warnings };
       }
       if (r.warnings.length > 0) warnings.push(...r.warnings);
-      if (r.code) bodyCode += r.code + '\n';
+      const hasDirectives = !!r.component?.directives?.length;
+      if (r.component?.directives) {
+        nestedDirectives.push(...r.component.directives);
+      }
+      if (r.code && !(isComponentContext && hasDirectives)) {
+        bodyCode += r.code + '\n';
+      }
+    }
+
+    if (isComponentContext) {
+      // Components listen inside their own render root, like <event>.
+      const directive: EventDirective = {
+        kind: 'event',
+        selector: target,
+        eventType: 'submit',
+        body: bodyCode
+          .split('\n')
+          .map((line) => line.replace(/\s+$/, ''))
+          .filter((line) => line.trim().length > 0),
+        directives: nestedDirectives.length > 0 ? nestedDirectives : undefined,
+        modifiers: prevent ? { prevent: true } : undefined,
+      };
+      return {
+        code: '',
+        errors,
+        warnings,
+        component: { directives: [directive] },
+      };
     }
 
     const sel = SecurityValidator.jsStringLiteral(target);

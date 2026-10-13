@@ -189,15 +189,9 @@ export function ensureRuntime(): string {
             record.run = typeof spec.run === 'function' ? spec.run : record.run;
             record.cleanupFactory = typeof spec.cleanup === 'function' ? spec.cleanup : record.cleanupFactory;
             record.once = !!spec.once;
-            record.disposed = false;
-            if (spec.immediate !== false) {
-              record.dirty = true;
-            }
-            if (spec.immediate === false && !record.initialized) {
-              record.skipInitial = true;
-            } else if (spec.immediate !== false) {
-              record.skipInitial = false;
-            }
+            // Re-registration happens on every render. \`immediate\` only
+            // governs the first run; afterwards the effect re-runs when its
+            // dependencies change (or on every flush when it has none).
           }
           this.scheduleFlush();
           return {

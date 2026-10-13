@@ -162,7 +162,7 @@ export const handleEffectTag: TagHandler = (
 
     const depsCode =
       dependencies.length > 0
-        ? `[${dependencies.map((dep) => `function(){ return ${dep}; }`).join(', ')}]`
+        ? `[${dependencies.map((dep) => `() => (${dep})`).join(', ')}]`
         : '[]';
 
     const runBody = bodyStatements
@@ -171,7 +171,7 @@ export const handleEffectTag: TagHandler = (
 
     const cleanupBlock = cleanupAttr
       ? `
-          cleanup: function(){
+          cleanup: () => {
             try {
               ${cleanupAttr}
             } catch (error) {
@@ -180,7 +180,9 @@ export const handleEffectTag: TagHandler = (
           },`
       : '';
 
-    const registrationCode = `(function(owner){
+    // Arrow functions keep `this` bound to the component inside run, deps
+    // and cleanup.
+    const registrationCode = `((owner) => {
         if (typeof window !== 'undefined' && window.__HTMS_SSR__) { return; }
         var runtime = typeof window !== 'undefined' ? window.__htms : null;
         if (!runtime) { return; }
@@ -190,7 +192,7 @@ export const handleEffectTag: TagHandler = (
           deps: ${depsCode},
           immediate: ${immediate ? 'true' : 'false'},
           once: ${once ? 'true' : 'false'},
-          run: function(){
+          run: () => {
             try {
 ${runBody}
             } catch (error) {

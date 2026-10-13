@@ -1,19 +1,17 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
+import { handlerScope } from '../component/scope';
+import { valueAttributeToExpression } from '../utils/values';
 import { StateDirective } from '../component/ir';
 
-function buildValueExpr(value: string): string | null {
-  if (!value) return 'undefined';
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  )
-    return value;
-  if (SecurityValidator.isNumericLiteral(value)) return value;
-  if (value === 'true' || value === 'false' || value === 'null') return value;
-  if (SecurityValidator.isJavaScriptPath(value)) return value;
-  return SecurityValidator.jsStringLiteral(value);
+function buildValueExpr(
+  value: string,
+  options: TagHandlerOptions
+): string | null {
+  return valueAttributeToExpression(value, {
+    isReference: handlerScope(options).isReference,
+  });
 }
 
 export const handlePushTag: TagHandler = (
@@ -51,7 +49,7 @@ export const handlePushTag: TagHandler = (
       }
     }
     const valExpr =
-      exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
+      exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value, options);
     const isComponentContext = options.parentContext === 'component';
     const code = isComponentContext
       ? ''
