@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { StateDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 
 function validateStatePath(path: string): string[] | null {
@@ -76,7 +77,7 @@ export const handleDeriveTag: TagHandler = (
       kind: 'state',
       mode: 'derive',
       path,
-      value: expr,
+      value: handlerScope(options).expression(expr),
     };
 
     return {

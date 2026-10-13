@@ -1,10 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
-import {
-  DirectiveNode,
-  EventDirective,
-  EventModifiers,
-} from '../component/ir';
+import { DirectiveNode, EventDirective, EventModifiers } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope, withLocals } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 
@@ -139,6 +136,8 @@ export const handleEventTag: TagHandler = (
     if (once !== undefined) modifiers.once = once;
     const passive = parseBooleanModifier(element, 'passive');
     if (passive !== undefined) modifiers.passive = passive;
+    const self = parseBooleanModifier(element, 'self');
+    if (self !== undefined) modifiers.self = self;
 
     const debounceAttr = element.getAttribute('debounce');
     if (debounceAttr !== null) {
@@ -171,22 +170,23 @@ export const handleEventTag: TagHandler = (
     const isComponentContext =
       options.parentContext === 'component' || options.componentContext;
     if (element.children.length > 0) {
+      const childOptions = withLocals(options, 'event');
       for (const child of Array.from(element.children)) {
-        const r = handleElement(child, options);
+        const r = handleElement(child, childOptions);
         if (r.errors.length > 0) {
           errors.push(...r.errors.map((error) => ({ ...error, tag: 'EVENT' })));
           if (options.strictMode) return { code: '', errors, warnings };
         }
         if (r.warnings.length > 0) warnings.push(...r.warnings);
+        const hasComponentDirective = !!r.component?.directives?.length;
         if (r.component?.directives) {
           nestedDirectives.push(...r.component.directives);
+        } else if (isComponentContext && r.code) {
+          // Keep document order: code-only children (e.g. <call>) run
+          // between the state changes around them.
+          nestedDirectives.push({ kind: 'statement', code: r.code });
         }
-        const hasComponentDirective = !!(
-          r.component &&
-          r.component.directives &&
-          r.component.directives.length > 0
-        );
-        if (!(isComponentContext && hasComponentDirective) && r.code) {
+        if (!isComponentContext && !hasComponentDirective && r.code) {
           bodyCode += r.code + '\n';
         }
       }
@@ -225,7 +225,7 @@ export const handleEventTag: TagHandler = (
         });
         return { code: '', errors, warnings };
       }
-      bodyCode = `${action}`;
+      bodyCode = handlerScope(options).statements(action, ['event']);
     }
 
     const escapedTarget = SecurityValidator.jsStringLiteral(target);
@@ -300,8 +300,7 @@ ${(bodyCode || '')
         .map((line) => line.replace(/\s+$/, ''))
         .filter((line) => line.trim().length > 0),
       directives: nestedDirectives.length > 0 ? nestedDirectives : undefined,
-      modifiers:
-        Object.keys(modifiers).length > 0 ? modifiers : undefined,
+      modifiers: Object.keys(modifiers).length > 0 ? modifiers : undefined,
     };
 
     return {

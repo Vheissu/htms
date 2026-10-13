@@ -6,6 +6,7 @@ import {
   templateTextValue,
 } from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 
@@ -322,7 +323,7 @@ export const handleSwitchTag: TagHandler = (
     if (componentCases.length > 0 || defaultTemplates) {
       switchDirective = {
         kind: 'switch',
-        expression,
+        expression: handlerScope(options).expression(expression),
         cases: componentCases,
         defaultCase: defaultTemplates
           ? {

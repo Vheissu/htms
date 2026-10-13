@@ -29,7 +29,8 @@ type ConsumableElement = Element & { __htmsConsumed?: boolean };
 export function elementsToComponentCode(
   componentElement: Element,
   appendTargetVar: string,
-  options: ParseOptions
+  options: ParseOptions,
+  componentFields?: ReadonlySet<string>
 ): ComponentRenderResult {
   const ir = createEmptyComponentIR();
   const errors: CompilerError[] = [];
@@ -101,6 +102,7 @@ export function elementsToComponentCode(
       parentContext: 'component',
       appendTargetVar,
       componentContext: true,
+      componentFields,
     };
 
     // Directive tags nested inside markup (e.g. <div><event .../></div>)

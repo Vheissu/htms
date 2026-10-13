@@ -1,5 +1,6 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 
 // Whitelist of allowed function names for security
@@ -63,7 +64,11 @@ export const handleCallTag: TagHandler = (
     }
 
     // Security check - only allow whitelisted functions in strict mode
-    if (options.strictMode && !ALLOWED_FUNCTIONS.has(functionName)) {
+    if (
+      options.strictMode &&
+      !ALLOWED_FUNCTIONS.has(functionName) &&
+      !options.componentFields?.has(functionName.split('.')[0])
+    ) {
       errors.push({
         type: 'security',
         message: `Function not in whitelist: ${functionName}. Allowed functions: ${Array.from(ALLOWED_FUNCTIONS).join(', ')}`,
@@ -174,16 +179,24 @@ export const handleCallTag: TagHandler = (
       }
     }
 
+    // Inside a component, `function="save"` calls the component method and
+    // bare arguments read component fields.
+    const callExpression = handlerScope(options).expression(
+      `${functionName}(${validatedArgs})`
+    );
+
     // Generate safe function call with try-catch
     const code = `
       try {
-        ${functionName}(${validatedArgs});
+        ${callExpression};
       } catch (error) {
-        console.error('Function call failed: ${functionName}', error);
+        console.error(${JSON.stringify(`Function call failed: ${functionName}`)}, error);
       }
     `;
 
-    if (!ALLOWED_FUNCTIONS.has(functionName)) {
+    const callsComponentMember =
+      options.componentFields?.has(functionName.split('.')[0]) ?? false;
+    if (!ALLOWED_FUNCTIONS.has(functionName) && !callsComponentMember) {
       warnings.push({
         message: `Function call to ${functionName} may pose security risks`,
         tag: 'CALL',

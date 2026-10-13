@@ -189,6 +189,23 @@ class DerivedBoxComponent extends HTMLElement {
   requestUpdate() {
     return this.__htmsRequestRender();
   }
+  $(selector) {
+    return (this.__htmsRoot || this).querySelector(selector);
+  }
+  $$(selector) {
+    return Array.from((this.__htmsRoot || this).querySelectorAll(selector));
+  }
+  emit(name, detail, options) {
+    return this.dispatchEvent(new CustomEvent(name, Object.assign({
+      detail,
+      bubbles: true,
+      composed: true,
+      cancelable: false
+    }, options)));
+  }
+  __htmsToText(value) {
+    return value == null ? '' : String(value);
+  }
   __htmsRequestRender() {
     if (!this.__htmsConnected || this.__htmsRenderScheduled) {
       return this.__htmsUpdatePromise;
@@ -664,12 +681,12 @@ class DerivedBoxComponent extends HTMLElement {
       _el0.setAttribute('class', 'box');
       const _el1 = document.createElement('h2');
       _el1.setAttribute('id', 'status');
-      _el1.appendChild(document.createTextNode(this.statusText == null ? '' : String(this.statusText)));
+      _el1.appendChild(document.createTextNode(this.__htmsToText(this.statusText)));
       _el0.appendChild(_el1);
       const _el2 = document.createElement('p');
       _el2.setAttribute('id', 'summary');
-      _el2.setAttribute('title', 'Count ' + (this.count == null ? '' : String(this.count)));
-      _el2.appendChild(document.createTextNode('Total items: ' + (this.count == null ? '' : String(this.count))));
+      _el2.setAttribute('title', 'Count ' + this.__htmsToText(this.count));
+      _el2.appendChild(document.createTextNode('Total items: ' + this.__htmsToText(this.count)));
       _el0.appendChild(_el2);
       const _el3 = document.createElement('button');
       _el3.setAttribute('id', 'add');

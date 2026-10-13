@@ -6,6 +6,7 @@ import {
   templateTextValue,
 } from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 
@@ -132,7 +133,7 @@ export const handleWhileTag: TagHandler = (
       }
     }
 
-    const safeCondition = condition.trim();
+    const safeCondition = handlerScope(options).expression(condition.trim());
     const loopBody = bodyCode.trim()
       ? `  try {\n${bodyCode
           .split('\n')

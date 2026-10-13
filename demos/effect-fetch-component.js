@@ -393,6 +393,23 @@ class EffectFetchDemoComponent extends HTMLElement {
   requestUpdate() {
     return this.__htmsRequestRender();
   }
+  $(selector) {
+    return (this.__htmsRoot || this).querySelector(selector);
+  }
+  $$(selector) {
+    return Array.from((this.__htmsRoot || this).querySelectorAll(selector));
+  }
+  emit(name, detail, options) {
+    return this.dispatchEvent(new CustomEvent(name, Object.assign({
+      detail,
+      bubbles: true,
+      composed: true,
+      cancelable: false
+    }, options)));
+  }
+  __htmsToText(value) {
+    return value == null ? '' : String(value);
+  }
   __htmsRequestRender() {
     if (!this.__htmsConnected || this.__htmsRenderScheduled) {
       return this.__htmsUpdatePromise;
@@ -855,16 +872,16 @@ class EffectFetchDemoComponent extends HTMLElement {
       _el0.appendChild(_el1);
       const _el2 = document.createElement('p');
       _el2.setAttribute('id', 'status');
-      _el2.appendChild(document.createTextNode('Status: ' + (this.status == null ? '' : String(this.status))));
+      _el2.appendChild(document.createTextNode('Status: ' + this.__htmsToText(this.status)));
       _el0.appendChild(_el2);
       const _el3 = document.createElement('blockquote');
       _el3.setAttribute('id', 'quote');
-      _el3.appendChild(document.createTextNode(this.state?.quote?.text == null ? '' : String(this.state?.quote?.text)));
+      _el3.appendChild(document.createTextNode(this.__htmsToText(this.state?.quote?.text)));
       _el0.appendChild(_el3);
       const _el4 = document.createElement('p');
       _el4.setAttribute('id', 'error');
       _el4.setAttribute('class', 'error');
-      _el4.appendChild(document.createTextNode(this.state?.error == null ? '' : String(this.state?.error)));
+      _el4.appendChild(document.createTextNode(this.__htmsToText(this.state?.error)));
       _el0.appendChild(_el4);
       componentRoot.appendChild(_el0);
       {

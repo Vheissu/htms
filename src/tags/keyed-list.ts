@@ -10,6 +10,7 @@ import {
   isLowerCaseTag,
 } from '../component/template-utils';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope, withLocals } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { handleElement } from '../handlers';
@@ -124,12 +125,19 @@ export const handleKeyedListTag: TagHandler = (
       // resolve to template children scoped to each rendered item.
       const template: TemplateNode[] = [
         elementToTemplateNode(templateEl, (child) => {
-          const childResult = handleElement(child, {
-            ...options,
-            loopVariable: itemVar,
-            parentContext: 'component',
-            componentContext: true,
-          });
+          const childResult = handleElement(
+            child,
+            withLocals(
+              {
+                ...options,
+                loopVariable: itemVar,
+                parentContext: 'component',
+                componentContext: true,
+              },
+              itemVar,
+              indexVar
+            )
+          );
           errors.push(...childResult.errors);
           warnings.push(...childResult.warnings);
 
@@ -159,10 +167,12 @@ export const handleKeyedListTag: TagHandler = (
       const componentDirective: KeyedListDirective = {
         kind: 'keyed-list',
         selector: target,
-        source: resolveComponentSource(ofExpr),
+        source: options.componentFields
+          ? handlerScope(options).expression(ofExpr)
+          : resolveComponentSource(ofExpr),
         itemVar,
         indexVar,
-        key: keyExpr,
+        key: handlerScope(options).expression(keyExpr, [itemVar, indexVar]),
         template,
         directives,
       };

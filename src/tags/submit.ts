@@ -50,11 +50,12 @@ export const handleSubmitTag: TagHandler = (
         if (options.strictMode) return { code: '', errors, warnings };
       }
       if (r.warnings.length > 0) warnings.push(...r.warnings);
-      const hasDirectives = !!r.component?.directives?.length;
       if (r.component?.directives) {
         nestedDirectives.push(...r.component.directives);
+      } else if (isComponentContext && r.code) {
+        nestedDirectives.push({ kind: 'statement', code: r.code });
       }
-      if (r.code && !(isComponentContext && hasDirectives)) {
+      if (!isComponentContext && r.code) {
         bodyCode += r.code + '\n';
       }
     }

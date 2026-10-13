@@ -6,6 +6,7 @@ import {
 } from '../component/template-utils';
 import { DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 
@@ -22,8 +23,9 @@ function validateCondition(
   tag: string,
   errors: HandlerResult['errors'],
   warnings: HandlerResult['warnings'],
-  strictMode: boolean
+  options: TagHandlerOptions
 ): string | null {
+  const strictMode = options.strictMode ?? false;
   const conditionErrors = SecurityValidator.validateContent(condition);
   if (conditionErrors.length > 0) {
     errors.push(...conditionErrors.map((error) => ({ ...error, tag })));
@@ -48,7 +50,7 @@ function validateCondition(
     }
   }
 
-  return condition.trim();
+  return handlerScope(options).expression(condition.trim());
 }
 
 function collectBranchContent(
@@ -154,7 +156,7 @@ export const handleIfElseTags: TagHandler = (
       'IF',
       errors,
       warnings,
-      options.strictMode ?? false
+      options
     );
     if (!sanitizedCondition) {
       return { code: '', errors, warnings };
@@ -211,7 +213,7 @@ export const handleIfElseTags: TagHandler = (
           tagName,
           errors,
           warnings,
-          options.strictMode ?? false
+          options
         );
         if (!sanitizedElseIf) {
           if (options.strictMode) {

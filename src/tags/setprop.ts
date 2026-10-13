@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { AttributeDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { valueAttributeToExpression } from '../utils/values';
 
@@ -68,7 +69,9 @@ export const handleSetPropTag: TagHandler = (
       return { code: '', errors, warnings };
     }
     const valExpr =
-      exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value);
+      exprAttr && exprAttr.trim()
+        ? handlerScope(options).expression(exprAttr.trim())
+        : buildValueExpr(value);
     if (valExpr == null) {
       errors.push({
         type: 'validation',

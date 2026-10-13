@@ -132,6 +132,23 @@ class TodoBoxComponent extends HTMLElement {
   requestUpdate() {
     return this.__htmsRequestRender();
   }
+  $(selector) {
+    return (this.__htmsRoot || this).querySelector(selector);
+  }
+  $$(selector) {
+    return Array.from((this.__htmsRoot || this).querySelectorAll(selector));
+  }
+  emit(name, detail, options) {
+    return this.dispatchEvent(new CustomEvent(name, Object.assign({
+      detail,
+      bubbles: true,
+      composed: true,
+      cancelable: false
+    }, options)));
+  }
+  __htmsToText(value) {
+    return value == null ? '' : String(value);
+  }
   __htmsRequestRender() {
     if (!this.__htmsConnected || this.__htmsRenderScheduled) {
       return this.__htmsUpdatePromise;
@@ -650,7 +667,7 @@ class TodoBoxComponent extends HTMLElement {
         const _el12 = document.createElement('li');
         _el12.setAttribute('class', 'todo-item');
         const _el13 = document.createElement('span');
-        _el13.appendChild(document.createTextNode(item == null ? '' : String(item)));
+        _el13.appendChild(document.createTextNode(this.__htmsToText(item)));
         _el12.appendChild(_el13);
         const _el14 = document.createElement('button');
         _el14.setAttribute('class', 'remove');

@@ -69,9 +69,11 @@ export const handleVarTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    const processedValue = valueAttributeToExpression(value, {
-      isReference: handlerScope(options).isReference,
-    });
+    const processedValue = handlerScope(options).expression(
+      valueAttributeToExpression(value, {
+        isReference: handlerScope(options).isReference,
+      })
+    );
 
     const decl = mutable ? 'let' : 'const';
     const isComponentContext = options.parentContext === 'component';

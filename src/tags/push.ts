@@ -48,8 +48,11 @@ export const handlePushTag: TagHandler = (
         return { code: '', errors, warnings };
       }
     }
-    const valExpr =
-      exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value, options);
+    const valExpr = handlerScope(options).expression(
+      (exprAttr && exprAttr.trim()
+        ? exprAttr
+        : buildValueExpr(value, options)) ?? 'undefined'
+    );
     const isComponentContext = options.parentContext === 'component';
     const code = isComponentContext
       ? ''

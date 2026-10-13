@@ -1,4 +1,5 @@
 import { DirectiveNode, TemplateNode } from './ir';
+import { expressionReferences, scopeExpression } from './scope';
 
 const IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
@@ -240,6 +241,56 @@ function serializeNode(
   return statements;
 }
 
+interface InterpolationToken {
+  start: number;
+  end: number;
+  source: string;
+}
+
+// Finds the `}` closing the `{` at `start`, skipping nested braces and
+// quoted strings so `{ok ? '}' : 'x'}` is one token. Returns -1 when the
+// brace is never closed.
+function findClosingBrace(value: string, start: number): number {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let index = start; index < value.length; index += 1) {
+    const character = value.charAt(index);
+    if (quote) {
+      if (character === '\\') {
+        index += 1;
+      } else if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character;
+    } else if (character === '{') {
+      depth += 1;
+    } else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+function interpolationTokens(value: string): InterpolationToken[] {
+  const tokens: InterpolationToken[] = [];
+  let searchFrom = 0;
+  while (searchFrom < value.length) {
+    const start = value.indexOf('{', searchFrom);
+    if (start === -1) break;
+    const end = findClosingBrace(value, start);
+    if (end === -1) break;
+    tokens.push({ start, end, source: value.slice(start + 1, end).trim() });
+    searchFrom = end + 1;
+  }
+  return tokens;
+}
+
 function serializeTextValue(
   value: string,
   interpolationVars: string[],
@@ -253,36 +304,22 @@ function serializeTextValue(
 
   const parts: string[] = [];
   let literalStart = 0;
-  let searchFrom = 0;
 
-  while (searchFrom < value.length) {
-    const start = value.indexOf('{', searchFrom);
-    if (start === -1) {
-      break;
-    }
-
-    const end = value.indexOf('}', start + 1);
-    if (end === -1) {
-      break;
-    }
-
-    const token = value.slice(start + 1, end).trim();
+  for (const token of interpolationTokens(value)) {
     const expression = resolveInterpolationExpression(
-      token,
+      token.source,
       localRoots,
       componentRoots
     );
     if (!expression) {
-      searchFrom = end + 1;
       continue;
     }
 
-    if (start > literalStart) {
-      parts.push(JSON.stringify(value.slice(literalStart, start)));
+    if (token.start > literalStart) {
+      parts.push(JSON.stringify(value.slice(literalStart, token.start)));
     }
-    parts.push(`(${expression} == null ? '' : String(${expression}))`);
-    literalStart = end + 1;
-    searchFrom = end + 1;
+    parts.push(`this.__htmsToText(${expression})`);
+    literalStart = token.end + 1;
   }
 
   if (parts.length === 0) {
@@ -303,12 +340,17 @@ function resolveWholeAttributeInterpolation(
   interpolationVars: string[],
   componentInterpolationVars: string[]
 ): string | null {
-  const match = /^\{([^{}]+)\}$/.exec(value.trim());
-  if (!match) {
+  const trimmed = value.trim();
+  const tokens = interpolationTokens(trimmed);
+  if (
+    tokens.length !== 1 ||
+    tokens[0].start !== 0 ||
+    tokens[0].end !== trimmed.length - 1
+  ) {
     return null;
   }
   return resolveInterpolationExpression(
-    match[1].trim(),
+    tokens[0].source,
     new Set(interpolationVars),
     new Set(componentInterpolationVars)
   );
@@ -355,28 +397,14 @@ function textHasInterpolation(
 ): boolean {
   const localRoots = new Set(interpolationVars);
   const componentRoots = new Set(componentInterpolationVars);
-  let searchFrom = 0;
-
-  while (searchFrom < value.length) {
-    const start = value.indexOf('{', searchFrom);
-    if (start === -1) {
-      return false;
-    }
-
-    const end = value.indexOf('}', start + 1);
-    if (end === -1) {
-      return false;
-    }
-
-    const token = value.slice(start + 1, end).trim();
-    if (resolveInterpolationExpression(token, localRoots, componentRoots)) {
-      return true;
-    }
-
-    searchFrom = end + 1;
-  }
-
-  return false;
+  return interpolationTokens(value).some(
+    (token) =>
+      resolveInterpolationExpression(
+        token.source,
+        localRoots,
+        componentRoots
+      ) !== null
+  );
 }
 
 function resolveInterpolationExpression(
@@ -385,12 +413,11 @@ function resolveInterpolationExpression(
   componentRoots: Set<string>
 ): string | null {
   const segments = token.split('.');
-  if (segments.length === 0 || segments.some((segment) => segment === '')) {
-    return null;
-  }
-
-  if (!segments.every((segment) => IDENTIFIER_PATTERN.test(segment))) {
-    return null;
+  if (
+    segments.length === 0 ||
+    segments.some((segment) => !IDENTIFIER_PATTERN.test(segment))
+  ) {
+    return resolveExpressionInterpolation(token, localRoots, componentRoots);
   }
 
   // Paths are null-safe: `{user.name}` renders empty text while `user` is
@@ -408,6 +435,31 @@ function resolveInterpolationExpression(
   }
 
   return null;
+}
+
+// `{count * 2}`, `{items.length > 0 ? 'Some' : 'None'}`, `{format(price)}`.
+// Braces only interpolate when the expression reads a component field, a
+// loop variable or `this`; anything else (CSS blocks, prose) stays text.
+function resolveExpressionInterpolation(
+  token: string,
+  localRoots: Set<string>,
+  componentRoots: Set<string>
+): string | null {
+  if (!token) {
+    return null;
+  }
+  const references = expressionReferences(token);
+  if (!references) {
+    return null;
+  }
+  const readsScope = Array.from(references).some(
+    (name) =>
+      name === 'this' || localRoots.has(name) || componentRoots.has(name)
+  );
+  if (!readsScope) {
+    return null;
+  }
+  return `(${scopeExpression(token, componentRoots, Array.from(localRoots))})`;
 }
 
 function optionalPath(segments: string[]): string {

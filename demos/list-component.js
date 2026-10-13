@@ -132,6 +132,23 @@ class ListBoxComponent extends HTMLElement {
   requestUpdate() {
     return this.__htmsRequestRender();
   }
+  $(selector) {
+    return (this.__htmsRoot || this).querySelector(selector);
+  }
+  $$(selector) {
+    return Array.from((this.__htmsRoot || this).querySelectorAll(selector));
+  }
+  emit(name, detail, options) {
+    return this.dispatchEvent(new CustomEvent(name, Object.assign({
+      detail,
+      bubbles: true,
+      composed: true,
+      cancelable: false
+    }, options)));
+  }
+  __htmsToText(value) {
+    return value == null ? '' : String(value);
+  }
   __htmsRequestRender() {
     if (!this.__htmsConnected || this.__htmsRenderScheduled) {
       return this.__htmsUpdatePromise;
@@ -599,7 +616,7 @@ class ListBoxComponent extends HTMLElement {
             const _el7 = document.createElement('li');
             _el7.setAttribute('class', 'person');
             const _el8 = document.createElement('span');
-            _el8.appendChild(document.createTextNode(item == null ? '' : String(item)));
+            _el8.appendChild(document.createTextNode(this.__htmsToText(item)));
             _el7.appendChild(_el8);
             const _el9 = document.createElement('button');
             _el9.setAttribute('class', 'promote');

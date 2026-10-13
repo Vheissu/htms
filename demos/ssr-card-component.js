@@ -193,6 +193,23 @@ class SsrCardComponent extends HTMLElement {
   requestUpdate() {
     return this.__htmsRequestRender();
   }
+  $(selector) {
+    return (this.__htmsRoot || this).querySelector(selector);
+  }
+  $$(selector) {
+    return Array.from((this.__htmsRoot || this).querySelectorAll(selector));
+  }
+  emit(name, detail, options) {
+    return this.dispatchEvent(new CustomEvent(name, Object.assign({
+      detail,
+      bubbles: true,
+      composed: true,
+      cancelable: false
+    }, options)));
+  }
+  __htmsToText(value) {
+    return value == null ? '' : String(value);
+  }
   __htmsRequestRender() {
     if (!this.__htmsConnected || this.__htmsRenderScheduled) {
       return this.__htmsUpdatePromise;
@@ -661,11 +678,11 @@ class SsrCardComponent extends HTMLElement {
       const _el0 = document.createElement('article');
       _el0.setAttribute('class', 'card');
       const _el1 = document.createElement('h2');
-      _el1.appendChild(document.createTextNode(this.name == null ? '' : String(this.name)));
+      _el1.appendChild(document.createTextNode(this.__htmsToText(this.name)));
       _el0.appendChild(_el1);
       const _el2 = document.createElement('p');
       _el2.setAttribute('id', 'count');
-      _el2.appendChild(document.createTextNode('Server count: ' + (this.count == null ? '' : String(this.count))));
+      _el2.appendChild(document.createTextNode('Server count: ' + this.__htmsToText(this.count)));
       _el0.appendChild(_el2);
       const _el3 = document.createElement('button');
       _el3.setAttribute('id', 'increment');

@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { DirectiveNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 
 // Custom event names: a letter/underscore followed by letters, digits,
@@ -54,7 +55,7 @@ export const handleEmitTag: TagHandler = (
           return { code: '', errors, warnings };
         }
       }
-      detailExpr = detail;
+      detailExpr = handlerScope(options).expression(detail);
     }
 
     const bubbles = parseBoolean(element.getAttribute('bubbles'), true);

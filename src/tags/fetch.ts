@@ -1,6 +1,7 @@
 import * as acorn from 'acorn';
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { getNodeLocation } from '../diagnostics';
@@ -31,9 +32,25 @@ function stableId(prefix: string, element: Element): string {
 // `url` accepts a JS expression (e.g. `'/api'` or `this.endpoint`). When the
 // attribute does not parse as an expression, treat it as a literal URL so
 // `url="/api"` produces fetch('/api') instead of a broken regex literal.
-function expressionOrLiteral(value: string): string {
+function expressionOrLiteral(
+  value: string,
+  isReference?: (root: string) => boolean
+): string {
+  // A bare word such as url="health" is a relative URL unless it names a
+  // component field.
+  if (
+    isReference &&
+    SecurityValidator.isJavaScriptPath(value) &&
+    value.split('.')[0] !== 'this' &&
+    !isReference(value.split('.')[0])
+  ) {
+    return SecurityValidator.jsStringLiteral(value);
+  }
   try {
-    acorn.parseExpressionAt(value, 0, { ecmaVersion: 'latest' });
+    const node = acorn.parseExpressionAt(value, 0, { ecmaVersion: 'latest' });
+    if (value.slice(node.end).trim() !== '') {
+      return SecurityValidator.jsStringLiteral(value);
+    }
     return value;
   } catch {
     return SecurityValidator.jsStringLiteral(value);
@@ -250,12 +267,21 @@ export const handleFetchTag: TagHandler = (
       return { code: '', errors, warnings };
     }
 
-    const urlCode = expressionOrLiteral(urlExpr);
+    const scope = handlerScope(options);
+    const scoped = (expression: string | null): string | null =>
+      expression ? scope.expression(expression, ['owner']) : expression;
+    const urlCode = scope.expression(
+      expressionOrLiteral(urlExpr, scope.isReference),
+      ['owner']
+    );
+    const bodyCode = scoped(bodyAttr);
+    const headersCode = scoped(headersAttr);
+    const whenCode = scoped(whenAttr);
     const dependencySet = new Set<string>();
     dependencySet.add(urlCode);
-    if (bodyAttr) dependencySet.add(bodyAttr);
-    if (headersAttr) dependencySet.add(headersAttr);
-    if (whenAttr) dependencySet.add(whenAttr);
+    if (bodyCode) dependencySet.add(bodyCode);
+    if (headersCode) dependencySet.add(headersCode);
+    if (whenCode) dependencySet.add(whenCode);
 
     if (depsAttr) {
       for (const raw of depsAttr.split(',')) {
@@ -274,7 +300,7 @@ export const handleFetchTag: TagHandler = (
           );
           return { code: '', errors, warnings };
         }
-        dependencySet.add(dep);
+        dependencySet.add(scope.expression(dep, ['owner']));
       }
     }
 
@@ -293,11 +319,11 @@ export const handleFetchTag: TagHandler = (
         : '[]';
 
     const requestInitEntries: string[] = [`method: '${methodAttr}'`];
-    if (headersAttr) {
-      requestInitEntries.push(`headers: ${headersAttr}`);
+    if (headersCode) {
+      requestInitEntries.push(`headers: ${headersCode}`);
     }
-    if (bodyAttr) {
-      requestInitEntries.push(`body: ${bodyAttr}`);
+    if (bodyCode) {
+      requestInitEntries.push(`body: ${bodyCode}`);
     }
     if (credentialsAttr) {
       requestInitEntries.push(`credentials: '${credentialsAttr}'`);
@@ -340,7 +366,7 @@ export const handleFetchTag: TagHandler = (
     const setLoadingTrue = buildAssignment(loadingPath, 'true', isComponent);
     const setLoadingFalse = buildAssignment(loadingPath, 'false', isComponent);
 
-    const guardExpression = whenAttr ? `(${whenAttr})` : 'true';
+    const guardExpression = whenCode ? `(${whenCode})` : 'true';
 
     // Arrow functions keep `this` bound to the component, so url, body and
     // headers expressions can read component fields.

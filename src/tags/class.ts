@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { ClassDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 
 const ACTIONS = new Set(['add', 'remove', 'toggle']);
@@ -94,7 +95,7 @@ export const handleClassTag: TagHandler = (
           return { code: '', errors, warnings };
         }
       }
-      condition = whenAttr.trim();
+      condition = handlerScope(options).expression(whenAttr.trim());
     }
 
     const isComponentContext = options.parentContext === 'component';

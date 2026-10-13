@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { BindDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 
@@ -69,7 +70,7 @@ export const handleBindTag: TagHandler = (
       kind: 'bind',
       selector,
       property: prop,
-      expression: expr,
+      expression: handlerScope(options).expression(expr),
     };
 
     return {

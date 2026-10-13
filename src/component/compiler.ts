@@ -82,7 +82,11 @@ const COMPONENT_INPUT_TYPES = new Set<ComponentInputType>([
   'json',
 ]);
 const VALID_CUSTOM_ELEMENT_NAME = /^[a-z][a-z0-9._-]*-[a-z0-9._-]*$/;
+// Public helpers every generated component exposes.
+const BUILTIN_COMPONENT_FIELDS = ['$', '$$', 'emit', 'requestUpdate'];
+
 const RESERVED_COMPONENT_PROPERTIES = new Set([
+  ...BUILTIN_COMPONENT_FIELDS,
   '__proto__',
   'attributeChangedCallback',
   'connectedCallback',
@@ -327,11 +331,17 @@ function compileComponentElement(
   }
 
   const renderTargetVar = 'componentRoot';
+  const componentFields = collectComponentFields(element, metadata);
   const {
     ir: renderIR,
     errors: renderErrors,
     warnings: renderWarnings,
-  } = elementsToComponentCode(element, renderTargetVar, options);
+  } = elementsToComponentCode(
+    element,
+    renderTargetVar,
+    options,
+    componentFields
+  );
 
   errors.push(...renderErrors);
   warnings.push(...renderWarnings);
@@ -391,6 +401,61 @@ function compileComponentElement(
       code: [classCode, registrationCode].join('\n\n'),
     },
   };
+}
+
+// Field-declaring tags and the attribute holding the declared path. Only
+// the root segment becomes a component field.
+const FIELD_DECLARATIONS: Array<[string, string]> = [
+  ['var', 'name'],
+  ['derive', 'name'],
+  ['function', 'name'],
+  ['object', 'name'],
+  ['array', 'name'],
+  ['set', 'name'],
+  ['push', 'array'],
+  ['splice', 'array'],
+  ['model', 'path'],
+  ['model', 'name'],
+  ['fetch', 'into'],
+  ['fetch', 'error'],
+  ['fetch', 'loading'],
+];
+
+const IDENTIFIER_ROOT = /^(?:this\.)?([a-zA-Z_$][a-zA-Z0-9_$]*)/;
+
+// Collects the names that bare identifiers in component expressions refer
+// to, before any tag handler runs: props, state, derived values and
+// methods. Built-in helpers are included so `$('#id')` works unqualified.
+function collectComponentFields(
+  element: Element,
+  metadata: ComponentMetadata
+): Set<string> {
+  const fields = new Set<string>(BUILTIN_COMPONENT_FIELDS);
+  for (const input of metadata.inputs) {
+    fields.add(input.propName);
+  }
+  for (const [tagName, attribute] of FIELD_DECLARATIONS) {
+    for (const declaration of Array.from(
+      element.getElementsByTagName(tagName)
+    )) {
+      const value = declaration.getAttribute(attribute);
+      const match = value ? IDENTIFIER_ROOT.exec(value.trim()) : null;
+      if (match && match[1] !== 'this') {
+        fields.add(match[1]);
+      }
+    }
+  }
+  for (const candidate of Array.from(element.getElementsByTagName('*'))) {
+    for (const attr of Array.from(candidate.attributes)) {
+      if (attr.name.startsWith('bind:')) {
+        const match = IDENTIFIER_ROOT.exec(attr.value.trim());
+        if (match && match[1] !== 'this') {
+          fields.add(match[1]);
+        }
+      }
+    }
+  }
+  return fields;
 }
 
 function readComponentMetadata(
@@ -1049,6 +1114,27 @@ function buildComponentClass(
 
   requestUpdate() {
     return this.__htmsRequestRender();
+  }
+
+  $(selector) {
+    return (this.__htmsRoot || this).querySelector(selector);
+  }
+
+  $$(selector) {
+    return Array.from((this.__htmsRoot || this).querySelectorAll(selector));
+  }
+
+  emit(name, detail, options) {
+    return this.dispatchEvent(new CustomEvent(name, Object.assign({
+      detail,
+      bubbles: true,
+      composed: true,
+      cancelable: false
+    }, options)));
+  }
+
+  __htmsToText(value) {
+    return value == null ? '' : String(value);
   }
 
   __htmsRequestRender() {

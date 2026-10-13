@@ -1,5 +1,6 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { StateDirective } from '../component/ir';
 
@@ -100,7 +101,7 @@ export const handleSpliceTag: TagHandler = (
       kind: 'state',
       mode: 'splice',
       path,
-      index,
+      index: handlerScope(options).expression(index),
       deleteCount,
       values: valueExpressions,
     };

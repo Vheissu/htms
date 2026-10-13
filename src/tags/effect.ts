@@ -1,5 +1,6 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { handleElement } from '../handlers';
@@ -159,21 +160,29 @@ export const handleEffectTag: TagHandler = (
     const effectId = stableId('__effect', element);
     const runtime = ensureRuntime();
     const ownerExpr = options.componentContext ? 'this' : 'null';
+    const scope = handlerScope(options);
+    const scopedDependencies = dependencies.map((dependency) =>
+      scope.expression(dependency, ['owner'])
+    );
+    const scopedBody = scope
+      .statements(bodyStatements.join('\n'), ['owner'])
+      .split('\n');
+    const scopedCleanup = cleanupAttr
+      ? scope.statements(cleanupAttr, ['owner'])
+      : '';
 
     const depsCode =
-      dependencies.length > 0
-        ? `[${dependencies.map((dep) => `() => (${dep})`).join(', ')}]`
+      scopedDependencies.length > 0
+        ? `[${scopedDependencies.map((dep) => `() => (${dep})`).join(', ')}]`
         : '[]';
 
-    const runBody = bodyStatements
-      .map((line) => `            ${line}`)
-      .join('\n');
+    const runBody = scopedBody.map((line) => `            ${line}`).join('\n');
 
-    const cleanupBlock = cleanupAttr
+    const cleanupBlock = scopedCleanup
       ? `
           cleanup: () => {
             try {
-              ${cleanupAttr}
+              ${scopedCleanup}
             } catch (error) {
               console.error('EFFECT cleanup failed:', error);
             }

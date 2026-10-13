@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { VisibilityDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 
 export const handleToggleTag: TagHandler = (
@@ -56,7 +57,7 @@ export const handleToggleTag: TagHandler = (
     const directive: VisibilityDirective = {
       kind: 'visibility',
       selector: target,
-      condition,
+      condition: handlerScope(options).expression(condition),
       mode: 'toggle',
     };
     return {

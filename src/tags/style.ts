@@ -1,6 +1,7 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { StyleDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { valueAttributeToExpression } from '../utils/values';
 
@@ -73,7 +74,9 @@ export const handleStyleTag: TagHandler = (
     }
 
     const valueExpr =
-      exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(valueAttr);
+      exprAttr && exprAttr.trim()
+        ? handlerScope(options).expression(exprAttr.trim())
+        : buildValueExpr(valueAttr);
     if (!valueExpr) {
       errors.push({
         type: 'validation',

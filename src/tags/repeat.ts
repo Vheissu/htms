@@ -6,6 +6,7 @@ import {
 } from '../component/template-utils';
 import { DirectiveNode, TemplateChild, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
+import { handlerScope, withLocals } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 
@@ -70,9 +71,9 @@ export const handleRepeatTag: TagHandler = (
       // Array iteration mode
       const simpleIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(variable);
       componentSource =
-        options.componentContext && simpleIdentifier
+        options.componentContext && simpleIdentifier && !options.componentFields
           ? `this.${variable}`
-          : variable;
+          : handlerScope(options).expression(variable);
       if (!simpleIdentifier) {
         const exprErrors = SecurityValidator.validateContent(variable);
         if (exprErrors.length > 0) {
@@ -178,11 +179,11 @@ export const handleRepeatTag: TagHandler = (
         continue;
       }
       const child = childNode as Element;
-      const childOptions: TagHandlerOptions = {
-        ...options,
+      const childOptions: TagHandlerOptions = withLocals(
+        { ...options, loopVariable, parentContext: 'loop' },
         loopVariable,
-        parentContext: 'loop',
-      };
+        indexVar || undefined
+      );
 
       const childResult = handleElement(child, childOptions);
 
@@ -206,11 +207,7 @@ export const handleRepeatTag: TagHandler = (
       } else if (isLowerCaseTag(child)) {
         componentTemplateChildren.push(
           elementToTemplateNode(child as Element, (nested: Element) => {
-            const nestedResult = handleElement(nested, {
-              ...options,
-              loopVariable,
-              parentContext: 'loop',
-            });
+            const nestedResult = handleElement(nested, childOptions);
             errors.push(...nestedResult.errors);
             warnings.push(...nestedResult.warnings);
             const children = (nestedResult.component?.template ??

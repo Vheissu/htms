@@ -127,12 +127,12 @@ function collectReplacements(
     key: string,
     inPlainFunction: boolean
   ): void => {
-    if (node.type === 'Identifier' && parent) {
+    if (node.type === 'Identifier') {
       const name = node.name as string;
       if (
         !inPlainFunction &&
         shouldRewrite(name) &&
-        isReference(node, parent, key)
+        (!parent || isReference(node, parent, key))
       ) {
         replacements.push({
           start: node.start,
@@ -227,14 +227,22 @@ function mentionsField(code: string, fields: ReadonlySet<string>): boolean {
   return false;
 }
 
+// Parses `code` as exactly one expression. It is wrapped in parentheses so
+// parenthesized input (`({ a })`) and object literals parse; node positions
+// are therefore shifted by one character.
+const EXPRESSION_OFFSET = 1;
+
 function parseExpressionExactly(code: string): AstNode | null {
   try {
-    const node = acorn.parseExpressionAt(
-      code,
-      0,
+    const program = acorn.parse(
+      `(${code}\n)`,
       PARSE_OPTIONS
-    ) as unknown as AstNode;
-    return code.slice(node.end).trim() === '' ? node : null;
+    ) as unknown as AstNode & { body: AstNode[] };
+    const [statement] = program.body;
+    if (program.body.length !== 1 || statement.type !== 'ExpressionStatement') {
+      return null;
+    }
+    return statement.expression as AstNode;
   } catch {
     return null;
   }
@@ -244,11 +252,18 @@ function rewrite(
   code: string,
   root: AstNode,
   fields: ReadonlySet<string>,
-  locals: readonly string[]
+  locals: readonly string[],
+  offset = 0
 ): string {
   const shadowed = collectDeclaredNames(root);
   for (const local of locals) shadowed.add(local);
-  const replacements = collectReplacements(root, fields, shadowed);
+  const replacements = collectReplacements(root, fields, shadowed).map(
+    (replacement) => ({
+      ...replacement,
+      start: replacement.start - offset,
+      end: replacement.end - offset,
+    })
+  );
   return replacements.length > 0 ? applyReplacements(code, replacements) : code;
 }
 
@@ -261,7 +276,7 @@ export function scopeExpression(
 ): string {
   if (fields.size === 0 || !mentionsField(code, fields)) return code;
   const root = parseExpressionExactly(code);
-  return root ? rewrite(code, root, fields, locals) : code;
+  return root ? rewrite(code, root, fields, locals, EXPRESSION_OFFSET) : code;
 }
 
 // Rewrites a block of statements (an event action, a method body).

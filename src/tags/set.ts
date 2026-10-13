@@ -64,7 +64,7 @@ export const handleSetTag: TagHandler = (
     let processedValue = '';
     if (op !== '++' && op !== '--') {
       if (exprAttr && exprAttr.trim()) {
-        processedValue = exprAttr;
+        processedValue = handlerScope(options).expression(exprAttr.trim());
       } else {
         if (!value) {
           errors.push({
@@ -78,6 +78,7 @@ export const handleSetTag: TagHandler = (
         processedValue = valueAttributeToExpression(value, {
           isReference: handlerScope(options).isReference,
         });
+        processedValue = handlerScope(options).expression(processedValue);
       }
     }
 

@@ -124,6 +124,23 @@ class EmitCounterComponent extends HTMLElement {
   requestUpdate() {
     return this.__htmsRequestRender();
   }
+  $(selector) {
+    return (this.__htmsRoot || this).querySelector(selector);
+  }
+  $$(selector) {
+    return Array.from((this.__htmsRoot || this).querySelectorAll(selector));
+  }
+  emit(name, detail, options) {
+    return this.dispatchEvent(new CustomEvent(name, Object.assign({
+      detail,
+      bubbles: true,
+      composed: true,
+      cancelable: false
+    }, options)));
+  }
+  __htmsToText(value) {
+    return value == null ? '' : String(value);
+  }
   __htmsRequestRender() {
     if (!this.__htmsConnected || this.__htmsRenderScheduled) {
       return this.__htmsUpdatePromise;
@@ -580,7 +597,7 @@ class EmitCounterComponent extends HTMLElement {
       componentRoot.appendChild(_el0);
       const _el1 = document.createElement('p');
       _el1.setAttribute('id', 'out');
-      _el1.appendChild(document.createTextNode('Count: ' + (this.count == null ? '' : String(this.count))));
+      _el1.appendChild(document.createTextNode('Count: ' + this.__htmsToText(this.count)));
       componentRoot.appendChild(_el1);
       {
         const eventTargets = componentRoot.querySelectorAll('#inc');
