@@ -2,14 +2,6 @@
 'use strict';
 
 class FormBoxComponent extends HTMLElement {
-  static get __htmsTemplate() {
-    if (!this.__templateCache) {
-      const template = document.createElement('template');
-      template.innerHTML = '<div class="form"><form id="signup"><label>Name <input id="nameInput" autocomplete="off"></label><label>Email <input id="emailInput" type="email" autocomplete="off"></label><button type="submit">Save</button></form><p id="summary"></p></div>';
-      this.__templateCache = template;
-    }
-    return this.__templateCache;
-  }
   __htmsDefineStateProperty(propName) {
     const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
     const ownValue = hadOwnValue ? this[propName] : undefined;
@@ -587,6 +579,7 @@ class FormBoxComponent extends HTMLElement {
     this.__htmsTimers = new Map();
     this.__htmsDefineStateProperty('name');
     this.__htmsDefineStateProperty('email');
+    this.__htmsDefineStateProperty('saved');
   }
   connectedCallback() {
     this.__htmsEnsureRenderRoot();
@@ -613,40 +606,70 @@ class FormBoxComponent extends HTMLElement {
         throw new Error('Component root not initialized');
       }
       const componentRoot = document.createDocumentFragment();
-      const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, ['#summary']);
+      const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, []);
       this.__htmsCleanupRenderListeners();
       this.__htmsInitState(['name'], () => '');
       this.__htmsInitState(['email'], () => '');
-      const staticFragment = FormBoxComponent.__htmsTemplate.content.cloneNode(true);
-      componentRoot.appendChild(staticFragment);
+      this.__htmsInitState(['saved'], () => null);
+      const _el0 = document.createElement('div');
+      _el0.setAttribute('class', 'form');
+      const _el1 = document.createElement('form');
+      this.__htmsMarkListener(_el1, 'submit', event => {
+        event.preventDefault();
+        this.saved = {
+          name: this.name.trim(),
+          email: this.email.trim()
+        };
+        this.requestUpdate();
+      });
+      const _el2 = document.createElement('label');
+      _el2.appendChild(document.createTextNode('Name '));
+      const _el3 = document.createElement('input');
+      _el3.setAttribute('autocomplete', 'off');
       {
-        const eventTargets = componentRoot.querySelectorAll('#signup');
-        eventTargets.forEach(targetEl => {
-          const _handler0 = event => {
-            event.preventDefault();
-            const _eventRoot1 = this.__htmsResolveEventRoot(event.currentTarget, componentRoot);
-            // No event body
-            this.__htmsSetState(['name'], '=', () => this.__htmsRoot.querySelector('#nameInput').value.trim());
-            this.__htmsSetState(['email'], '=', () => this.__htmsRoot.querySelector('#emailInput').value.trim());
-            this.requestUpdate();
-          };
-          this.__htmsMarkListener(targetEl, 'submit', _handler0);
-        });
+        const boundValue = this.name == null ? '' : this.name;
+        _el3['value'] = boundValue;
+        this.__htmsMarkProperty(_el3, ['value'], boundValue);
+        this.__htmsMarkProperty(_el3, ['__htmsControlled'], true);
       }
+      this.__htmsMarkListener(_el3, 'input', event => {
+        this.name = event.currentTarget['value'];
+        this.requestUpdate();
+      });
+      _el2.appendChild(_el3);
+      _el1.appendChild(_el2);
+      const _el4 = document.createElement('label');
+      _el4.appendChild(document.createTextNode('Email '));
+      const _el5 = document.createElement('input');
+      _el5.setAttribute('type', 'email');
+      _el5.setAttribute('autocomplete', 'off');
       {
-        const nodes = componentRoot.querySelectorAll('#summary');
-        nodes.forEach(node => {
-          try {
-            const value = function () {
-              return this.name && this.email ? `Saved ${ this.name } <${ this.email }>` : 'Fill out the form';
-            }.call(this);
-            node['textContent'] = value;
-            this.__htmsMarkProperty(node, ['textContent'], value);
-          } catch (error) {
-            console.error('BIND evaluation failed for #summary', error);
-          }
-        });
+        const boundValue = this.email == null ? '' : this.email;
+        _el5['value'] = boundValue;
+        this.__htmsMarkProperty(_el5, ['value'], boundValue);
+        this.__htmsMarkProperty(_el5, ['__htmsControlled'], true);
       }
+      this.__htmsMarkListener(_el5, 'input', event => {
+        this.email = event.currentTarget['value'];
+        this.requestUpdate();
+      });
+      _el4.appendChild(_el5);
+      _el1.appendChild(_el4);
+      const _el6 = document.createElement('button');
+      _el6.setAttribute('type', 'submit');
+      if (!this.name.trim() || !this.email.trim()) {
+        _el6.setAttribute('disabled', '');
+      } else {
+        _el6.removeAttribute('disabled');
+      }
+      _el6.appendChild(document.createTextNode('Save'));
+      _el1.appendChild(_el6);
+      _el0.appendChild(_el1);
+      const _el7 = document.createElement('p');
+      _el7.setAttribute('id', 'summary');
+      _el7.appendChild(document.createTextNode(this.__htmsToText(this.saved ? 'Saved ' + this.saved.name + ' (' + this.saved.email + ')' : 'Fill out the form')));
+      _el0.appendChild(_el7);
+      componentRoot.appendChild(_el0);
       this.__htmsReconcileChildren(root, componentRoot);
       this.__htmsRestoreFocus(root, __htmsFocusSnapshot);
     } catch (error) {

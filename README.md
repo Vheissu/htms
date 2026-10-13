@@ -8,12 +8,18 @@ HTMS (Hyper Text Media Script) compiles HTML-flavoured source into reactive web 
 <component name="click-counter">
   <var name="count" value="0" mutable="true"></var>
 
-  <button id="increment">Clicked {count} times</button>
-
-  <event target="#increment" type="click">
-    <set name="count" op="++"></set>
-  </event>
+  <button on:click="count++">Clicked {count} times</button>
 </component>
+```
+
+The same handler can be written as tags, which is handy when it grows:
+
+```html
+<button id="increment">Clicked {count} times</button>
+
+<event target="#increment" type="click">
+  <set name="count" op="++"></set>
+</event>
 ```
 
 No `eval`, no `Function` constructor and no private browser runtime to learn.
@@ -47,6 +53,75 @@ or run `npm run demo:serve` and open `http://localhost:5173/demos/`.
 - `htms render <file>` produces server-rendered Declarative Shadow DOM.
 
 Run `htms <command> --help` for every option. If a file declares several components, pass `--tag <name>` to `dev` or `render`.
+
+## Expressions
+
+Attributes such as `condition`, `expr`, `when` and `on:click`, plus `{...}` in markup, are JavaScript expressions evaluated against the component. Name a prop, `<var>`, `<derive>` or `<function>` directly; the compiler turns `count` into `this.count`. Loop variables, `event`, locals you declare and globals (`Math`, `Date`, `JSON`) keep their usual meaning, and writing `this.count` still works.
+
+```html
+<var name="items" value='[{"name": "Tea", "price": 3.5}]'></var>
+<var name="rate" value="1.1"></var>
+
+<p>{items.length} items, total {items.reduce((sum, item) => sum + item.price, 0) * rate}</p>
+<p if="items.length === 0">Nothing here yet.</p>
+```
+
+- `{user.name}` is null-safe: it renders nothing while `user` is still loading, rather than failing the render.
+- Braces only interpolate when the expression reads a component field, a loop variable or `this`. CSS blocks and literal text such as `{ braces }` are left alone.
+- `value="..."` on `<var>`, `<set>` and `<push>` is a literal: `'text'`, `42`, `true`, `null`, JSON, or the name of a field. Any other bare word is a string, so `value="done"` sets `"done"`. Use `expr="..."` for anything computed.
+
+## Inline bindings
+
+Markup elements accept directive attributes. They compile to the same listeners and properties as the directive tags and survive re-renders the same way.
+
+| Attribute | Effect |
+| --- | --- |
+| `on:click="count++"` or `@click="..."` | Runs statements on the event. `event` is available. The component re-renders afterwards, so `items.push(x)` shows up. |
+| `on:submit.prevent`, `.stop`, `.once`, `.passive`, `.capture`, `.self` | Event modifiers. |
+| `on:keydown.enter`, `.esc`, `.space`, `.tab`, `.up`/`.down`/`.left`/`.right` | Key filters for keyboard events. |
+| `on:input.debounce-250` | Debounces the handler (`.debounce` alone means 300 ms). |
+| `bind:value="name"` | Two-way binding. Also `bind:checked`, `bind:valueasnumber`, `bind:selectedindex` and `bind:open`. Number and range inputs store numbers. |
+| `class:done="todo.done"` | Adds the class while the expression is truthy. |
+| `style:width="pct + '%'"` | Sets an inline style property; `null` or `false` removes it. |
+| `if="error"` | Renders the element only while the expression is truthy. |
+
+```html
+<component name="todo-list">
+  <var name="todos" value="[]" mutable="true"></var>
+  <var name="draft" value="''" mutable="true"></var>
+
+  <form on:submit.prevent="todos.push({ text: draft, done: false }); draft = ''">
+    <input bind:value="draft" placeholder="Add a task">
+  </form>
+
+  <ul>
+    <repeat variable="todos" item="todo" index="i">
+      <li class:done="todo.done">
+        <input type="checkbox" bind:checked="todo.done"> {todo.text}
+        <button on:click="todos.splice(i, 1)">Remove</button>
+      </li>
+    </repeat>
+  </ul>
+</component>
+```
+
+HTML lowercases attribute names, so custom events used with `on:` should be kebab-case (`on:item-selected`). Native `onclick` attributes remain blocked; the browser would run them outside HTMS.
+
+## Methods
+
+`<function>` inside a component becomes a method. The body can mix JavaScript and HTMS tags, `params` become arguments, and the component re-renders when the method returns.
+
+```html
+<function name="add" params="text">
+  if (!text.trim()) return;
+  todos.push({ id: Date.now(), text: text.trim(), done: false });
+</function>
+
+<button on:click="add(draft)">Add</button>
+<p>{format(total)}</p>
+```
+
+Use `async="true"` for methods that `await`. Every component also has `$(selector)` and `$$(selector)` to query its own render root, plus `emit(name, detail)` to dispatch a composed `CustomEvent`.
 
 ## Component Inputs
 
@@ -117,7 +192,7 @@ htms render component.html \
 
 ## How It Works (roughly)
 
-- Parses HTMS markup with JSDOM, converts nodes to directives via tag handlers, validates with Esprima, then emits JavaScript through Escodegen.
+- Parses HTMS markup with JSDOM, converts nodes to directives via tag handlers, resolves component fields in expressions, validates the output with Acorn, then emits JavaScript through Escodegen.
 - A security pass rejects dangerous constructs (`eval`, inline handlers, raw `innerHTML`, path traversal, …).
 - In component mode, standard elements become cached template fragments, while control/state tags compile into instructions that mutate the component instance and re-render the shadow DOM.
 - Component text and attributes can interpolate reactive state and props with `{count}`, `{user.name}`, and `{labelText}`.
@@ -129,23 +204,24 @@ htms render component.html \
 ## Tag glossary
 
 - State & Arrays
-  - `<var name="x" value="42" mutable="true" />` — declare `let x = 42` (accepts JSON).
+  - `<var name="x" value="42" mutable="true" />` — declare component state (accepts quoted strings, numbers, booleans and JSON, including arrays of objects).
+  - `<object name="user">…<property name="name" value="Ada" /></object>` and `<array name="tags"><value>a</value></array>` — declare object/array state from child tags.
   - `<derive name="total" expr="this.items.length" />` — compute reactive state before each render.
-  - `<set name="x" op="=|+=|-=|*=|/=|++|--" value="…" />` — mutate values; notifies bindings.
+  - `<set name="x" op="=|+=|-=|*=|/=|++|--" value="…" />` or `expr="…"` — mutate values; notifies bindings. `+=` concatenates strings.
   - `<push array="state.list" expr="document.getElementById('txt').value" />` — push; notifies bindings.
   - `<splice array="state.list" index="0" delete="1" values='["New"]' />` — remove/insert; notifies bindings.
 - Control Flow
-  - `<repeat variable="items" item="it" index="i">…</repeat>` or `<repeat count="3">…</repeat>` — `item` names the loop variable (default `item`); inside, use `{it}`, property paths like `{it.name}`, and the optional index token (`{i}` here) in text or attribute values.
+  - `<repeat variable="items" item="it" index="i">…</repeat>` or `<repeat count="3" index="n">…</repeat>` (`count` may be an expression such as `count="rating"`) — `item` names the loop variable (default `item`); inside, use `{it}`, property paths like `{it.name}`, and the optional index token (`{i}` here) in text or attribute values.
   - `<if condition="flag">…</if><else-if condition="other">…</else-if><else>…</else>` — nested tags allowed.
   - `<while condition="state.count < 3" max="1000">…</while>` — guarded loop; `max` prevents infinite loops.
   - `<switch variable="day">…</switch>` or `<switch expr="this.day">…</switch>` — nested tags allowed.
 - DOM Updates
   - `<setprop selector="#msg" prop="textContent" expr="'Hello'" />` — set property (use `expr` for JS, or `value` for literals).
-  - `<setattr selector="#link" name="title" value="Info" />` — set attribute.
+  - `<setattr selector="#link" name="title" value="Info" />` — set attribute. `expr="…"` computes it; `null`/`false` removes it.
   - `<append target="#list"> <li>Row</li> </append>` — append generated children to an existing element.
   - `<class selector="#card" name="active" when="this.isActive" />` — toggle class based on expression.
   - `<style selector="#card" prop="background-color" value="red" />` — set inline style.
-  - `<model selector="#name" path="name" />` — two-way input binding (`value` + `input` event).
+  - `<model selector="#name" path="name" />` — two-way input binding (`value` + `input` event). Add `number="true"` to store numbers. `bind:value` on the input is the inline equivalent.
 - Visibility
   - `<toggle target="#panel" condition="isOpen" />` — show/hide (style.display).
   - `<show target="#a" when="x > 5" />` — sugar over TOGGLE.
@@ -161,8 +237,8 @@ htms render component.html \
   - Use `<slot></slot>` and `<slot name="heading"></slot>` inside a component to accept default and named content from its parent.
   - SVG and MathML can sit directly in a component template, including interpolated attributes.
 - Events
-  - `<event target="#btn" type="click"> …child tags… </event>` — handler is composed of child tags (no action string required). `type` accepts any DOM event name, including custom events dispatched by `<emit>`.
-  - Event modifiers: `prevent="true"` calls `event.preventDefault()`, `stop="true"` calls `event.stopPropagation()`, `once="true"` removes the listener after the first fire, `passive="false"` marks the listener non-passive, `key="Enter"` filters `KeyboardEvent`s, and `debounce="200"` delays the handler by N milliseconds. `<event>` tags can nest inside ordinary markup — they bind relative to the enclosing element.
+  - `<event target="#btn" type="click"> …child tags… </event>` — handler is composed of child tags (no action string required). `type` accepts any DOM event name, including custom events dispatched by `<emit>`. `target="window"`, `"document"` or `":host"` listen outside the render root and detach with the component.
+  - Event modifiers: `prevent="true"` calls `event.preventDefault()`, `stop="true"` calls `event.stopPropagation()`, `self="true"` ignores events from descendants, `once="true"` removes the listener after the first fire (it stays fired across re-renders), `passive="false"` marks the listener non-passive, `key="Enter"` filters `KeyboardEvent`s, and `debounce="200"` delays the handler by N milliseconds. `<event>` tags can nest inside ordinary markup — they bind relative to the enclosing element.
   - `<submit target="#form"> …child tags… </submit>` — form submit helper (prevents default). Use child tags to update state/DOM.
   - `<emit name="count-changed" detail="this.count" />` — dispatches a `CustomEvent` from the component so parents can react. Place it inside an `<event>`/`<submit>` handler. Defaults to `bubbles`/`composed` so the event crosses the shadow boundary; opt out with `bubbles="false"` / `composed="false"`, or set `cancelable="true"`.
 
@@ -184,5 +260,6 @@ htms render component.html \
 HTMS rejects known executable sinks and unsafe template attributes, but source files are still application code. Do not compile untrusted markup and execute the result.
 
 - `<inject>` is disabled entirely unless `HTMS_ALLOW_INJECT_TAG=true` is set — and even then it writes through `textContent`, never `innerHTML`.
-- Inline event-handler attributes (`onclick`, `onload`, …) are rejected in markup; use `<event>` instead.
+- Inline event-handler attributes (`onclick`, `onload`, …) are rejected in markup; use `on:click` or `<event>` instead.
+- Dynamic URL attributes (`href="{link}"`, `<setattr name="src" expr="…">`) are checked when they render. `javascript:`, `vbscript:` and `data:text/html` values become `about:blank`.
 - File logging is opt-in: set `HTMS_LOG_DIR` to write `htms-combined.log`/`htms-error.log` to a chosen directory. Importing the library never writes files to your working directory.

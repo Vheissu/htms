@@ -1,20 +1,14 @@
 <component name="form-box">
   <var name="name" value="''" mutable="true"></var>
   <var name="email" value="''" mutable="true"></var>
+  <var name="saved" value="null" mutable="true"></var>
 
   <div class="form">
-    <form id="signup">
-      <label>Name <input id="nameInput" autocomplete="off" /></label>
-      <label>Email <input id="emailInput" type="email" autocomplete="off" /></label>
-      <button type="submit">Save</button>
+    <form on:submit.prevent="saved = { name: name.trim(), email: email.trim() }">
+      <label>Name <input autocomplete="off" bind:value="name" /></label>
+      <label>Email <input type="email" autocomplete="off" bind:value="email" /></label>
+      <button type="submit" disabled="{!name.trim() || !email.trim()}">Save</button>
     </form>
-    <p id="summary"></p>
+    <p id="summary">{saved ? 'Saved ' + saved.name + ' (' + saved.email + ')' : 'Fill out the form'}</p>
   </div>
-
-  <submit target="#signup">
-    <set name="name" op="=" expr="this.__htmsRoot.querySelector('#nameInput').value.trim()"></set>
-    <set name="email" op="=" expr="this.__htmsRoot.querySelector('#emailInput').value.trim()"></set>
-  </submit>
-
-  <bind selector="#summary" prop="textContent" expr='this.name && this.email ? `Saved ${this.name} <${this.email}>` : "Fill out the form"'></bind>
 </component>

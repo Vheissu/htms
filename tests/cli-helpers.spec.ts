@@ -99,7 +99,7 @@ describe('CLI helpers', () => {
       })
     );
     expect(source).toContain('<output aria-live="polite">{count}</output>');
-    expect(source).toContain('<set name="count" op="++"></set>');
+    expect(source).toContain('on:click="count++"');
     expect(validation.success).toBe(true);
     expect(
       validation.components?.map((component) => component.tagName)

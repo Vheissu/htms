@@ -12,7 +12,7 @@ The compilation pipeline consists of three main stages:
 
 1. **HTML Parsing** (`parser.ts:getTopLevelElements`): Uses JSDOM to parse HTML into DOM elements
 2. **Element Processing** (`handlers.ts`): Routes custom tags to specific handlers in the `tags/` directory
-3. **Code Generation** (`parser.ts:generateFinalJsCode`): Uses esprima/escodegen to generate clean JavaScript output
+3. **Code Generation** (`parser.ts:generateFinalJsCode`): Uses acorn/escodegen to validate and generate clean JavaScript output
 
 ### Key Components
 

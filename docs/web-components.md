@@ -67,7 +67,8 @@ badge.labelText = 'Synced';
 - Native HTML is not limited to a small allowlist. SVG and MathML nodes retain their namespaces when interpolation requires programmatic node creation.
 - Template attributes are checked recursively. Unsafe event attributes and executable URL schemes are removed in normal mode and stop compilation in strict mode.
 - Component root defaults to `<template>` content; outer `<component>` is not emitted.
-- Text and attribute values in normal component markup can interpolate reactive component fields and props with `{count}`, `{user.name}`, and `{labelText}`. Simple names are resolved against the component instance.
+- Text and attribute values in normal component markup can interpolate expressions over component fields and props: `{count}`, `{user.name}`, `{items.length > 0 ? 'Some' : 'None'}`. Field names are resolved against the component instance, and paths are null-safe.
+- Markup elements accept inline directive attributes: `on:<event>[.modifiers]` (or `@<event>`), `bind:value`/`bind:checked`, `class:<name>`, `style:<property>` and `if`. See the README for the full table.
 - Text and attribute values inside component-mode `<repeat>` templates can interpolate the active item, item property paths, and optional index with `{item}`, `{item.name}`, and `{indexName}` tokens.
 - Array repeats treat `null` and non-array values as empty lists so components can render safely before async data or property inputs arrive.
 
@@ -75,15 +76,17 @@ badge.labelText = 'Synced';
 
 | Lifecycle hook             | Trigger                   | Generated HTMS features                                   |
 | -------------------------- | ------------------------- | --------------------------------------------------------- |
-| `constructor`              | Element creation          | Initializes state from `<var>` tags with `scope="class"`. |
-| `connectedCallback`        | Element inserted          | Runs compiled body (default append template + bindings).  |
+| `constructor`              | Element creation          | Defines reactive accessors for props and `<var>` state.   |
+| `connectedCallback`        | Element inserted          | Initializes state and renders the template + bindings.    |
 | `disconnectedCallback`     | Element removed           | Disposes runtime effects owned by the component.          |
 | `attributeChangedCallback` | Observed attribute change | Bridges attributes to properties; invokes bindings.       |
 
 ### State & Reactivity
 
-- `<var>` tags with `scope="instance"` declare reactive fields. Compiler emits property definitions and update notifications.
-- `<derive name="total" expr="this.items.length">` recomputes derived fields before each render, so templates, `<bind>`, and downstream derived fields see current values.
+- `<var>` tags declare reactive fields. Compiler emits property definitions and update notifications. `<object>` and `<array>` declare state from child tags.
+- Expressions name fields directly (`count`, `todos.length`); the compiler resolves them to `this.<field>`. Loop variables, `event`, declared locals and globals are left alone.
+- `<function>` compiles to a class method that can be called from expressions, handlers and outside code. The component re-renders after a method returns.
+- `<derive name="total" expr="items.length">` recomputes derived fields before each render, so templates, `<bind>`, and downstream derived fields see current values.
 - `<set>`, `<push>`, and `<splice>` update instance fields and schedule a render.
 - Prop and top-level state writes are batched in a microtask. Several synchronous writes produce one render.
 - Generated elements expose `requestUpdate()` for in-place nested changes and an `updateComplete` promise for code that needs the updated DOM.
@@ -93,9 +96,10 @@ badge.labelText = 'Synced';
 
 ### Events & Handlers
 
-- `<event target="#btn" type="click">` attaches listeners within the component’s shadow tree. Handlers execute HTMS child tags with `this` bound to the component instance.
+- `<event target="#btn" type="click">` attaches listeners within the component’s shadow tree. Handlers execute HTMS child tags, in document order, with `this` bound to the component instance. `target="window"`, `"document"` and `":host"` listen outside the shadow tree for the lifetime of the element.
+- `on:click="..."` on an element is the inline form. Handlers re-render the component afterwards; `once` and `debounce` state survives re-renders.
 - `<submit>` reuses event semantics with `preventDefault` injected automatically.
-- `<effect>` and `<fetch>` register component-owned runtime effects. Generated components dispose those effects immediately when disconnected, including cleanup callbacks and in-flight fetch abort handlers.
+- `<effect>` and `<fetch>` register component-owned runtime effects. An effect runs once (unless `immediate="false"`) and then whenever one of its `deps` changes; an effect without deps runs after every render. Generated components dispose those effects immediately when disconnected, including cleanup callbacks and in-flight fetch abort handlers. A superseded fetch never overwrites the state of the request that replaced it.
 - Multiple effects and fetches in the same source share one runtime bootstrap, reducing parse and bundle overhead.
 
 ## Control Flow Translation

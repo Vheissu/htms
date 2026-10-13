@@ -22,14 +22,27 @@ The generated file has three moving parts:
 
 <output>{count}</output>
 
-<event target="#increment" type="click">
-  <set name="count" op="++"></set>
-</event>
+<button type="button" on:click="count++">Make it count</button>
 ```
 
-`<var>` creates component state. `{count}` prints its current value into normal markup. The event finds `#increment` inside the component and increments the same field. HTMS batches the update and renders once.
+`<var>` creates component state. `{count}` prints its current value into normal markup. `on:click` runs a statement when the button is clicked; `count` refers to the component's field, so `count++` updates it and HTMS renders once.
 
-Try changing `<set name="count" op="++">` to `op="+=" value="5"`. Saving the file is enough.
+Try changing `count++` to `count += 5`. Saving the file is enough.
+
+When a handler grows, move it into a method or use the tag form:
+
+```html
+<function name="bump" params="amount">
+  count += amount;
+</function>
+
+<button type="button" on:click="bump(5)">+5</button>
+
+<!-- equivalent, written as tags -->
+<event target="#reset" type="click">
+  <set name="count" value="0"></set>
+</event>
+```
 
 ## Add an input
 
@@ -56,14 +69,22 @@ String props are the default. HTMS also understands `number`, `boolean` and `jso
 ```html
 <component name="name-list">
   <var name="names" value='["Ada", "Lin", "Ida"]' mutable="true"></var>
+  <var name="draft" value="''" mutable="true"></var>
+
+  <form on:submit.prevent="names.push(draft); draft = ''">
+    <input bind:value="draft" placeholder="Add a name">
+  </form>
 
   <ul>
     <repeat variable="names" index="position">
-      <li>{position}: {item}</li>
+      <li>{position + 1}: {item} <button on:click="names.splice(position, 1)">Remove</button></li>
     </repeat>
   </ul>
+  <p if="names.length === 0">Nobody yet.</p>
 </component>
 ```
+
+`bind:value` keeps the input and `draft` in sync. Anything inside `{...}` is an expression, so `{position + 1}` and `{names.length}` work.
 
 ## Check before compiling
 

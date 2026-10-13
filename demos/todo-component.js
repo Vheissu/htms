@@ -2,13 +2,20 @@
 'use strict';
 
 class TodoBoxComponent extends HTMLElement {
-  static get __htmsTemplate() {
-    if (!this.__templateCache) {
-      const template = document.createElement('template');
-      template.innerHTML = '<div class="todo"><h2>HTMS Todo</h2><div class="input-row"><input type="text" id="newTodo" placeholder="Add a task"><button id="addBtn" type="button">Add</button></div><ul id="todoList"></ul></div>';
-      this.__templateCache = template;
+  add() {
+    try {
+      const text = this.draft.trim();
+      if (!text)
+        return;
+      this.todos.push({
+        id: Date.now(),
+        text,
+        done: false
+      });
+      this.draft = '';
+    } finally {
+      this.__htmsAfterMethod();
     }
-    return this.__templateCache;
   }
   __htmsDefineStateProperty(propName) {
     const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
@@ -586,7 +593,7 @@ class TodoBoxComponent extends HTMLElement {
     this.__htmsRenderCleanups = [];
     this.__htmsTimers = new Map();
     this.__htmsDefineStateProperty('todos');
-    this.__htmsDefineStateProperty('nextTodo');
+    this.__htmsDefineStateProperty('draft');
   }
   connectedCallback() {
     this.__htmsEnsureRenderRoot();
@@ -613,99 +620,101 @@ class TodoBoxComponent extends HTMLElement {
         throw new Error('Component root not initialized');
       }
       const componentRoot = document.createDocumentFragment();
-      const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, ['#newTodo']);
+      const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, []);
       this.__htmsCleanupRenderListeners();
       this.__htmsInitState(['todos'], () => []);
-      this.__htmsInitState(['nextTodo'], () => '');
-      const staticFragment = TodoBoxComponent.__htmsTemplate.content.cloneNode(true);
-      componentRoot.appendChild(staticFragment);
+      this.__htmsInitState(['draft'], () => '');
       {
-        const eventTargets = componentRoot.querySelectorAll('#addBtn');
-        eventTargets.forEach(targetEl => {
-          const _handler0 = event => {
-            const _eventRoot1 = this.__htmsResolveEventRoot(event.currentTarget, componentRoot);
-            // No event body
-            this.__htmsSetState(['nextTodo'], '=', () => this.__htmsRoot.querySelector('#newTodo').value.trim());
-            if (this.nextTodo.length > 0) {
-              const _frag3 = document.createDocumentFragment();
-              this.__htmsPushState(['todos'], () => this.nextTodo);
-              {
-                const targets = _frag3.querySelectorAll('#newTodo');
-                targets.forEach(node => {
-                  const propertyValue = '';
-                  node['value'] = propertyValue;
-                  this.__htmsMarkProperty(node, ['value'], propertyValue);
-                });
-              }
-              this.__htmsSetState(['nextTodo'], '=', () => '');
-              _eventRoot1.appendChild(_frag3);
-            }
-            this.requestUpdate();
-          };
-          this.__htmsMarkListener(targetEl, 'click', _handler0);
-        });
+        const resolved = this.__htmsResolvePath(['remaining']);
+        resolved.target[resolved.key] = this.todos.filter(todo => !todo.done).length;
       }
+      const _el0 = document.createElement('style');
+      _el0.appendChild(document.createTextNode('\n    .done span { text-decoration: line-through; opacity: 0.6; }\n  '));
+      componentRoot.appendChild(_el0);
+      const _el1 = document.createElement('div');
+      _el1.setAttribute('class', 'todo');
+      const _el2 = document.createElement('h2');
+      _el2.appendChild(document.createTextNode('HTMS Todo'));
+      _el1.appendChild(_el2);
+      const _el3 = document.createElement('form');
+      _el3.setAttribute('class', 'input-row');
+      this.__htmsMarkListener(_el3, 'submit', event => {
+        event.preventDefault();
+        this.add();
+        this.requestUpdate();
+      });
+      const _el4 = document.createElement('input');
+      _el4.setAttribute('type', 'text');
+      _el4.setAttribute('placeholder', 'Add a task');
       {
-        const eventTargets = componentRoot.querySelectorAll('#newTodo');
-        eventTargets.forEach(targetEl => {
-          const _handler4 = event => {
-            const _eventRoot5 = this.__htmsResolveEventRoot(event.currentTarget, componentRoot);
-            // No event body
-            if (event.key === 'Enter') {
-              const _frag7 = document.createDocumentFragment();
-              this.__htmsSetState(['nextTodo'], '=', () => event.currentTarget.value.trim());
-              if (this.nextTodo.length > 0) {
-                const _frag8 = document.createDocumentFragment();
-                this.__htmsPushState(['todos'], () => this.nextTodo);
-                this.__htmsSetState(['nextTodo'], '=', () => '');
-                {
-                  const targets = _frag8.querySelectorAll('#newTodo');
-                  targets.forEach(node => {
-                    const propertyValue = '';
-                    node['value'] = propertyValue;
-                    this.__htmsMarkProperty(node, ['value'], propertyValue);
-                  });
-                }
-                _frag7.appendChild(_frag8);
-              }
-              _eventRoot5.appendChild(_frag7);
-            }
-            this.requestUpdate();
-          };
-          this.__htmsMarkListener(targetEl, 'keypress', _handler4);
-        });
+        const boundValue = this.draft == null ? '' : this.draft;
+        _el4['value'] = boundValue;
+        this.__htmsMarkProperty(_el4, ['value'], boundValue);
+        this.__htmsMarkProperty(_el4, ['__htmsControlled'], true);
       }
-      const _source10 = this.todos;
-      const _items11 = Array.isArray(_source10) ? _source10 : [];
-      for (let i = 0; i < _items11.length; i++) {
-        const item = _items11[i];
-        const _frag9 = document.createDocumentFragment();
-        const _el12 = document.createElement('li');
-        _el12.setAttribute('class', 'todo-item');
+      this.__htmsMarkListener(_el4, 'input', event => {
+        this.draft = event.currentTarget['value'];
+        this.requestUpdate();
+      });
+      _el3.appendChild(_el4);
+      const _el5 = document.createElement('button');
+      _el5.setAttribute('type', 'submit');
+      if (!this.draft.trim()) {
+        _el5.setAttribute('disabled', '');
+      } else {
+        _el5.removeAttribute('disabled');
+      }
+      _el5.appendChild(document.createTextNode('Add'));
+      _el3.appendChild(_el5);
+      _el1.appendChild(_el3);
+      const _el6 = document.createElement('ul');
+      const _source8 = this.todos;
+      const _items9 = Array.isArray(_source8) ? _source8 : [];
+      for (let i = 0; i < _items9.length; i++) {
+        const todo = _items9[i];
+        const _frag7 = document.createDocumentFragment();
+        const _el10 = document.createElement('li');
+        _el10.setAttribute('class', 'todo-item');
+        const _el11 = document.createElement('label');
+        const _el12 = document.createElement('input');
+        _el12.setAttribute('type', 'checkbox');
+        {
+          const boundValue = todo.done;
+          _el12['checked'] = boundValue;
+          this.__htmsMarkProperty(_el12, ['checked'], boundValue);
+          this.__htmsMarkProperty(_el12, ['__htmsControlled'], true);
+        }
+        this.__htmsMarkListener(_el12, 'change', event => {
+          todo.done = event.currentTarget['checked'];
+          this.requestUpdate();
+        });
+        _el11.appendChild(_el12);
         const _el13 = document.createElement('span');
-        _el13.appendChild(document.createTextNode(this.__htmsToText(item)));
-        _el12.appendChild(_el13);
+        _el13.appendChild(document.createTextNode(this.__htmsToText(todo?.text)));
+        _el11.appendChild(_el13);
+        _el10.appendChild(_el11);
         const _el14 = document.createElement('button');
         _el14.setAttribute('class', 'remove');
         _el14.setAttribute('type', 'button');
         _el14.setAttribute('aria-label', 'Remove');
+        this.__htmsMarkListener(_el14, 'click', event => {
+          this.todos.splice(i, 1);
+          this.requestUpdate();
+        });
         _el14.appendChild(document.createTextNode('\u2715'));
-        _el12.appendChild(_el14);
-        {
-          const eventTargets = _el12.querySelectorAll('.remove');
-          eventTargets.forEach(targetEl => {
-            const _handler15 = event => {
-              const _eventRoot16 = this.__htmsResolveEventRoot(event.currentTarget, _el12);
-              // No event body
-              this.__htmsSpliceState(['todos'], () => i, () => 1, () => []);
-              this.requestUpdate();
-            };
-            this.__htmsMarkListener(targetEl, 'click', _handler15);
-          });
-        }
-        _frag9.appendChild(_el12);
-        componentRoot.appendChild(_frag9);
+        _el10.appendChild(_el14);
+        _el10.classList.toggle('done', !!todo.done);
+        _frag7.appendChild(_el10);
+        _el6.appendChild(_frag7);
       }
+      _el1.appendChild(_el6);
+      if (this.todos.length) {
+        const _el15 = document.createElement('p');
+        _el15.setAttribute('class', 'summary');
+        _el15.appendChild(document.createTextNode(this.__htmsToText(this.remaining) + ' of ' + this.__htmsToText(this.todos?.length) + ' left'));
+        _el1.appendChild(_el15);
+      }
+      componentRoot.appendChild(_el1);
       this.__htmsReconcileChildren(root, componentRoot);
       this.__htmsRestoreFocus(root, __htmsFocusSnapshot);
     } catch (error) {

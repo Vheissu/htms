@@ -393,12 +393,8 @@ export function buildStarterComponent(tagName: string): string {
   <section class="counter">
     <span>JavaScript, written in HTML.</span>
     <output aria-live="polite">{count}</output>
-    <button id="increment" type="button">Make it count</button>
+    <button type="button" on:click="count++">Make it count</button>
   </section>
-
-  <event target="#increment" type="click">
-    <set name="count" op="++"></set>
-  </event>
 </component>
 `;
 }
