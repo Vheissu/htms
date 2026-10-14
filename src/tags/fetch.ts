@@ -1,5 +1,5 @@
-import * as acorn from 'acorn';
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { parseExpressionPrefix } from '../utils/js-parser';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
@@ -47,15 +47,11 @@ function expressionOrLiteral(
   ) {
     return SecurityValidator.jsStringLiteral(value);
   }
-  try {
-    const node = acorn.parseExpressionAt(value, 0, { ecmaVersion: 'latest' });
-    if (value.slice(node.end).trim() !== '') {
-      return SecurityValidator.jsStringLiteral(value);
-    }
-    return value;
-  } catch {
+  const prefix = parseExpressionPrefix(value);
+  if (!prefix || value.slice(prefix.end).trim() !== '') {
     return SecurityValidator.jsStringLiteral(value);
   }
+  return value;
 }
 
 function validateStatePath(path: string): string[] | null {

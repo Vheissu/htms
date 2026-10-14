@@ -1,5 +1,5 @@
-import * as acorn from 'acorn';
 import { CompilerError } from '../types';
+import { parseProgram } from './js-parser';
 
 // Content patterns that indicate code injection or executable markup.
 // Timers are only eval-like with a string argument, and file-system paths
@@ -220,7 +220,7 @@ export class SecurityValidator {
 
   static isSideEffectFreeExpression(expression: string): boolean {
     try {
-      const ast = acorn.parse(`(${expression})`, { ecmaVersion: 'latest' });
+      const ast = parseProgram(`(${expression})`, 'script');
       const forbiddenTypes = new Set([
         'AssignmentExpression',
         'AwaitExpression',

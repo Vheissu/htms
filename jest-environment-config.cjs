@@ -19,6 +19,11 @@ class JSDOMEnvironment extends $JSDOMEnvironment {
     if ( typeof global.setImmediate !== 'function' ) {
       global.setImmediate = (fn, ...rest) => setTimeout(fn, 0, ...rest);
     }
+    // jsdom's global lacks structuredClone, which Node and browsers have
+    // and the JavaScript parser uses.
+    if ( typeof global.structuredClone !== 'function' ) {
+      global.structuredClone = structuredClone;
+    }
   }
 }
 

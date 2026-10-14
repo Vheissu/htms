@@ -61,6 +61,27 @@ describe('scopeExpression', () => {
     ).toBe('const count = 1; console.log(count);');
   });
 
+  it('accepts await and return at the top level of a snippet', () => {
+    expect(scopeStatements('await save(count); return items;', fields)).toBe(
+      'await save(this.count); return this.items;'
+    );
+    expect(scopeExpression('await load(count)', fields)).toBe(
+      'await load(this.count)'
+    );
+    expect(scopeStatements('count++ // bump', fields)).toBe(
+      'this.count++ // bump'
+    );
+  });
+
+  it('leaves a snippet that breaks out of its parse wrapper unchanged', () => {
+    expect(scopeExpression('count)) + ((items', fields)).toBe(
+      'count)) + ((items'
+    );
+    expect(scopeStatements('count++ }) + (() => { items', fields)).toBe(
+      'count++ }) + (() => { items'
+    );
+  });
+
   it('reports the free identifiers an expression reads', () => {
     expect(expressionReferences('a ? b.c : d(e)')).toEqual(
       new Set(['a', 'b', 'd', 'e'])

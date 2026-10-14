@@ -1,6 +1,5 @@
 import { handleElement } from './handlers';
 import * as escodegen from 'escodegen';
-import * as acorn from 'acorn';
 import {
   ParseOptions,
   CompilerResult,
@@ -8,6 +7,7 @@ import {
   CompilerWarning,
 } from './types';
 import { CompilerLogger } from './utils/logger';
+import { parseErrorLine, parseProgram, SourceComment } from './utils/js-parser';
 import { SecurityValidator } from './utils/security';
 import { compileComponents } from './component/compiler';
 import { parseDocument, SourceElement } from './source-dom';
@@ -105,35 +105,23 @@ interface FormattedChunk {
 }
 
 // Parses one chunk of generated JavaScript, checks it for dangerous calls
-// and prints it back formatted. Throws acorn's SyntaxError on invalid code.
+// and prints it back formatted. Throws a SyntaxError on invalid code.
 function formatChunk(
   source: string,
   sourceType: 'module' | 'script'
 ): FormattedChunk {
-  // Validate generated JavaScript syntax. Acorn parses modern syntax
-  // (optional chaining, nullish coalescing, etc.) that esprima could not.
-  // Ranges are all escodegen needs to place comments; line/column
-  // locations would only add an object per node.
-  const comments: acorn.Comment[] = [];
-  const ast = acorn.parse(source, {
-    ecmaVersion: 'latest',
-    sourceType,
-    ranges: true,
-    onComment: comments,
-  }) as acorn.Program;
+  // Validate generated JavaScript syntax. Node ranges are all escodegen
+  // needs to place comments; line/column locations would only add an
+  // object per node.
+  const comments: SourceComment[] = [];
+  const ast = parseProgram(source, sourceType, comments);
 
   const errors = validateASTSecurity(ast);
 
   if (comments.length > 0) {
-    // Attach comments in the esprima-compatible shape escodegen expects
-    const esprimaComments = comments.map((comment) => ({
-      type: comment.type === 'Line' ? 'Line' : 'Block',
-      value: comment.value,
-      range: comment.range as [number, number],
-    }));
     escodegen.attachComments(
       ast,
-      esprimaComments,
+      comments,
       commentBoundaryTokens(source, comments)
     );
   }
@@ -153,25 +141,25 @@ function formatChunk(
 // escodegen places a comment by the tokens around it: the end of the token
 // before and the start of the token after (`extendedRange`). Only comments
 // and whitespace separate a comment from those tokens, so the boundaries
-// can be read off the source without having acorn record every token.
+// can be read off the source without having the parser record every token.
 // Positions become zero-width stand-in tokens, which is all attachComments
 // reads from the token list.
 function commentBoundaryTokens(
   source: string,
-  comments: readonly acorn.Comment[]
+  comments: readonly SourceComment[]
 ): Array<{ type: string; value: string; range: [number, number] }> {
   const positions = new Set<number>();
   for (let index = 0; index < comments.length; index += 1) {
     // Backwards over whitespace and earlier comments to a token's end.
-    let position = (comments.at(index) as acorn.Comment).start;
+    let position = (comments.at(index) as SourceComment).range[0];
     let previous = index - 1;
     for (;;) {
       while (position > 0 && isJsWhitespace(source.charCodeAt(position - 1))) {
         position -= 1;
       }
       const before = previous >= 0 ? comments.at(previous) : undefined;
-      if (before && before.end === position) {
-        position = before.start;
+      if (before && before.range[1] === position) {
+        position = before.range[0];
         previous -= 1;
         continue;
       }
@@ -180,8 +168,8 @@ function commentBoundaryTokens(
     if (position > 0) positions.add(position);
 
     // Forwards over whitespace and later comments to a token's start; the
-    // end of the source stands for acorn's end-of-file token.
-    position = (comments.at(index) as acorn.Comment).end;
+    // end of the source stands for the end-of-file token.
+    position = (comments.at(index) as SourceComment).range[1];
     let next = index + 1;
     for (;;) {
       while (
@@ -191,8 +179,8 @@ function commentBoundaryTokens(
         position += 1;
       }
       const after = next < comments.length ? comments.at(next) : undefined;
-      if (after && after.start === position) {
-        position = after.end;
+      if (after && after.range[0] === position) {
+        position = after.range[1];
         next += 1;
         continue;
       }
@@ -209,7 +197,7 @@ function commentBoundaryTokens(
     }));
 }
 
-// The characters acorn skips between tokens (the same set as /\s/).
+// The characters the parser skips between tokens (the same set as /\s/).
 function isJsWhitespace(code: number): boolean {
   if (code <= 32) return code === 32 || (code >= 9 && code <= 13);
   if (code < 160) return false;
@@ -295,13 +283,9 @@ export function generateFinalJsCode(
       message: `JavaScript generation failed: ${error instanceof Error ? error.message : String(error)}`,
     };
 
-    if (
-      error instanceof Error &&
-      'loc' in error &&
-      error.loc &&
-      typeof (error.loc as { line?: unknown }).line === 'number'
-    ) {
-      syntaxError.line = (error.loc as { line: number }).line;
+    const line = parseErrorLine(error);
+    if (line !== undefined) {
+      syntaxError.line = line;
       syntaxError.source = 'generated';
     }
 

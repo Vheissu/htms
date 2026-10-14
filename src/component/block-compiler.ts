@@ -7,7 +7,7 @@ import {
   TemplateBinding,
   TemplateNode,
 } from './ir';
-import * as acorn from 'acorn';
+import { parseProgram } from '../utils/js-parser';
 import { scopeExpression, scopeStatements } from './scope';
 import {
   BOOLEAN_ATTRIBUTES,
@@ -296,7 +296,7 @@ function rawTextValue(expression: string): string | null {
   if (!expression.startsWith('__htmsS(') || !expression.endsWith(')'))
     return null;
   try {
-    const program = acorn.parse(expression, { ecmaVersion: 'latest' });
+    const program = parseProgram(expression, 'script');
     const statement = program.body[0];
     if (
       program.body.length === 1 &&
@@ -306,7 +306,7 @@ function rawTextValue(expression: string): string | null {
       statement.expression.callee.name === '__htmsS' &&
       statement.expression.arguments.length === 1
     ) {
-      const argument = statement.expression.arguments[0];
+      const [argument] = statement.expression.arguments;
       return expression.slice(argument.start, argument.end);
     }
   } catch {

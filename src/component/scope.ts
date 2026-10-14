@@ -1,5 +1,5 @@
-import * as acorn from 'acorn';
 import { TagHandlerOptions } from '../types';
+import { ESTree, parseProgram } from '../utils/js-parser';
 
 // Component expressions are written against the component's fields:
 // `count + 1`, `todos.length`, `format(price)`. The generated code runs as
@@ -20,13 +20,6 @@ interface Replacement {
   end: number;
   text: string;
 }
-
-const PARSE_OPTIONS: acorn.Options = {
-  ecmaVersion: 'latest',
-  sourceType: 'script',
-  allowReturnOutsideFunction: true,
-  allowAwaitOutsideFunction: true,
-};
 
 function isNode(value: unknown): value is AstNode {
   return (
@@ -231,25 +224,47 @@ function mentionsField(code: string, fields: ReadonlySet<string>): boolean {
   return false;
 }
 
-// Parses `code` as exactly one expression. It is wrapped in parentheses so
-// parenthesized input (`({ a })`) and object literals parse; node positions
-// are therefore shifted by one character.
-const EXPRESSION_OFFSET = 1;
+// Snippets may use `await` and `return` at their top level, since event
+// actions and method bodies become (async) methods. A script allows
+// neither, so a snippet is parsed as the body of an async arrow function:
+// an expression inside `(...)`, which also lets object literals and a
+// trailing line comment parse, or statements inside `{...}`. Node positions
+// are shifted by the prefix length. The arrow must come out as the whole
+// program, so a snippet that closes the wrapper early does not parse.
+const EXPRESSION_PREFIX = '(async () => (';
+const STATEMENTS_PREFIX = '(async () => {\n';
+const EXPRESSION_OFFSET = EXPRESSION_PREFIX.length;
+const STATEMENTS_OFFSET = STATEMENTS_PREFIX.length;
 
-function parseExpressionExactly(code: string): AstNode | null {
+function parseWrapped(code: string, asExpression: boolean): AstNode | null {
+  const wrapped = asExpression
+    ? `${EXPRESSION_PREFIX}${code}\n))`
+    : `${STATEMENTS_PREFIX}${code}\n})`;
+  let program: ESTree.Program;
   try {
-    const program = acorn.parse(
-      `(${code}\n)`,
-      PARSE_OPTIONS
-    ) as unknown as AstNode & { body: AstNode[] };
-    const [statement] = program.body;
-    if (program.body.length !== 1 || statement.type !== 'ExpressionStatement') {
-      return null;
-    }
-    return statement.expression as AstNode;
+    program = parseProgram(wrapped, 'script');
   } catch {
     return null;
   }
+  const [statement] = program.body;
+  if (program.body.length !== 1 || statement.type !== 'ExpressionStatement') {
+    return null;
+  }
+  const arrow = statement.expression;
+  if (
+    arrow.type !== 'ArrowFunctionExpression' ||
+    arrow.expression !== asExpression ||
+    arrow.start !== 1 ||
+    arrow.end !== wrapped.length - 1
+  ) {
+    return null;
+  }
+  return arrow.body as unknown as AstNode;
+}
+
+// Parses `code` as exactly one expression.
+function parseExpressionExactly(code: string): AstNode | null {
+  return parseWrapped(code, true);
 }
 
 function rewrite(
@@ -290,13 +305,8 @@ export function scopeStatements(
   locals: readonly string[] = []
 ): string {
   if (fields.size === 0 || !mentionsField(code, fields)) return code;
-  let root: AstNode;
-  try {
-    root = acorn.parse(code, PARSE_OPTIONS) as unknown as AstNode;
-  } catch {
-    return code;
-  }
-  return rewrite(code, root, fields, locals);
+  const root = parseWrapped(code, false);
+  return root ? rewrite(code, root, fields, locals, STATEMENTS_OFFSET) : code;
 }
 
 // Returns the free identifiers an expression reads (used to decide whether

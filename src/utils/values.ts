@@ -1,4 +1,4 @@
-import * as acorn from 'acorn';
+import { parseExpressionPrefix } from './js-parser';
 import { SecurityValidator } from './security';
 
 // Returns the decoded value when `raw` is exactly one quoted JavaScript
@@ -14,17 +14,15 @@ export function parseQuotedString(raw: string): string | null {
   ) {
     return null;
   }
-  try {
-    const node = acorn.parseExpressionAt(value, 0, { ecmaVersion: 'latest' });
-    if (
-      node.type === 'Literal' &&
-      typeof node.value === 'string' &&
-      node.end === value.length
-    ) {
-      return node.value;
-    }
-  } catch {
-    // Not a single literal, e.g. 'a' + 'b'
+  // Anything else that parses, e.g. 'a' + 'b', is not a single literal.
+  const prefix = parseExpressionPrefix(value);
+  if (
+    prefix &&
+    prefix.expression.type === 'Literal' &&
+    typeof prefix.expression.value === 'string' &&
+    prefix.end === value.length
+  ) {
+    return prefix.expression.value;
   }
   return null;
 }
