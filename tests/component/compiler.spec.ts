@@ -70,7 +70,7 @@ describe('Component compiler', () => {
       </component>
     `);
     expect(code).toContain("this.__htmsSetState(['count'], '++'");
-    expect(code).toContain('this.requestUpdate();');
+    expect(code).toContain('this.__htmsNotifyStateChange(1);');
   });
 
   it('emits push and splice helpers', () => {
@@ -765,7 +765,7 @@ describe('Component compiler', () => {
     expect(code).toContain('static get observedAttributes()');
     expect(code).toContain("return ['label-text'];");
     expect(code).toContain(
-      "this.__htmsDefineInputProperty('labelText', 'label-text', 'string');"
+      "this.__htmsDefineInputProperty('labelText', 'label-text', 'string', 1, true);"
     );
 
     execute(code);

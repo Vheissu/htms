@@ -8,6 +8,7 @@ import {
   TemplateNode,
 } from './ir';
 import { parseProgram } from '../utils/js-parser';
+import { ALL_DIRTY, DependencyAnalyzer } from './dependencies';
 import { scopeExpression, scopeStatements } from './scope';
 import {
   BOOLEAN_ATTRIBUTES,
@@ -33,7 +34,9 @@ import {
 // value and touches the DOM only when that value changed. Lists reconcile
 // keyed rows with a longest-increasing-subsequence pass, so a reorder moves
 // the fewest nodes. Events bubble to one listener per type on the render
-// root instead of one listener per element.
+// root instead of one listener per element. Every binding is guarded by the
+// mask of fields it reads (see dependencies.ts), so an update evaluates only
+// the values a changed field can affect.
 //
 // Selector-based directives (<event target>, <bind selector>, <toggle> ...)
 // are resolved at compile time by replaying the legacy renderer's order of
@@ -52,8 +55,10 @@ export interface BlockCompileOptions {
   className: string;
   document: SourceDocument;
   componentFields: string[];
+  analyzer: DependencyAnalyzer;
   // Statements an <event> directive runs when it fires, with nested
-  // directives applied to `eventRootVar`.
+  // directives applied to `eventRootVar`. Must not request a render; the
+  // block compiler adds that from the statements' writes.
   renderEventBody: (
     directive: EventDirective,
     eventRootVar: string,
@@ -71,6 +76,9 @@ export interface BlockComponentPlan {
   // Statement directives (effects, prints) run after every render.
   statements: string[];
   hasHandlers: boolean;
+  // Fields something rendered reads; a change to any other field needs no
+  // render. Every bit when statements run after each render.
+  usedMask: number;
 }
 
 type Namespace = 'html' | 'svg' | 'mathml';
@@ -140,6 +148,8 @@ interface ListSub {
   end: PComment;
   owned: boolean;
   source: string;
+  // Fields the source expression reads.
+  mask: number;
   body: BlockPlan;
   keyed: boolean;
   dataKey: boolean;
@@ -158,9 +168,11 @@ interface CondSub {
   prelude: string | null;
   branches: CondBranch[];
   slot: string;
+  // Fields the prelude and branch tests read.
+  testMask: number;
 }
 
-type ValuePart =
+type ValueSpec =
   | { kind: 'text'; node: PText; expr: string; slot: string }
   | {
       kind: 'attr';
@@ -198,6 +210,9 @@ type ValuePart =
       slot: string;
     };
 
+// A value part with the mask of fields its expression reads.
+type ValuePart = ValueSpec & { mask: number };
+
 type Part = ValuePart | ListSub | CondSub;
 
 type CreateAction =
@@ -214,6 +229,8 @@ type CreateAction =
 interface BlockVar {
   name: string;
   field: 'x' | 'i';
+  // Fields the loop source reads: the variable changes when they do.
+  mask: number;
 }
 
 interface BlockPlan {
@@ -334,12 +351,15 @@ class BlockCompiler {
   >();
   private readonly fields: Set<string>;
   private readonly doc: SourceDocument;
+  private readonly analyzer: DependencyAnalyzer;
+  private readonly blockMasks = new Map<BlockPlan, number>();
   private handlerCount = 0;
   private eventRootCount = 0;
 
   constructor(private readonly options: BlockCompileOptions) {
     this.fields = new Set(options.componentFields);
     this.doc = options.document;
+    this.analyzer = options.analyzer;
   }
 
   compile(ir: ComponentIR): BlockComponentPlan {
@@ -368,6 +388,7 @@ class BlockCompiler {
       globalListeners: this.globals,
       statements: this.statements,
       hasHandlers: this.handlerCount > 0,
+      usedMask: this.statements.length > 0 ? ALL_DIRTY : this.blockMask(root),
     };
   }
 
@@ -406,9 +427,11 @@ class BlockCompiler {
   }
 
   // Loop variables visible in a block, innermost first.
-  private visibleVars(block: BlockPlan): Array<{ name: string; path: string }> {
+  private visibleVars(
+    block: BlockPlan
+  ): Array<{ name: string; path: string; mask: number }> {
     const seen = new Set<string>();
-    const result: Array<{ name: string; path: string }> = [];
+    const result: Array<{ name: string; path: string; mask: number }> = [];
     let hops = 0;
     for (
       let current: BlockPlan | null = block;
@@ -421,6 +444,7 @@ class BlockCompiler {
         result.push({
           name: variable.name,
           path: `${'.P'.repeat(hops)}.${variable.field}`,
+          mask: variable.mask,
         });
       }
       hops += 1;
@@ -430,6 +454,67 @@ class BlockCompiler {
 
   private localNames(block: BlockPlan): string[] {
     return this.visibleVars(block).map((variable) => variable.name);
+  }
+
+  // Mask of the fields `code` reads inside `block`, where loop variables
+  // stand for the fields their list reads.
+  private readMask(
+    block: BlockPlan,
+    code: string,
+    asExpression = true
+  ): number {
+    const locals = new Map<string, number>();
+    for (const variable of this.visibleVars(block)) {
+      locals.set(variable.name, variable.mask);
+    }
+    return this.analyzer.readMask(code, locals, asExpression);
+  }
+
+  // Mask a handler in `block` reports after running `code`: the alias
+  // classes of nested writes. Loop variables may hold objects of the fields
+  // their list reads; `event` and the names in `inert` hold DOM values.
+  private writeMask(
+    block: BlockPlan,
+    code: string,
+    inert: readonly string[]
+  ): number {
+    const locals = new Map<string, number>();
+    for (const variable of this.visibleVars(block)) {
+      locals.set(variable.name, this.analyzer.expand(variable.mask));
+    }
+    locals.set('event', 0);
+    for (const name of inert) locals.set(name, 0);
+    return this.analyzer.writeMask(code, locals, false);
+  }
+
+  // Lines that report a handler body's nested writes, if it has any.
+  private notifyLines(
+    block: BlockPlan,
+    body: readonly string[],
+    inert: readonly string[] = []
+  ): string[] {
+    const mask = this.writeMask(block, body.join('\n'), inert);
+    return mask === 0 ? [] : [`this.__htmsNotifyStateChange(${mask});`];
+  }
+
+  // Fields whose change can affect anything a block renders, including its
+  // nested lists and branches.
+  private blockMask(block: BlockPlan): number {
+    const cached = this.blockMasks.get(block);
+    if (cached !== undefined) return cached;
+    let mask = 0;
+    for (const part of block.parts) {
+      if (part.kind === 'list') {
+        mask |= part.mask | this.blockMask(part.body);
+      } else if (part.kind === 'cond') {
+        mask |= part.testMask;
+        for (const branch of part.branches) mask |= this.blockMask(branch.body);
+      } else {
+        mask |= part.mask;
+      }
+    }
+    this.blockMasks.set(block, mask);
+    return mask;
   }
 
   // `const row = $$b.x;` for every loop variable the code reads.
@@ -496,11 +581,13 @@ class BlockCompiler {
       };
       this.addText(container, text);
       if (dynamic) {
+        const expr = textExpression(expression);
         block.parts.push({
           kind: 'text',
           node: text,
-          expr: textExpression(expression),
+          expr,
           slot: this.slot(block),
+          mask: this.readMask(block, expr),
         });
       }
       return;
@@ -512,17 +599,16 @@ class BlockCompiler {
         ...node,
         bindings: node.bindings?.filter((binding) => binding !== condition),
       };
-      const sub = this.addCondition(block, container, null);
+      const sub = this.addCondition(block, container, null, 0);
       const branch = this.newBlock(block, 'branch', []);
       this.buildNode(branch, this.blockContainer(branch), rest);
-      sub.branches.push({
-        test: scopeExpression(
-          condition.expression,
-          this.fields,
-          this.localNames(block)
-        ),
-        body: branch,
-      });
+      const test = scopeExpression(
+        condition.expression,
+        this.fields,
+        this.localNames(block)
+      );
+      sub.testMask |= this.readMask(block, test);
+      sub.branches.push({ test, body: branch });
       this.mountSample(branch, sub.end);
       return;
     }
@@ -625,10 +711,10 @@ class BlockCompiler {
         const body = scopeStatements(binding.code, this.fields, [
           ...locals,
           'event',
-        ]);
+        ]).replace(/;?\s*$/, ';');
         this.addHandler(block, element, binding.eventType, binding.modifiers, [
-          body.replace(/;?\s*$/, ';'),
-          'this.requestUpdate();',
+          body,
+          ...this.notifyLines(block, [body]),
         ]);
       }
     }
@@ -725,9 +811,10 @@ class BlockCompiler {
     const source = binding.numeric
       ? `(event.currentTarget.value === '' ? null : Number(event.currentTarget.value))`
       : `event.currentTarget[${JSON.stringify(binding.property)}]`;
+    const assignment = `${target} = ${source};`;
     this.addHandler(block, element, binding.eventType, {}, [
-      `${target} = ${source};`,
-      'this.requestUpdate();',
+      assignment,
+      ...this.notifyLines(block, [assignment]),
     ]);
   }
 
@@ -735,13 +822,19 @@ class BlockCompiler {
     block: BlockPlan,
     element: PElement,
     writeKey: string,
-    part: ValuePart
+    spec: ValueSpec
   ): void {
     if (element.writes.has(writeKey)) {
       throw new UnsupportedBlockFeature(`conflicting writes to ${writeKey}`);
     }
     element.writes.add(writeKey);
-    block.parts.push(part);
+    // A live property is compared with the DOM on every update, so user
+    // edits never outlive the state they contradict.
+    const mask =
+      spec.kind === 'prop' && spec.live
+        ? ALL_DIRTY
+        : this.readMask(block, spec.expr);
+    block.parts.push({ ...spec, mask });
   }
 
   // Adds a handler method and attaches it to `element` when the block is
@@ -822,7 +915,8 @@ class BlockCompiler {
   private addCondition(
     block: BlockPlan,
     container: Container,
-    prelude: string | null
+    prelude: string | null,
+    testMask: number
   ): CondSub {
     this.addComment(container, '[');
     const end = this.addComment(container, ']');
@@ -832,6 +926,7 @@ class BlockCompiler {
       prelude,
       branches: [],
       slot: `C${block.subs++}`,
+      testMask,
     };
     block.parts.push(sub);
     return sub;
@@ -879,11 +974,13 @@ class BlockCompiler {
         const sub = this.addCondition(
           block,
           container,
-          `const ${subject} = ${directive.expression};`
+          `const ${subject} = ${directive.expression};`,
+          this.readMask(block, directive.expression)
         );
         for (const switchCase of directive.cases) {
           const branch = this.newBlock(block, 'branch', []);
           this.fillBlock(branch, switchCase.template, switchCase.directives);
+          sub.testMask |= this.readMask(block, switchCase.value);
           sub.branches.push({
             test: `${subject} === ${switchCase.value}`,
             body: branch,
@@ -931,7 +1028,8 @@ class BlockCompiler {
           const sub = this.addCondition(
             block,
             this.elementContainer(target),
-            null
+            null,
+            0
           );
           const branch = this.newBlock(block, 'branch', []);
           this.fillBlock(branch, directive.template, directive.directives);
@@ -1107,7 +1205,7 @@ class BlockCompiler {
     container: Container,
     directive: ConditionDirective
   ): void {
-    const sub = this.addCondition(block, container, null);
+    const sub = this.addCondition(block, container, null, 0);
     // Flatten else-if chains: whenFalse holding only another condition.
     let current: ConditionDirective | null = directive;
     while (current) {
@@ -1117,6 +1215,7 @@ class BlockCompiler {
         current.whenTrue.template,
         current.whenTrue.directives
       );
+      sub.testMask |= this.readMask(block, current.condition);
       sub.branches.push({ test: current.condition, body: branch });
       this.mountSample(branch, sub.end);
       const otherwise: ConditionDirective['whenFalse'] = current.whenFalse;
@@ -1184,9 +1283,10 @@ class BlockCompiler {
   ): void {
     const start = this.addComment(container, '[');
     const end = this.addComment(container, ']');
-    const vars: BlockVar[] = [{ name: list.itemVar, field: 'x' }];
+    const mask = this.readMask(block, list.source);
+    const vars: BlockVar[] = [{ name: list.itemVar, field: 'x', mask }];
     if (list.indexVar && list.indexVar !== list.itemVar) {
-      vars.push({ name: list.indexVar, field: 'i' });
+      vars.push({ name: list.indexVar, field: 'i', mask });
     }
     const body = this.newBlock(block, 'loop', vars);
     const sub: ListSub = {
@@ -1196,6 +1296,7 @@ class BlockCompiler {
       end,
       owned: false,
       source: list.source,
+      mask,
       body,
       keyed: !!list.key,
       dataKey: list.dataKey,
@@ -1244,11 +1345,15 @@ class BlockCompiler {
     scope: Scope
   ): void {
     const eventRootVar = `_eventRoot${this.eventRootCount++}`;
-    const body = this.options.renderEventBody(
+    const statements = this.options.renderEventBody(
       directive,
       eventRootVar,
       this.localNames(block)
     );
+    const body = [
+      ...statements,
+      ...this.notifyLines(block, statements, [eventRootVar]),
+    ];
     const modifiers = directive.modifiers ?? {};
     const global = GLOBAL_TARGETS.get(directive.selector.trim());
     if (global) {
@@ -1650,7 +1755,7 @@ class BlockCompiler {
         );
       }
     }
-    create.push(`this.__htmsU${block.id}($$b);`, 'return $$b;');
+    create.push(`this.__htmsU${block.id}($$b, -1);`, 'return $$b;');
     members.push(
       `  __htmsC${block.id}(${params}) {\n${create.map((line) => `    ${line}`).join('\n')}\n  }\n`
     );
@@ -1677,7 +1782,7 @@ class BlockCompiler {
       }
     }
     members.push(
-      `  __htmsU${block.id}($$b) {\n${[...header, ...update].map((line) => `    ${line}`).join('\n')}\n  }\n`
+      `  __htmsU${block.id}($$b, $$d) {\n${[...header, ...update].map((line) => `    ${line}`).join('\n')}\n  }\n`
     );
 
     // key
@@ -1757,146 +1862,182 @@ class BlockCompiler {
 
   private walkCounter = 0;
 
+  // The update method's body. Each part runs only when `$$d`, the mask of
+  // fields changed since the last update, overlaps the fields it reads;
+  // neighbouring parts with the same mask share one test. A create passes
+  // -1 (every bit), as does requestUpdate().
   private generateUpdate(block: BlockPlan): string[] {
     const lines: string[] = [];
+    let pending: { mask: number; lines: string[] } | null = null;
+    const flush = (): void => {
+      if (pending) lines.push(...guarded(pending.mask, pending.lines, null));
+      pending = null;
+    };
     for (const part of block.parts) {
-      if (part.kind === 'list') {
-        const body = part.body;
-        lines.push(
-          `__htmsList(this, $$b.${part.slot}, ${part.source}, $$b, this.__htmsC${body.id}, this.__htmsU${body.id}, ${body.keyMethod ? `this.${body.keyMethod}` : 'null'});`
-        );
-        continue;
-      }
-      if (part.kind === 'cond') {
-        lines.push(...this.generateCondition(part));
-        continue;
-      }
-      const slot = `$$b.${part.slot}`;
-      if (part.kind === 'text') {
-        const raw = rawTextValue(part.expr);
-        if (raw === null) {
-          lines.push(
-            `$$v = ${part.expr};`,
-            `if ($$v !== ${slot}) $$b.${part.node.field}.data = ${slot} = $$v;`
-          );
-        } else {
-          // Objects can change their text without changing identity, so
-          // they are compared as text against the node every time.
-          lines.push(
-            `$$v = ${raw};`,
-            `if ($$v !== ${slot}) ${slot} = typeof $$v === 'object' && $$v !== null ? __htmsSo($$b.${part.node.field}, $$v) : ($$b.${part.node.field}.data = __htmsS($$v), $$v);`
-          );
-        }
-        continue;
-      }
-      const node = `$$b.${part.node.field}`;
-      const classFlag = part.node.flag
-        ? `${part.node.flag}${part.node.field}`
-        : null;
-      const styleFlag = part.node.styleFlag
-        ? `${part.node.styleFlag}${part.node.field}`
-        : null;
-      switch (part.kind) {
-        case 'attr': {
-          const name = JSON.stringify(part.name);
-          const lower = part.name.toLowerCase();
-          const flagSet =
-            lower === 'class' && classFlag
-              ? ` ${classFlag} = true;`
-              : lower === 'style' && styleFlag
-                ? ` ${styleFlag} = true;`
-                : '';
-          if (part.mode === 'bool') {
-            lines.push(
-              `$$v = !!(${part.expr});`,
-              `if ($$v !== ${slot}) { ${slot} = $$v; if ($$v) ${node}.setAttribute(${name}, ''); else ${node}.removeAttribute(${name}); }`
-            );
-          } else if (part.mode === 'class') {
-            lines.push(
-              `$$v = ${part.expr};`,
-              `if ($$v !== ${slot}) { ${node}.className = ${slot} = $$v;${flagSet} }`
-            );
-          } else if (part.mode === 'url') {
-            lines.push(
-              `$$v = ${part.expr};`,
-              `if ($$v !== ${slot}) ${node}.setAttribute(${name}, this.__htmsSafeUrl(${slot} = $$v));`
-            );
-          } else if (part.mode === 'directive') {
-            const value = URL_ATTRIBUTES.has(lower)
-              ? 'this.__htmsSafeUrl($$v)'
-              : 'String($$v)';
-            lines.push(
-              `$$v = (${part.expr});`,
-              `if ($$v !== ${slot}) { ${slot} = $$v; if ($$v == null || $$v === false) ${node}.removeAttribute(${name}); else ${node}.setAttribute(${name}, $$v === true ? '' : ${value});${flagSet} }`
-            );
-          } else {
-            lines.push(
-              `$$v = ${part.expr};`,
-              `if ($$v !== ${slot}) { ${node}.setAttribute(${name}, ${slot} = $$v);${flagSet} }`
-            );
-          }
-          break;
-        }
-        case 'toggle':
-          lines.push(
-            `$$v = !!(${part.expr});`,
-            `if ($$v !== ${slot}${classFlag ? ` || ${classFlag}` : ''}) ${node}.classList.toggle(${JSON.stringify(part.name)}, ${slot} = $$v);`
-          );
-          break;
-        case 'style': {
-          const property = JSON.stringify(part.property);
-          const changed = `$$v !== ${slot}${styleFlag ? ` || ${styleFlag}` : ''}`;
-          if (part.mode === 'binding') {
-            lines.push(
-              `$$v = ${part.expr};`,
-              `if (${changed}) { ${slot} = $$v; if ($$v == null || $$v === false) ${node}.style.removeProperty(${property}); else ${node}.style.setProperty(${property}, String($$v)); }`
-            );
-          } else if (part.mode === 'css') {
-            lines.push(
-              `$$v = (${part.expr});`,
-              `if (${changed}) ${node}.style.setProperty(${property}, ${slot} = $$v);`
-            );
-          } else {
-            lines.push(
-              `$$v = (${part.expr});`,
-              `if (${changed}) ${node}.style[${property}] = ${slot} = $$v;`
-            );
-          }
-          break;
-        }
-        case 'show':
-          lines.push(
-            `$$v = !!(${part.expr});`,
-            `if ($$v !== ${slot}${styleFlag ? ` || ${styleFlag}` : ''}) ${node}.style.display = (${slot} = $$v) ? '' : 'none';`
-          );
-          break;
-        case 'prop': {
-          const access = part.path
-            .map((segment) => `[${JSON.stringify(segment)}]`)
-            .join('');
-          const value = part.url
-            ? `this.__htmsSafeUrl(${part.expr})`
-            : part.expr;
-          const evaluate = part.guard
-            ? `$$v = (function () { return ${value}; }).call(this);`
-            : `$$v = ${value};`;
-          const write = part.live
-            ? part.path[0] === 'value' && part.path.length === 1
-              ? `if (${node}.value !== String($$v)) ${node}.value = $$v;`
-              : `if (${node}${access} !== $$v) ${node}${access} = $$v;`
-            : `if ($$v !== ${slot}) ${node}${access} = ${slot} = $$v;`;
-          if (part.guard) {
-            lines.push(
-              `try { ${evaluate} ${write} } catch (error) { console.error(${JSON.stringify(part.guard)}, error); }`
-            );
-          } else {
-            lines.push(evaluate, write);
-          }
-          break;
-        }
+      const update = this.partUpdate(part);
+      if (update.flag !== null) {
+        flush();
+        lines.push(...guarded(update.mask, update.lines, update.flag));
+      } else if (pending && pending.mask === update.mask) {
+        pending.lines.push(...update.lines);
+      } else {
+        flush();
+        pending = { mask: update.mask, lines: update.lines };
       }
     }
+    flush();
     return lines;
+  }
+
+  // One part's update statements, the mask guarding them and, for a toggle
+  // that must re-apply after a class or style attribute write, that flag.
+  private partUpdate(part: Part): {
+    mask: number;
+    lines: string[];
+    flag: string | null;
+  } {
+    const lines: string[] = [];
+    if (part.kind === 'list') {
+      const body = part.body;
+      lines.push(
+        `__htmsList(this, $$b.${part.slot}, ${part.source}, $$b, this.__htmsC${body.id}, this.__htmsU${body.id}, ${body.keyMethod ? `this.${body.keyMethod}` : 'null'}, $$d);`
+      );
+      return { mask: part.mask | this.blockMask(part.body), lines, flag: null };
+    }
+    if (part.kind === 'cond') {
+      let mask = part.testMask;
+      for (const branch of part.branches) mask |= this.blockMask(branch.body);
+      return { mask, lines: this.generateCondition(part), flag: null };
+    }
+    const slot = `$$b.${part.slot}`;
+    if (part.kind === 'text') {
+      const raw = rawTextValue(part.expr);
+      if (raw === null) {
+        lines.push(
+          `$$v = ${part.expr};`,
+          `if ($$v !== ${slot}) $$b.${part.node.field}.data = ${slot} = $$v;`
+        );
+      } else {
+        // Objects can change their text without changing identity, so
+        // they are compared as text against the node every time.
+        lines.push(
+          `$$v = ${raw};`,
+          `if ($$v !== ${slot}) ${slot} = typeof $$v === 'object' && $$v !== null ? __htmsSo($$b.${part.node.field}, $$v) : ($$b.${part.node.field}.data = __htmsS($$v), $$v);`
+        );
+      }
+      return { mask: part.mask, lines, flag: null };
+    }
+    const node = `$$b.${part.node.field}`;
+    const classFlag = part.node.flag
+      ? `${part.node.flag}${part.node.field}`
+      : null;
+    const styleFlag = part.node.styleFlag
+      ? `${part.node.styleFlag}${part.node.field}`
+      : null;
+    // A toggle re-applies when the attribute it shares the node with was
+    // rewritten, whether or not its own fields changed.
+    let flag: string | null = null;
+    switch (part.kind) {
+      case 'attr': {
+        const name = JSON.stringify(part.name);
+        const lower = part.name.toLowerCase();
+        const flagSet =
+          lower === 'class' && classFlag
+            ? ` ${classFlag} = true;`
+            : lower === 'style' && styleFlag
+              ? ` ${styleFlag} = true;`
+              : '';
+        if (part.mode === 'bool') {
+          lines.push(
+            `$$v = !!(${part.expr});`,
+            `if ($$v !== ${slot}) { ${slot} = $$v; if ($$v) ${node}.setAttribute(${name}, ''); else ${node}.removeAttribute(${name}); }`
+          );
+        } else if (part.mode === 'class') {
+          lines.push(
+            `$$v = ${part.expr};`,
+            `if ($$v !== ${slot}) { ${node}.className = ${slot} = $$v;${flagSet} }`
+          );
+        } else if (part.mode === 'url') {
+          lines.push(
+            `$$v = ${part.expr};`,
+            `if ($$v !== ${slot}) ${node}.setAttribute(${name}, this.__htmsSafeUrl(${slot} = $$v));`
+          );
+        } else if (part.mode === 'directive') {
+          const value = URL_ATTRIBUTES.has(lower)
+            ? 'this.__htmsSafeUrl($$v)'
+            : 'String($$v)';
+          lines.push(
+            `$$v = (${part.expr});`,
+            `if ($$v !== ${slot}) { ${slot} = $$v; if ($$v == null || $$v === false) ${node}.removeAttribute(${name}); else ${node}.setAttribute(${name}, $$v === true ? '' : ${value});${flagSet} }`
+          );
+        } else {
+          lines.push(
+            `$$v = ${part.expr};`,
+            `if ($$v !== ${slot}) { ${node}.setAttribute(${name}, ${slot} = $$v);${flagSet} }`
+          );
+        }
+        break;
+      }
+      case 'toggle':
+        flag = classFlag;
+        lines.push(
+          `$$v = !!(${part.expr});`,
+          `if ($$v !== ${slot}${classFlag ? ` || ${classFlag}` : ''}) ${node}.classList.toggle(${JSON.stringify(part.name)}, ${slot} = $$v);`
+        );
+        break;
+      case 'style': {
+        flag = styleFlag;
+        const property = JSON.stringify(part.property);
+        const changed = `$$v !== ${slot}${styleFlag ? ` || ${styleFlag}` : ''}`;
+        if (part.mode === 'binding') {
+          lines.push(
+            `$$v = ${part.expr};`,
+            `if (${changed}) { ${slot} = $$v; if ($$v == null || $$v === false) ${node}.style.removeProperty(${property}); else ${node}.style.setProperty(${property}, String($$v)); }`
+          );
+        } else if (part.mode === 'css') {
+          lines.push(
+            `$$v = (${part.expr});`,
+            `if (${changed}) ${node}.style.setProperty(${property}, ${slot} = $$v);`
+          );
+        } else {
+          lines.push(
+            `$$v = (${part.expr});`,
+            `if (${changed}) ${node}.style[${property}] = ${slot} = $$v;`
+          );
+        }
+        break;
+      }
+      case 'show':
+        flag = styleFlag;
+        lines.push(
+          `$$v = !!(${part.expr});`,
+          `if ($$v !== ${slot}${styleFlag ? ` || ${styleFlag}` : ''}) ${node}.style.display = (${slot} = $$v) ? '' : 'none';`
+        );
+        break;
+      case 'prop': {
+        const access = part.path
+          .map((segment) => `[${JSON.stringify(segment)}]`)
+          .join('');
+        const value = part.url ? `this.__htmsSafeUrl(${part.expr})` : part.expr;
+        const evaluate = part.guard
+          ? `$$v = (function () { return ${value}; }).call(this);`
+          : `$$v = ${value};`;
+        const write = part.live
+          ? part.path[0] === 'value' && part.path.length === 1
+            ? `if (${node}.value !== String($$v)) ${node}.value = $$v;`
+            : `if (${node}${access} !== $$v) ${node}${access} = $$v;`
+          : `if ($$v !== ${slot}) ${node}${access} = ${slot} = $$v;`;
+        if (part.guard) {
+          lines.push(
+            `try { ${evaluate} ${write} } catch (error) { console.error(${JSON.stringify(part.guard)}, error); }`
+          );
+        } else {
+          lines.push(evaluate, write);
+        }
+        break;
+      }
+    }
+    return { mask: part.mask, lines, flag };
   }
 
   private generateCondition(part: CondSub): string[] {
@@ -1921,14 +2062,28 @@ class BlockCompiler {
     const update = part.branches
       .map(
         (branch, index) =>
-          `${index === 0 ? '' : 'else '}if ($$k === ${index}) this.__htmsU${branch.body.id}($$c.b);`
+          `${index === 0 ? '' : 'else '}if ($$k === ${index}) this.__htmsU${branch.body.id}($$c.b, $$d);`
       )
       .join(' ');
+    // The tests re-run only when a field they read changed; otherwise the
+    // branch shown last stays and just updates.
+    const retest = part.testMask !== ALL_DIRTY && part.testMask !== 0;
+    const choose = retest
+      ? [
+          `  let $$k = $$c.k;`,
+          `  if ($$d & ${part.testMask}) {`,
+          ...(part.prelude ? [`    ${part.prelude}`] : []),
+          `    $$k = ${selector};`,
+          `  }`,
+        ]
+      : [
+          ...(part.prelude ? [`  ${part.prelude}`] : []),
+          `  const $$k = ${selector};`,
+        ];
     return [
       '{',
-      ...(part.prelude ? [`  ${part.prelude}`] : []),
       `  const $$c = ${state};`,
-      `  const $$k = ${selector};`,
+      ...choose,
       `  if ($$k !== $$c.k) {`,
       `    if ($$c.b) __htmsRm($$c.b);`,
       `    $$c.k = $$k;`,
@@ -1938,6 +2093,23 @@ class BlockCompiler {
       '}',
     ];
   }
+}
+
+// Wraps update statements in their dirty-mask test. Every bit set (-1)
+// needs no test. A mask of 0 means the value reads no field at all: it is
+// evaluated when the block is created and when everything is marked dirty.
+function guarded(
+  mask: number,
+  lines: readonly string[],
+  flag: string | null
+): string[] {
+  if (mask === ALL_DIRTY) return [...lines];
+  const test = mask === 0 ? '$$d === -1' : `$$d & ${mask}`;
+  return [
+    `if (${flag ? `(${test}) || ${flag}` : test}) {`,
+    ...lines.map((line) => `  ${line}`),
+    '}',
+  ];
 }
 
 // Shared helpers for block-rendered components, emitted once per bundle.
@@ -2051,7 +2223,20 @@ function __htmsCreate(component, parentBlock, create, items, keys, next, first, 
   }
 }
 
-function __htmsList(component, list, items, parentBlock, create, update, key) {
+// \`dirty\` is the mask of changed fields; a row whose item changed since
+// its last update is updated with every bit set.
+// Updates a kept row at its new position. A row that received a different
+// item re-evaluates everything, since the mask describes fields, not rows.
+function __htmsRow(component, block, item, index, update, dirty) {
+  if (block.x !== item) {
+    block.x = item;
+    dirty = -1;
+  }
+  block.i = index;
+  update.call(component, block, dirty);
+}
+
+function __htmsList(component, list, items, parentBlock, create, update, key, dirty) {
   if (!Array.isArray(items)) items = [];
   var old = list.b;
   var oldLength = old.length;
@@ -2078,9 +2263,12 @@ function __htmsList(component, list, items, parentBlock, create, update, key) {
     if (block.x !== item) {
       if (key !== null && block.k !== key.call(component, item, i, parentBlock)) break;
       block.x = item;
+      block.i = i;
+      update.call(component, block, -1);
+    } else {
+      block.i = i;
+      update.call(component, block, dirty);
     }
-    block.i = i;
-    update.call(component, block);
   }
   var same = i;
   var keys;
@@ -2115,9 +2303,7 @@ function __htmsList(component, list, items, parentBlock, create, update, key) {
       ((block = old[oldStart]).x === items[start] || block.k === key.call(component, items[start], start, parentBlock))
     ) {
       oldStart++;
-      block.x = items[start];
-      block.i = start;
-      update.call(component, block);
+      __htmsRow(component, block, items[start], start, update, dirty);
       next[start++] = block;
     }
     while (
@@ -2126,9 +2312,7 @@ function __htmsList(component, list, items, parentBlock, create, update, key) {
       ((block = old[oldEnd]).x === items[end] || block.k === key.call(component, items[end], end, parentBlock))
     ) {
       oldEnd--;
-      block.x = items[end];
-      block.i = end;
-      update.call(component, block);
+      __htmsRow(component, block, items[end], end, update, dirty);
       next[end--] = block;
     }
     if (oldStart >= oldEnd || start >= end) break;
@@ -2145,13 +2329,9 @@ function __htmsList(component, list, items, parentBlock, create, update, key) {
     before = second.e.nextSibling;
     __htmsIns(second, parent, first.s);
     __htmsIns(first, parent, before);
-    first.x = items[end];
-    first.i = end;
-    update.call(component, first);
+    __htmsRow(component, first, items[end], end, update, dirty);
     next[end--] = first;
-    second.x = items[start];
-    second.i = start;
-    update.call(component, second);
+    __htmsRow(component, second, items[start], start, update, dirty);
     next[start++] = second;
   }
   keys = new Array(length);
@@ -2181,9 +2361,7 @@ function __htmsList(component, list, items, parentBlock, create, update, key) {
     positions[target - start] = i;
     if (target < last) moved = true;
     else last = target;
-    block.x = items[target];
-    block.i = target;
-    update.call(component, block);
+    __htmsRow(component, block, items[target], target, update, dirty);
     next[target] = block;
     reused++;
   }

@@ -8,7 +8,7 @@ import { ESTree, parseProgram } from '../utils/js-parser';
 // locals (loop variables, `event`, names declared inside the snippet),
 // member properties, object keys and globals untouched.
 
-interface AstNode {
+export interface AstNode {
   type: string;
   start: number;
   end: number;
@@ -21,7 +21,7 @@ interface Replacement {
   text: string;
 }
 
-function isNode(value: unknown): value is AstNode {
+export function isNode(value: unknown): value is AstNode {
   return (
     !!value &&
     typeof value === 'object' &&
@@ -31,7 +31,7 @@ function isNode(value: unknown): value is AstNode {
 
 // Calls `visit` with every child node and the property holding it, without
 // building an entries array per node (this runs over every expression).
-function forEachChild(
+export function forEachChild(
   node: AstNode,
   visit: (key: string, child: AstNode) => void
 ): void {
@@ -48,7 +48,10 @@ function forEachChild(
   }
 }
 
-function collectPatternNames(pattern: unknown, names: Set<string>): void {
+export function collectPatternNames(
+  pattern: unknown,
+  names: Set<string>
+): void {
   if (!isNode(pattern)) return;
   switch (pattern.type) {
     case 'Identifier':
@@ -231,12 +234,17 @@ function mentionsField(code: string, fields: ReadonlySet<string>): boolean {
 // trailing line comment parse, or statements inside `{...}`. Node positions
 // are shifted by the prefix length. The arrow must come out as the whole
 // program, so a snippet that closes the wrapper early does not parse.
+// Node positions in the result are offset by `EXPRESSION_OFFSET` or
+// `STATEMENTS_OFFSET`.
 const EXPRESSION_PREFIX = '(async () => (';
 const STATEMENTS_PREFIX = '(async () => {\n';
-const EXPRESSION_OFFSET = EXPRESSION_PREFIX.length;
-const STATEMENTS_OFFSET = STATEMENTS_PREFIX.length;
+export const EXPRESSION_OFFSET = EXPRESSION_PREFIX.length;
+export const STATEMENTS_OFFSET = STATEMENTS_PREFIX.length;
 
-function parseWrapped(code: string, asExpression: boolean): AstNode | null {
+export function parseSnippet(
+  code: string,
+  asExpression: boolean
+): AstNode | null {
   const wrapped = asExpression
     ? `${EXPRESSION_PREFIX}${code}\n))`
     : `${STATEMENTS_PREFIX}${code}\n})`;
@@ -264,7 +272,7 @@ function parseWrapped(code: string, asExpression: boolean): AstNode | null {
 
 // Parses `code` as exactly one expression.
 function parseExpressionExactly(code: string): AstNode | null {
-  return parseWrapped(code, true);
+  return parseSnippet(code, true);
 }
 
 function rewrite(
@@ -305,7 +313,7 @@ export function scopeStatements(
   locals: readonly string[] = []
 ): string {
   if (fields.size === 0 || !mentionsField(code, fields)) return code;
-  const root = parseWrapped(code, false);
+  const root = parseSnippet(code, false);
   return root ? rewrite(code, root, fields, locals, STATEMENTS_OFFSET) : code;
 }
 

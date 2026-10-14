@@ -14,6 +14,8 @@ The compilation pipeline consists of three main stages:
 2. **Element Processing** (`handlers.ts`): Routes custom tags to specific handlers in the `tags/` directory
 3. **Code Generation** (`parser.ts:generateFinalJsCode`): Uses meriyah (via `utils/js-parser.ts`) and escodegen to validate and generate clean JavaScript output
 
+Components compile to "blocks" (`component/block-compiler.ts`): a cloned template plus an update method per block. `component/dependencies.ts` gives every field a dirty bit and derives, from the expressions and method bodies, which fields each binding reads and which fields each handler or method writes in place; the update method skips bindings whose fields did not change, and a field nothing renders never schedules a render. Fields that may share objects (`editing = todo`) form alias classes so an in-place write through one marks the others.
+
 ### Key Components
 
 - `cli.ts`: CLI entry point that reads HTML files and outputs generated JS

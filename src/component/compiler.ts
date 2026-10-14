@@ -8,6 +8,12 @@ import {
   compileBlockComponent,
 } from './block-compiler';
 import {
+  ALL_DIRTY,
+  DependencyAnalyzer,
+  MethodCode,
+  collectAliases,
+} from './dependencies';
+import {
   ComponentIR,
   DirectiveNode,
   LoopDirective,
@@ -795,15 +801,16 @@ function buildComponentClass(
       ? `  static get observedAttributes() { return ${JSON.stringify(metadata.observedAttributes)}; }`
       : '';
 
-  const inputInitialization =
-    metadata.inputs.length > 0
-      ? metadata.inputs
-          .map(
-            (input) =>
-              `    this.__htmsDefineInputProperty(${JSON.stringify(input.propName)}, ${JSON.stringify(input.attributeName)}, ${JSON.stringify(input.type)});`
-          )
-          .join('\n')
-      : '';
+  const inputInitialization = (
+    analyzer: DependencyAnalyzer | null,
+    usedMask: number
+  ): string =>
+    metadata.inputs
+      .map((input) => {
+        const bit = analyzer ? analyzer.bit(input.propName) : ALL_DIRTY;
+        return `    this.__htmsDefineInputProperty(${JSON.stringify(input.propName)}, ${JSON.stringify(input.attributeName)}, ${JSON.stringify(input.type)}, ${bit}, ${(bit & usedMask) !== 0});`;
+      })
+      .join('\n');
 
   const inputMap =
     metadata.inputs.length > 0
@@ -890,21 +897,52 @@ function buildComponentClass(
     containsBindings(renderIR);
   const controlledSelectors = collectControlledSelectors(renderIR);
   const directiveCounter = { value: 0 };
+  const lifecycleState = collectLifecycleStateDirectives(renderIR);
+
+  const methodBodies = new Map<string, MethodCode>();
+  for (const method of collectMethods(renderIR)) {
+    const bodyLines = method.body.flatMap((directive) =>
+      renderDirective(
+        directive,
+        '(this.__htmsRoot || this)',
+        directiveCounter,
+        '      ',
+        method.params,
+        componentInterpolationVars
+      )
+    );
+    methodBodies.set(method.name, {
+      params: method.params,
+      body: bodyLines.join('\n'),
+    });
+  }
 
   let blockPlan: BlockComponentPlan | null = null;
+  let analyzer: DependencyAnalyzer | null = null;
   if (blockDocument) {
+    analyzer = createAnalyzer(
+      renderIR,
+      reactiveStateRoots,
+      inputNames,
+      lifecycleState,
+      methodBodies
+    );
+    const stateMasks = (root: string): number =>
+      analyzer?.classMask(root) ?? ALL_DIRTY;
     try {
       blockPlan = compileBlockComponent(renderIR, {
         className: metadata.className,
         document: blockDocument,
         componentFields: componentInterpolationVars,
+        analyzer,
         renderEventBody: (directive, eventRootVar, scopeVars) =>
           renderEventBody(
             directive,
             eventRootVar,
             directiveCounter,
             scopeVars,
-            componentInterpolationVars
+            componentInterpolationVars,
+            stateMasks
           ),
       });
     } catch (error) {
@@ -958,7 +996,6 @@ function buildComponentClass(
     renderLines.push(`    this.__htmsCleanupRenderListeners();`);
   }
 
-  const lifecycleState = collectLifecycleStateDirectives(renderIR);
   for (const directive of lifecycleState.init) {
     renderLines.push(...renderStateDirective(directive, '    '));
   }
@@ -1035,13 +1072,15 @@ function buildComponentClass(
     return value;
   }
 
-  __htmsDefineInputProperty(propName, attributeName, type) {
+  __htmsDefineInputProperty(propName, attributeName, type, bit, rendered) {
     const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
     const ownValue = hadOwnValue ? this[propName] : undefined;
     if (hadOwnValue) {
       delete this[propName];
     }
 
+    // \`bit\` marks the property dirty; \`rendered\` is false when nothing
+    // the component renders reads it, so a change needs no render.
     Object.defineProperty(this, propName, {
       configurable: true,
       enumerable: true,
@@ -1052,7 +1091,10 @@ function buildComponentClass(
           return;
         }
         this.__htmsProps[propName] = value;
-        this.__htmsRequestRender();
+        this.__htmsDirty |= bit;
+        if (rendered) {
+          this.__htmsRequestRender();
+        }
       }
     });
 
@@ -1085,7 +1127,7 @@ function buildComponentClass(
       : '';
 
   const stateHelpers = hasStateDirectives
-    ? `  __htmsDefineStateProperty(propName) {
+    ? `  __htmsDefineStateProperty(propName, bit = -1, rendered = true) {
     const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
     const ownValue = hadOwnValue ? this[propName] : undefined;
     if (hadOwnValue) {
@@ -1102,7 +1144,8 @@ function buildComponentClass(
           return;
         }
         this.__htmsState[propName] = value;
-        if (!this.__htmsRendering) {
+        this.__htmsDirty |= bit;
+        if (rendered && !this.__htmsRendering) {
           this.__htmsRequestRender();
         }
       }
@@ -1123,7 +1166,10 @@ function buildComponentClass(
     }
   }
 
-  __htmsNotifyStateChange() {
+  __htmsNotifyStateChange(mask = -1) {
+    // \`mask\` names the fields a nested write changed; every bit when the
+    // caller does not know.
+    this.__htmsDirty |= mask;
     if (!this.__htmsRendering) {
       this.__htmsRequestRender();
     }
@@ -1153,18 +1199,18 @@ function buildComponentClass(
     }
   }
 
-  __htmsSetState(path, op, valueFactory) {
+  __htmsSetState(path, op, valueFactory, mask) {
     const { target, key } = this.__htmsResolvePath(path);
     if (op === '++') {
       const current = typeof target[key] === 'number' ? target[key] : 0;
       target[key] = current + 1;
-      this.__htmsNotifyStateChange();
+      this.__htmsNotifyStateChange(mask);
       return;
     }
     if (op === '--') {
       const current = typeof target[key] === 'number' ? target[key] : 0;
       target[key] = current - 1;
-      this.__htmsNotifyStateChange();
+      this.__htmsNotifyStateChange(mask);
       return;
     }
     const current = target[key];
@@ -1189,7 +1235,7 @@ function buildComponentClass(
       default:
         target[key] = value;
     }
-    this.__htmsNotifyStateChange();
+    this.__htmsNotifyStateChange(mask);
   }
 
   __htmsEnsureArray(path) {
@@ -1200,19 +1246,19 @@ function buildComponentClass(
     return target[key];
   }
 
-  __htmsPushState(path, valueFactory) {
+  __htmsPushState(path, valueFactory, mask) {
     const arr = this.__htmsEnsureArray(path);
     arr.push(valueFactory());
-    this.__htmsNotifyStateChange();
+    this.__htmsNotifyStateChange(mask);
   }
 
-  __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory) {
+  __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory, mask) {
     const arr = this.__htmsEnsureArray(path);
     const index = indexFactory();
     const del = deleteFactory();
     const values = valuesFactory();
     arr.splice(index, del, ...values);
-    this.__htmsNotifyStateChange();
+    this.__htmsNotifyStateChange(mask);
   }
 
 `
@@ -1227,6 +1273,7 @@ function buildComponentClass(
   }
 
   requestUpdate() {
+    this.__htmsDirty = -1;
     return this.__htmsRequestRender();
   }
 
@@ -1247,9 +1294,11 @@ function buildComponentClass(
     }, options)));
   }
 
-  __htmsAfterMethod() {
+  __htmsAfterMethod(mask = -1) {
     // Methods may mutate nested state; re-render afterwards unless the
     // method was called while rendering (e.g. from an interpolation).
+    // \`mask\` names the fields the method's nested writes can change.
+    this.__htmsDirty |= mask;
     if (!this.__htmsRendering) {
       this.__htmsRequestRender();
     }
@@ -1743,23 +1792,29 @@ ${
 `
     : '';
 
+  // A method whose only writes go through setters needs no follow-up; one
+  // that changes state objects in place reports the fields it may have
+  // touched. Without the analysis every method reports everything.
   const methodsCode = collectMethods(renderIR)
     .map((method) => {
-      const bodyLines = method.body.flatMap((directive) =>
-        renderDirective(
-          directive,
-          '(this.__htmsRoot || this)',
-          directiveCounter,
-          '      ',
-          method.params,
-          componentInterpolationVars
-        )
-      );
-      return `  ${method.async ? 'async ' : ''}${method.name}(${method.params.join(', ')}) {
+      const body = methodBodies.get(method.name)?.body ?? '';
+      const header = `  ${method.async ? 'async ' : ''}${method.name}(${method.params.join(', ')}) {`;
+      const mask =
+        blockPlan && analyzer
+          ? analyzer.methodWriteMask(method.name)
+          : ALL_DIRTY;
+      if (mask === 0) {
+        return `${header}
+${body.replace(/^ {2}/gm, '')}
+  }
+
+`;
+      }
+      return `${header}
     try {
-${bodyLines.join('\n')}
+${body}
     } finally {
-      this.__htmsAfterMethod();
+      this.__htmsAfterMethod(${mask === ALL_DIRTY ? '' : mask});
     }
   }
 
@@ -1767,11 +1822,15 @@ ${bodyLines.join('\n')}
     })
     .join('');
 
+  const usedMask = blockPlan ? blockPlan.usedMask : ALL_DIRTY;
   const statePropertyInitialization = reactiveStateRoots
-    .map(
-      (stateName) =>
-        `    this.__htmsDefineStateProperty(${JSON.stringify(stateName)});`
-    )
+    .map((stateName) => {
+      if (!blockPlan || !analyzer) {
+        return `    this.__htmsDefineStateProperty(${JSON.stringify(stateName)}, -1, true);`;
+      }
+      const bit = analyzer.bit(stateName);
+      return `    this.__htmsDefineStateProperty(${JSON.stringify(stateName)}, ${bit}, ${(bit & usedMask) !== 0});`;
+    })
     .join('\n');
   const renderBody = renderLines.map((line) => `  ${line}`).join('\n');
 
@@ -1792,11 +1851,13 @@ ${bodyLines.join('\n')}
         lifecycleSection,
         shadowInit,
         statePropertyInitialization,
-        inputInitialization,
+        inputInitialization: inputInitialization(analyzer, usedMask),
+        stateMasks: (root) => analyzer?.classMask(root) ?? ALL_DIRTY,
       }),
       usesBlocks: true,
     };
   }
+  const inputInit = inputInitialization(null, ALL_DIRTY);
 
   return {
     code: finalizeStateStorage(`class ${metadata.className} extends HTMLElement {
@@ -1811,9 +1872,10 @@ ${staticTemplateProperty}${methodsCode}${inputHelpers}${stateHelpers}${updateHel
     this.__htmsResolveUpdate = null;
     this.__htmsUpdatePromise = Promise.resolve();
     this.__htmsLastError = null;
+    this.__htmsDirty = -1;
 ${hasEventDirectives ? `    this.__htmsRenderCleanups = [];\n    this.__htmsTimers = new Map();\n` : ''}
 ${shadowInit}
-${statePropertyInitialization ? `${statePropertyInitialization}\n` : ''}${inputInitialization ? `${inputInitialization}\n` : ''}  }
+${statePropertyInitialization ? `${statePropertyInitialization}\n` : ''}${inputInit ? `${inputInit}\n` : ''}  }
 
   connectedCallback() {
 ${metadata.shadowMode === 'none' ? '' : `    this.__htmsEnsureRenderRoot();\n`}    this.__htmsConnected = true;
@@ -1860,6 +1922,48 @@ interface BlockClassInput {
   shadowInit: string;
   statePropertyInitialization: string;
   inputInitialization: string;
+  // Class mask of a state root, for the state helpers' notifications.
+  stateMasks: (root: string) => number;
+}
+
+// Builds the dependency analyser for a block component: reactive fields get
+// bits, derived values carry their expressions, and every assignment in the
+// component is scanned for fields that may share objects.
+function createAnalyzer(
+  renderIR: ComponentIR,
+  reactiveStateRoots: readonly string[],
+  inputNames: ReadonlySet<string>,
+  lifecycleState: { init: StateDirective[]; derive: StateDirective[] },
+  methodBodies: ReadonlyMap<string, MethodCode>
+): DependencyAnalyzer {
+  // A derived value's readers depend on what its expression reads. Several
+  // derives into one root (`stats.total`, `stats.count`) are combined.
+  const derived = new Map<string, string>();
+  for (const directive of lifecycleState.derive) {
+    const [root] = directive.path;
+    if (root === undefined) continue;
+    const value = directive.value ?? 'undefined';
+    const existing = derived.get(root);
+    derived.set(
+      root,
+      existing === undefined ? value : `(${existing}, ${value})`
+    );
+  }
+  const analyzer = new DependencyAnalyzer({
+    reactive: [...reactiveStateRoots, ...inputNames],
+    derived,
+    methods: methodBodies,
+  });
+  const initialValues = new Map<string, string>();
+  for (const directive of lifecycleState.init) {
+    const [root] = directive.path;
+    if (root !== undefined && directive.value !== undefined) {
+      initialValues.set(root, directive.value);
+    }
+  }
+  collectAliases(renderIR, analyzer, initialValues);
+  analyzer.seal();
+  return analyzer;
 }
 
 // Drops internal `__htms*` methods nothing reachable calls. Public members
@@ -1885,8 +1989,8 @@ function finalizeStateStorage(classCode: string): string {
   const code = classCode
     .replace(/__HTMS_CLASS__/g, className)
     .replace(
-      /^ {4}this\.__htmsDefineStateProperty\(("[$\w]+")\);$/gm,
-      (line, quoted: string) => {
+      /^ {4}this\.__htmsDefineStateProperty\(("[$\w]+"), (-?\d+), (true|false)\);$/gm,
+      (line, quoted: string, bit: string, rendered: string) => {
         const name = JSON.parse(quoted) as string;
         if (
           members.has(name) ||
@@ -1895,8 +1999,15 @@ function finalizeStateStorage(classCode: string): string {
         ) {
           return line;
         }
+        // The setter marks the field dirty and, when something rendered
+        // reads it, schedules a render.
+        const mark = `      this.__htmsDirty |= ${bit};\n`;
+        const request =
+          rendered === 'false'
+            ? ''
+            : '      if (!this.__htmsRendering) this.__htmsRequestRender();\n';
         accessors.push(
-          `  get ${name}() {\n    return this.__htmsState.${name};\n  }\n\n  set ${name}(value) {\n    if (!Object.is(this.__htmsState.${name}, value)) {\n      this.__htmsState.${name} = value;\n      if (!this.__htmsRendering) this.__htmsRequestRender();\n    }\n  }\n`
+          `  get ${name}() {\n    return this.__htmsState.${name};\n  }\n\n  set ${name}(value) {\n    if (!Object.is(this.__htmsState.${name}, value)) {\n      this.__htmsState.${name} = value;\n${mark}${request}    }\n  }\n`
         );
         return `    this.__htmsAdoptState(${quoted});`;
       }
@@ -1974,14 +2085,19 @@ function buildBlockComponentClass(input: BlockClassInput): string {
   const lifecycleState = collectLifecycleStateDirectives(renderIR);
   const renderLines: string[] = [];
   for (const directive of lifecycleState.init) {
-    renderLines.push(...renderStateDirective(directive, ''));
+    renderLines.push(...renderStateDirective(directive, '', input.stateMasks));
   }
   for (const directive of lifecycleState.derive) {
-    renderLines.push(...renderStateDirective(directive, ''));
+    renderLines.push(...renderStateDirective(directive, '', input.stateMasks));
   }
+  // The fields changed since the last render; the update skips bindings
+  // none of them can affect. Changes made while rendering wait for the
+  // next render.
   renderLines.push(
+    'const $$d = this.__htmsDirty;',
+    'this.__htmsDirty = 0;',
     'if (this.__htmsBlock) {',
-    '  this.__htmsU0(this.__htmsBlock);',
+    '  if ($$d !== 0) this.__htmsU0(this.__htmsBlock, $$d);',
     '} else {',
     '  this.__htmsMount(this.__htmsRoot || this);',
     '}'
@@ -2047,6 +2163,7 @@ ${sections.join('')}${hasListeners ? input.sharedEventHelpers : ''}${mount}  con
     this.__htmsResolveUpdate = null;
     this.__htmsUpdatePromise = Promise.resolve();
     this.__htmsLastError = null;
+    this.__htmsDirty = -1;
     this.__htmsBlock = null;
 ${usesGlobals ? `    this.__htmsRenderCleanups = [];\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsTimers = new Map();\n` : ''}${delegated.length > 0 ? `    this.__htmsD = (event) => __htmsDispatch(this, event);\n` : ''}${input.shadowInit ? `${input.shadowInit}\n` : ''}${input.statePropertyInitialization ? `${input.statePropertyInitialization}\n` : ''}${input.inputInitialization ? `${input.inputInitialization}\n` : ''}  }
 
@@ -2086,7 +2203,8 @@ function renderDirective(
   counter: { value: number },
   indent: string,
   scopeVars: string[] = [],
-  componentInterpolationVars: string[] = []
+  componentInterpolationVars: string[] = [],
+  stateMasks?: (root: string) => number
 ): string[] {
   if (directive.kind === 'statement') {
     return directive.code
@@ -2198,7 +2316,7 @@ function renderDirective(
     if (directive.mode === 'init' || directive.mode === 'derive') {
       return [];
     }
-    return renderStateDirective(directive, indent);
+    return renderStateDirective(directive, indent, stateMasks);
   }
 
   return [];
@@ -2415,7 +2533,8 @@ function renderEventBody(
   eventRootVar: string,
   counter: { value: number },
   scopeVars: string[],
-  componentInterpolationVars: string[]
+  componentInterpolationVars: string[],
+  stateMasks?: (root: string) => number
 ): string[] {
   const bodyLines: string[] = [];
   if (directive.body.length > 0) {
@@ -2432,11 +2551,15 @@ function renderEventBody(
           counter,
           '',
           scopeVars,
-          componentInterpolationVars
+          componentInterpolationVars,
+          stateMasks
         )
       );
     }
   }
+  // With dependency masks the block compiler adds the render request from
+  // the body's writes; the reconciling renderer re-renders on any change.
+  if (stateMasks) return bodyLines;
   let hasStateChange = false;
   walkDirectives(directive.directives, (nested) => {
     if (nested.kind === 'state') {
@@ -2919,12 +3042,17 @@ function renderKeyedListDirective(
   return lines;
 }
 
+// `stateMasks` gives the class mask the state helpers report for a root;
+// without it (the reconciling renderer) they report every field.
 function renderStateDirective(
   directive: StateDirective,
-  indent: string
+  indent: string,
+  stateMasks?: (root: string) => number
 ): string[] {
   const lines: string[] = [];
   const pathLiteral = JSON.stringify(directive.path);
+  const [root] = directive.path;
+  const mask = stateMasks && root !== undefined ? `, ${stateMasks(root)}` : '';
 
   switch (directive.mode) {
     case 'init':
@@ -2944,17 +3072,17 @@ function renderStateDirective(
       break;
     case 'set':
       lines.push(
-        `${indent}this.__htmsSetState(${pathLiteral}, '${directive.op ?? '='}', () => (${directive.op === '++' || directive.op === '--' ? 'undefined' : (directive.value ?? 'undefined')}));`
+        `${indent}this.__htmsSetState(${pathLiteral}, '${directive.op ?? '='}', () => (${directive.op === '++' || directive.op === '--' ? 'undefined' : (directive.value ?? 'undefined')})${mask});`
       );
       break;
     case 'push':
       lines.push(
-        `${indent}this.__htmsPushState(${pathLiteral}, () => (${directive.value ?? 'undefined'}));`
+        `${indent}this.__htmsPushState(${pathLiteral}, () => (${directive.value ?? 'undefined'})${mask});`
       );
       break;
     case 'splice':
       lines.push(
-        `${indent}this.__htmsSpliceState(${pathLiteral}, () => (${directive.index ?? '0'}), () => (${directive.deleteCount ?? '0'}), () => [${(directive.values ?? []).join(', ')}]);`
+        `${indent}this.__htmsSpliceState(${pathLiteral}, () => (${directive.index ?? '0'}), () => (${directive.deleteCount ?? '0'}), () => [${(directive.values ?? []).join(', ')}]${mask});`
       );
       break;
   }
