@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './compile-cache';
 import { Command } from 'commander';
 import fs from 'fs';
 import http from 'http';
