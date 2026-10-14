@@ -15,16 +15,16 @@ Lower is better. Bold marks the best framework in each row; vanilla JS is the ha
 
 | operation | HTMS | Svelte 5 | Solid | Vue | React | Vanilla JS |
 | :-- | --: | --: | --: | --: | --: | --: |
-| create rows<br><sub>creating 1,000 rows</sub> | **30.9 ± 0.7** | 31.7 ± 0.9 | 31.6 ± 0.9 | 35.0 ± 1.3 | 37.2 ± 0.6 | 29.6 ± 0.4 |
-| replace all rows<br><sub>replacing all 1,000 rows</sub> | **33.4 ± 1.0** | 36.4 ± 1.3 | 35.7 ± 0.8 | 41.0 ± 1.8 | 43.0 ± 1.7 | 32.4 ± 1.5 |
-| partial update<br><sub>updating every 10th row of 1,000 (4x CPU slowdown)</sub> | **14.5 ± 1.5** | 15.6 ± 0.8 | 16.5 ± 1.2 | 17.2 ± 1.0 | 18.1 ± 1.2 | 13.3 ± 1.8 |
-| select row<br><sub>highlighting a selected row (4x CPU slowdown)</sub> | **3.7 ± 0.7** | 5.8 ± 0.5 | 4.1 ± 0.8 | 4.7 ± 0.7 | 5.2 ± 0.7 | 3.5 ± 0.7 |
-| swap rows<br><sub>swapping 2 rows of 1,000 (4x CPU slowdown)</sub> | 19.8 ± 2.5 | **18.5 ± 1.6** | 19.0 ± 2.0 | 19.9 ± 2.8 | 143 ± 5.6 | 17.5 ± 1.8 |
-| remove row<br><sub>removing one row (2x CPU slowdown)</sub> | **15.3 ± 1.2** | **15.3 ± 0.8** | **15.3 ± 1.0** | 18.0 ± 0.8 | 17.4 ± 1.3 | 15.0 ± 1.3 |
-| create many rows<br><sub>creating 10,000 rows</sub> | 443 ± 6.6 | 463 ± 14.3 | **433 ± 13.4** | 505 ± 16.6 | 687 ± 12.9 | 425 ± 26.6 |
-| append rows<br><sub>appending 1,000 rows to 1,000 (2x CPU slowdown)</sub> | **108 ± 4.9** | 109 ± 3.5 | 111 ± 5.8 | 118 ± 4.7 | 122 ± 4.7 | 107 ± 3.1 |
-| clear rows<br><sub>clearing 1,000 rows (4x CPU slowdown)</sub> | **20.2 ± 1.4** | 21.0 ± 1.1 | 20.6 ± 1.2 | 26.9 ± 1.6 | 31.0 ± 1.1 | 18.8 ± 1.2 |
-| **geometric mean vs vanilla** | **1.05×** | 1.14× | 1.09× | 1.23× | 1.66× | 1.00× |
+| create rows<br><sub>creating 1,000 rows</sub> | **32.1 ± 1.5** | 33.4 ± 1.4 | 33.0 ± 1.2 | 38.8 ± 1.4 | 39.5 ± 2.3 | 31.3 ± 1.4 |
+| replace all rows<br><sub>replacing all 1,000 rows</sub> | **36.6 ± 2.4** | 40.1 ± 3.9 | 40.3 ± 2.3 | 44.4 ± 2.1 | 49.0 ± 2.9 | 36.3 ± 3.1 |
+| partial update<br><sub>updating every 10th row of 1,000 (4x CPU slowdown)</sub> | 19.8 ± 2.0 | 20.3 ± 3.1 | **19.7 ± 2.7** | 22.4 ± 3.5 | 23.2 ± 3.5 | 16.9 ± 3.1 |
+| select row<br><sub>highlighting a selected row (4x CPU slowdown)</sub> | 4.6 ± 0.7 | 6.7 ± 1.5 | **4.3 ± 0.6** | 6.9 ± 1.6 | 6.1 ± 1.7 | 4.3 ± 0.7 |
+| swap rows<br><sub>swapping 2 rows of 1,000 (4x CPU slowdown)</sub> | **20.3 ± 1.8** | 21.0 ± 2.8 | 20.8 ± 2.0 | 24.4 ± 2.3 | 155 ± 5.9 | 19.3 ± 2.9 |
+| remove row<br><sub>removing one row (2x CPU slowdown)</sub> | 16.5 ± 1.3 | 17.0 ± 2.6 | **16.0 ± 2.5** | 18.6 ± 2.0 | 18.4 ± 1.6 | 16.2 ± 1.9 |
+| create many rows<br><sub>creating 10,000 rows</sub> | **335 ± 11.1** | 341 ± 14.2 | 341 ± 13.1 | 370 ± 7.9 | 510 ± 20.7 | 320 ± 12.3 |
+| append rows<br><sub>appending 1,000 rows to 1,000 (2x CPU slowdown)</sub> | **74.6 ± 4.6** | 77.4 ± 1.3 | 75.5 ± 1.6 | 82.3 ± 2.4 | 86.0 ± 2.5 | 74.3 ± 3.3 |
+| clear rows<br><sub>clearing 1,000 rows (4x CPU slowdown)</sub> | **14.1 ± 1.7** | 15.2 ± 1.4 | 15.8 ± 1.3 | 19.7 ± 1.0 | 21.9 ± 1.0 | 12.6 ± 1.0 |
+| **geometric mean vs vanilla** | **1.06×** | 1.14× | 1.08× | 1.28× | 1.67× | 1.00× |
 
 ![Time per operation relative to vanilla JS](speed.svg)
 
@@ -35,26 +35,26 @@ click and the paint. Layout and paint are excluded.
 
 | operation | HTMS | Svelte 5 | Solid | Vue | React | Vanilla JS |
 | :-- | --: | --: | --: | --: | --: | --: |
-| create rows | **2.0** | 3.4 | 3.0 | 6.2 | 8.8 | 1.8 |
-| replace all rows | **4.3** | 7.2 | 6.5 | 9.8 | 12.7 | 4.0 |
-| partial update | **0.6** | 1.9 | 1.4 | 2.8 | 3.7 | 0.2 |
-| select row | **0.6** | 2.4 | **0.6** | 1.5 | 1.8 | 0.1 |
-| swap rows | **0.5** | 1.6 | 1.2 | 1.9 | 24.5 | 0.4 |
-| remove row | **0.5** | 0.6 | **0.5** | 2.6 | 1.3 | 0.4 |
-| create many rows | **38.3** | 58.1 | 43.4 | 82.9 | 272 | 34.2 |
-| append rows | **6.2** | 10.7 | 9.1 | 16.9 | 22.4 | 5.6 |
-| clear rows | **16.4** | 18.1 | 18.5 | 24.4 | 28.1 | 15.2 |
+| create rows | **2.0** | 3.5 | 3.0 | 8.0 | 9.0 | 1.8 |
+| replace all rows | **4.9** | 7.6 | 7.0 | 9.8 | 14.1 | 4.7 |
+| partial update | **0.9** | 2.1 | 1.7 | 3.1 | 4.5 | 0.7 |
+| select row | **0.7** | 2.4 | **0.7** | 1.8 | 2.0 | 0.2 |
+| swap rows | **0.8** | 1.6 | 1.5 | 2.2 | 25.9 | 0.1 |
+| remove row | **0.5** | 0.7 | 0.6 | 2.5 | 1.3 | 0.5 |
+| create many rows | **28.6** | 44.4 | 37.2 | 61.7 | 201 | 25.1 |
+| append rows | **4.3** | 7.7 | 6.5 | 12.2 | 16.1 | 4.1 |
+| clear rows | **11.3** | 13.4 | 12.8 | 17.6 | 19.7 | 10.0 |
 
 ## Size, startup and memory
 
 |  | HTMS | Svelte 5 | Solid | Vue | React | Vanilla JS |
 | :-- | --: | --: | --: | --: | --: | --: |
-| minified | **12.0 KB** | 34.0 KB | 14.2 KB | 63.8 KB | 216.8 KB | 4.6 KB |
-| minified + gzip | **4.2 KB** | 13.3 KB | 5.7 KB | 24.7 KB | 67.0 KB | 1.6 KB |
-| minified + brotli | **3.8 KB** | 12.1 KB | 5.2 KB | 22.5 KB | 57.8 KB | 1.4 KB |
-| script time during page load | **10.4 ms** | 12.9 ms | 11.0 ms | 13.3 ms | 23.8 ms | 9.9 ms |
-| heap after load | **1.71 MB** | 1.80 MB | 1.73 MB | 1.94 MB | 2.17 MB | 1.70 MB |
-| heap with 1,000 rows | **2.32 MB** | 3.24 MB | 2.96 MB | 4.10 MB | 4.52 MB | 2.11 MB |
+| minified | **12.3 KB** | 34.0 KB | 14.2 KB | 63.8 KB | 216.8 KB | 4.6 KB |
+| minified + gzip | **4.5 KB** | 13.3 KB | 5.7 KB | 24.7 KB | 67.0 KB | 1.6 KB |
+| minified + brotli | **4.0 KB** | 12.1 KB | 5.2 KB | 22.5 KB | 57.8 KB | 1.4 KB |
+| script time during page load | **7.6 ms** | 9.4 ms | 8.0 ms | 9.7 ms | 17.1 ms | 7.2 ms |
+| heap after load | **1.72 MB** | 1.80 MB | 1.73 MB | 1.94 MB | 2.16 MB | 1.71 MB |
+| heap with 1,000 rows | **2.33 MB** | 3.24 MB | 2.96 MB | 4.10 MB | 4.52 MB | 2.11 MB |
 | heap after 5 replaces + clear | **1.99 MB** | 2.24 MB | 2.02 MB | 2.32 MB | 3.11 MB | 1.87 MB |
 
 ![Bundle size, startup and memory](footprint.svg)
