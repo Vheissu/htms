@@ -36,19 +36,23 @@ function isNode(value: unknown): value is AstNode {
   );
 }
 
-function childEntries(node: AstNode): Array<[string, AstNode]> {
-  const entries: Array<[string, AstNode]> = [];
-  for (const [key, value] of Object.entries(node)) {
-    if (key === 'loc' || key === 'range') continue;
+// Calls `visit` with every child node and the property holding it, without
+// building an entries array per node (this runs over every expression).
+function forEachChild(
+  node: AstNode,
+  visit: (key: string, child: AstNode) => void
+): void {
+  for (const key in node) {
+    if (key === 'type' || key === 'start' || key === 'end') continue;
+    const value: unknown = Reflect.get(node, key);
     if (Array.isArray(value)) {
       for (const item of value) {
-        if (isNode(item)) entries.push([key, item]);
+        if (isNode(item)) visit(key, item);
       }
     } else if (isNode(value)) {
-      entries.push([key, value]);
+      visit(key, value);
     }
   }
-  return entries;
 }
 
 function collectPatternNames(pattern: unknown, names: Set<string>): void {
@@ -104,7 +108,7 @@ function collectDeclaredNames(root: AstNode): Set<string> {
         collectPatternNames(node.param, names);
         break;
     }
-    for (const [, child] of childEntries(node)) visit(child);
+    forEachChild(node, (_key, child) => visit(child));
   };
   visit(root);
   return names;
@@ -165,9 +169,9 @@ function collectReplacements(
       inPlainFunction ||
       node.type === 'FunctionExpression' ||
       node.type === 'FunctionDeclaration';
-    for (const [childKey, child] of childEntries(node)) {
-      visit(child, node, childKey, nextInPlainFunction);
-    }
+    forEachChild(node, (childKey, child) =>
+      visit(child, node, childKey, nextInPlainFunction)
+    );
   };
 
   visit(root, null, '', false);
@@ -319,8 +323,7 @@ export function expressionReferences(code: string): Set<string> | null {
       names.add(node.name as string);
       return;
     }
-    for (const [childKey, child] of childEntries(node))
-      visit(child, node, childKey);
+    forEachChild(node, (childKey, child) => visit(child, node, childKey));
   };
   visit(root, null, '');
   return names;

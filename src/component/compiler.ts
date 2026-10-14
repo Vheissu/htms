@@ -515,25 +515,21 @@ function collectComponentFields(
   for (const input of metadata.inputs) {
     fields.add(input.propName);
   }
-  for (const [tagName, attribute] of FIELD_DECLARATIONS) {
-    for (const declaration of Array.from(
-      element.getElementsByTagName(tagName)
-    )) {
-      const value = declaration.getAttribute(attribute);
-      const match = value ? IDENTIFIER_ROOT.exec(value.trim()) : null;
-      if (match && match[1] !== 'this') {
-        fields.add(match[1]);
-      }
+  const addRoot = (value: string | null): void => {
+    const match = value ? IDENTIFIER_ROOT.exec(value.trim()) : null;
+    if (match && match[1] !== 'this') {
+      fields.add(match[1]);
     }
-  }
-  for (const candidate of Array.from(element.getElementsByTagName('*'))) {
-    for (const attr of Array.from(candidate.attributes)) {
-      if (attr.name.startsWith('bind:')) {
-        const match = IDENTIFIER_ROOT.exec(attr.value.trim());
-        if (match && match[1] !== 'this') {
-          fields.add(match[1]);
-        }
-      }
+  };
+  // One walk over the component: declaring tags contribute the declared
+  // path's root, and bind: attributes on any element contribute theirs.
+  for (const node of element.descendants()) {
+    if (!(node instanceof SourceElement)) continue;
+    for (const [tagName, attribute] of FIELD_DECLARATIONS) {
+      if (node.localName === tagName) addRoot(node.getAttribute(attribute));
+    }
+    for (const attr of node.attrs) {
+      if (attr.name.startsWith('bind:')) addRoot(attr.value);
     }
   }
   return fields;
