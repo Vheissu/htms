@@ -1,5 +1,5 @@
 import { CompilerError, CompilerWarning } from './types';
-import { SourceNode } from './source-dom';
+import { SourceElement, SourceNode } from './source-dom';
 
 export interface SourceLocation {
   line: number;
@@ -8,6 +8,7 @@ export interface SourceLocation {
 
 type Diagnostic = CompilerError | CompilerWarning;
 
+// Locations set explicitly, and those already read from a document.
 const nodeLocations = new WeakMap<SourceNode, SourceLocation>();
 
 export function registerNodeLocation(
@@ -26,7 +27,7 @@ export function addNodeLocation<T extends Diagnostic>(
     return diagnostic;
   }
 
-  const location = nodeLocations.get(node);
+  const location = getNodeLocation(node);
   if (!location) {
     return diagnostic;
   }
@@ -41,8 +42,16 @@ export function addNodeLocation<T extends Diagnostic>(
   return diagnostic;
 }
 
+// Where a parsed element starts in its source. Elements parsed without
+// locations are located through their document on first request.
 export function getNodeLocation(node: SourceNode): SourceLocation | undefined {
-  return nodeLocations.get(node);
+  const known = nodeLocations.get(node);
+  if (known || !(node instanceof SourceElement)) return known;
+  const parsed = node.ownerDocument?.locationOf(node);
+  if (!parsed) return undefined;
+  const location = { line: parsed.startLine, column: parsed.startCol };
+  nodeLocations.set(node, location);
+  return location;
 }
 
 export function addNodeLocations<T extends Diagnostic>(

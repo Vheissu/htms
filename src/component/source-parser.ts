@@ -1,9 +1,7 @@
-import { registerNodeLocation } from '../diagnostics';
 import {
   HTML_NAMESPACE,
   parseDocument,
   SourceDocument,
-  SourceElement,
   SourceParentNode,
 } from '../source-dom';
 
@@ -94,6 +92,7 @@ function restoreDirectives(
       }
       if (child.content) directive.appendChild(child.content);
       directive.sourceCodeLocation = child.sourceCodeLocation;
+      directive.ordinal = child.ordinal;
       child.replaceWith(directive);
       restoreDirectives(document, directive);
     } else {
@@ -102,19 +101,28 @@ function restoreDirectives(
   }
 }
 
-export function parseComponentSource(html: string): SourceDocument {
+function parseSource(html: string, locations: boolean): SourceDocument {
   const protect = TABLE_MARKUP.test(html);
   const document = parseDocument(protect ? protectDirectives(html) : html, {
-    locations: true,
+    locations,
   });
   if (protect && document.body) {
     restoreDirectives(document, document.body);
   }
-  for (const node of document.descendants()) {
-    const location = node.sourceCodeLocation;
-    if (node instanceof SourceElement && location) {
-      registerNodeLocation(node, location.startLine, location.startCol);
-    }
+  return document;
+}
+
+// Directives that name generated identifiers after their source position,
+// so every compile of a source containing them reads locations. Such
+// sources are parsed with locations up front; all others parse without
+// (half the parse time) and locate elements only for diagnostics.
+const LOCATION_NAMED_TAGS = /<(?:append|effect|fetch|keyedlist)[\s/>]/i;
+
+export function parseComponentSource(html: string): SourceDocument {
+  if (LOCATION_NAMED_TAGS.test(html)) {
+    return parseSource(html, true);
   }
+  const document = parseSource(html, false);
+  document.locationSource = (): SourceDocument => parseSource(html, true);
   return document;
 }

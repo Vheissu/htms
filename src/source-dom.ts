@@ -8,7 +8,16 @@ import {
   type TreeAdapter,
   type TreeAdapterTypeMap,
 } from 'parse5';
-import { is, selectAll, selectOne, type Options } from 'css-select';
+import type { Options } from 'css-select';
+
+// css-select (with its domutils dependency) takes ~30ms to load and most
+// compiles never run a selector, so it is required on first use.
+type CssSelect = typeof import('css-select');
+let cssSelect: CssSelect | null = null;
+function selectors(): CssSelect {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return (cssSelect ??= require('css-select') as CssSelect);
+}
 
 // The compiler's view of an HTMS source file: a plain node tree built by
 // parse5 (the parser behind jsdom and the browsers' HTML algorithm) with
@@ -266,7 +275,7 @@ export abstract class SourceParentNode extends SourceNode {
   // css-select tests the given nodes and their descendants, so the search
   // starts from the children to exclude this node, as in the DOM.
   querySelectorAll(selector: string): SourceElement[] {
-    return selectAll<SourceNode, SourceElement>(
+    return selectors().selectAll<SourceNode, SourceElement>(
       selector,
       this.childNodes,
       SELECT_OPTIONS
@@ -274,7 +283,7 @@ export abstract class SourceParentNode extends SourceNode {
   }
 
   querySelector(selector: string): SourceElement | null {
-    return selectOne<SourceNode, SourceElement>(
+    return selectors().selectOne<SourceNode, SourceElement>(
       selector,
       this.childNodes,
       SELECT_OPTIONS
@@ -373,6 +382,11 @@ export class SourceElement extends SourceParentNode {
   readonly tagName: string;
   // Template contents; null for every other element.
   content: SourceDocumentFragment | null = null;
+  // Creation order within the parse that built this element, or -1 for
+  // elements made afterwards. Parsing the same source again creates the
+  // same elements in the same order, which is how a document finds the
+  // location of an element parsed without locations (see `locationOf`).
+  ordinal = -1;
 
   constructor(
     readonly localName: string,
@@ -483,7 +497,11 @@ export class SourceElement extends SourceParentNode {
   }
 
   matches(selector: string): boolean {
-    return is<SourceNode, SourceElement>(this, selector, SELECT_OPTIONS);
+    return selectors().is<SourceNode, SourceElement>(
+      this,
+      selector,
+      SELECT_OPTIONS
+    );
   }
 
   closest(selector: string): SourceElement | null {
@@ -693,6 +711,35 @@ export class SourceDocument extends SourceParentNode {
     if (deep) this.cloneChildrenInto(clone);
     return clone;
   }
+
+  // Set by a caller that parsed this document without locations (location
+  // tracking doubles parse time) and can parse the same source again with
+  // them, should a diagnostic need one.
+  locationSource: (() => SourceDocument) | null = null;
+  private locationsByOrdinal: Map<number, Token.ElementLocation> | null = null;
+
+  // The source location of an element parsed into this document, read from
+  // the element itself or, lazily, from a located parse of the same source.
+  locationOf(element: SourceElement): Token.ElementLocation | null {
+    if (element.sourceCodeLocation) return element.sourceCodeLocation;
+    if (element.ordinal < 0 || !this.locationSource) return null;
+    if (!this.locationsByOrdinal) {
+      const locations = new Map<number, Token.ElementLocation>();
+      const visit = (parent: SourceParentNode): void => {
+        for (const child of parent.childNodes) {
+          if (!(child instanceof SourceElement)) continue;
+          if (child.ordinal >= 0 && child.sourceCodeLocation) {
+            locations.set(child.ordinal, child.sourceCodeLocation);
+          }
+          visit(child);
+          if (child.content) visit(child.content);
+        }
+      };
+      visit(this.locationSource());
+      this.locationsByOrdinal = locations;
+    }
+    return this.locationsByOrdinal.get(element.ordinal) ?? null;
+  }
 }
 
 // parse5 builds and serializes the tree through this adapter. Nodes without
@@ -711,6 +758,9 @@ type SourceTreeMap = TreeAdapterTypeMap<
 >;
 
 let currentDocument: SourceDocument | null = null;
+// Next element ordinal while a document is parsed; -1 outside parseDocument
+// (fragments parsed into an existing tree get no ordinal).
+let nextOrdinal = -1;
 
 function parsingDocument(): SourceDocument {
   if (!currentDocument) throw new Error('No document is being parsed');
@@ -726,7 +776,17 @@ const TREE_ADAPTER: TreeAdapter<SourceTreeMap> = {
     return new SourceDocumentFragment(parsingDocument());
   },
   createElement(tagName, namespaceURI, attrs) {
-    return new SourceElement(tagName, namespaceURI, attrs, parsingDocument());
+    const element = new SourceElement(
+      tagName,
+      namespaceURI,
+      attrs,
+      parsingDocument()
+    );
+    if (nextOrdinal >= 0) {
+      element.ordinal = nextOrdinal;
+      nextOrdinal += 1;
+    }
+    return element;
   },
   createCommentNode(data) {
     return new SourceComment(data, parsingDocument());
@@ -909,8 +969,13 @@ export function parseDocument(
   source: string,
   options: ParseDocumentOptions = {}
 ): SourceDocument {
-  return parse<SourceTreeMap>(source, {
-    treeAdapter: TREE_ADAPTER,
-    sourceCodeLocationInfo: options.locations === true,
-  });
+  nextOrdinal = 0;
+  try {
+    return parse<SourceTreeMap>(source, {
+      treeAdapter: TREE_ADAPTER,
+      sourceCodeLocationInfo: options.locations === true,
+    });
+  } finally {
+    nextOrdinal = -1;
+  }
 }

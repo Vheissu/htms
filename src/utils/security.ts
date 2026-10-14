@@ -22,6 +22,25 @@ const DANGEROUS_PATTERNS = [
   /(?:^|[\s<])on(?:abort|auxclick|blur|cancel|click|close|contextmenu|copy|cut|dblclick|drag(?:start|end|enter|leave|over|drop)?|error|focus(?:in|out)?|input|key(?:down|press|up)|load|mouse(?:down|up|move|over|out|enter|leave|wheel)|pointer(?:down|up|move|over|out|enter|leave|cancel)|reset|resize|scroll|select|submit|touch(?:start|end|move|cancel)|wheel)\s*=/i,
 ];
 
+// One case-insensitive pass that matches whenever any pattern above could,
+// so content with nothing suspicious (nearly all of it) is cleared with a
+// single scan instead of one per pattern.
+// eslint-disable-next-line security/detect-non-literal-regexp
+const ANY_DANGEROUS_PATTERN = new RegExp(
+  DANGEROUS_PATTERNS.map((pattern) => `(?:${pattern.source})`).join('|'),
+  'i'
+);
+
+// Attributes whose value is a URL and may carry a script scheme.
+const URL_ATTRIBUTES = new Set([
+  'action',
+  'formaction',
+  'href',
+  'poster',
+  'src',
+  'xlink:href',
+]);
+
 // Known DOM event-handler content attributes (onclick, onload, ...).
 // Arbitrary `on*` attribute names are inert in HTML — only these actually
 // execute, and names like `once` must not false-positive.
@@ -295,6 +314,7 @@ export class SecurityValidator {
 
   static validateContent(content: string): CompilerError[] {
     const errors: CompilerError[] = [];
+    if (!ANY_DANGEROUS_PATTERN.test(content)) return errors;
 
     for (const pattern of DANGEROUS_PATTERNS) {
       if (pattern.test(content)) {
@@ -411,15 +431,7 @@ export class SecurityValidator {
       });
     }
 
-    const urlAttributes = new Set([
-      'action',
-      'formaction',
-      'href',
-      'poster',
-      'src',
-      'xlink:href',
-    ]);
-    if (urlAttributes.has(normalizedName)) {
+    if (URL_ATTRIBUTES.has(normalizedName)) {
       const normalizedValue = Array.from(value)
         .filter((character) => character.charCodeAt(0) > 32)
         .join('')

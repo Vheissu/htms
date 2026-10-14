@@ -115,37 +115,30 @@ function formatChunk(
   // Ranges are all escodegen needs to place comments; line/column
   // locations would only add an object per node.
   const comments: acorn.Comment[] = [];
-  const tokens: acorn.Token[] = [];
   const ast = acorn.parse(source, {
     ecmaVersion: 'latest',
     sourceType,
     ranges: true,
     onComment: comments,
-    onToken: tokens,
-  }) as acorn.Program & { comments?: unknown[]; tokens?: unknown[] };
+  }) as acorn.Program;
 
   const errors = validateASTSecurity(ast);
 
-  // Attach comments in the esprima-compatible shape escodegen expects
-  const esprimaComments = comments.map((comment) => ({
-    type: comment.type === 'Line' ? 'Line' : 'Block',
-    value: comment.value,
-    range: comment.range,
-  }));
-  const esprimaTokens = tokens.map((token) => ({
-    type: 'Punctuator',
-    value: source.slice(token.start, token.end),
-    range: token.range,
-  }));
-  ast.comments = esprimaComments;
-  ast.tokens = esprimaTokens;
-  const astWithComments = escodegen.attachComments(
-    ast,
-    esprimaComments,
-    esprimaTokens
-  );
+  if (comments.length > 0) {
+    // Attach comments in the esprima-compatible shape escodegen expects
+    const esprimaComments = comments.map((comment) => ({
+      type: comment.type === 'Line' ? 'Line' : 'Block',
+      value: comment.value,
+      range: comment.range as [number, number],
+    }));
+    escodegen.attachComments(
+      ast,
+      esprimaComments,
+      commentBoundaryTokens(source, comments)
+    );
+  }
 
-  const code = escodegen.generate(astWithComments, {
+  const code = escodegen.generate(ast, {
     comment: true,
     format: {
       preserveBlankLines: true,
@@ -155,6 +148,82 @@ function formatChunk(
     },
   });
   return { code, errors };
+}
+
+// escodegen places a comment by the tokens around it: the end of the token
+// before and the start of the token after (`extendedRange`). Only comments
+// and whitespace separate a comment from those tokens, so the boundaries
+// can be read off the source without having acorn record every token.
+// Positions become zero-width stand-in tokens, which is all attachComments
+// reads from the token list.
+function commentBoundaryTokens(
+  source: string,
+  comments: readonly acorn.Comment[]
+): Array<{ type: string; value: string; range: [number, number] }> {
+  const positions = new Set<number>();
+  for (let index = 0; index < comments.length; index += 1) {
+    // Backwards over whitespace and earlier comments to a token's end.
+    let position = (comments.at(index) as acorn.Comment).start;
+    let previous = index - 1;
+    for (;;) {
+      while (position > 0 && isJsWhitespace(source.charCodeAt(position - 1))) {
+        position -= 1;
+      }
+      const before = previous >= 0 ? comments.at(previous) : undefined;
+      if (before && before.end === position) {
+        position = before.start;
+        previous -= 1;
+        continue;
+      }
+      break;
+    }
+    if (position > 0) positions.add(position);
+
+    // Forwards over whitespace and later comments to a token's start; the
+    // end of the source stands for acorn's end-of-file token.
+    position = (comments.at(index) as acorn.Comment).end;
+    let next = index + 1;
+    for (;;) {
+      while (
+        position < source.length &&
+        isJsWhitespace(source.charCodeAt(position))
+      ) {
+        position += 1;
+      }
+      const after = next < comments.length ? comments.at(next) : undefined;
+      if (after && after.start === position) {
+        position = after.end;
+        next += 1;
+        continue;
+      }
+      break;
+    }
+    positions.add(position);
+  }
+  return [...positions]
+    .sort((left, right) => left - right)
+    .map((position) => ({
+      type: 'Punctuator',
+      value: '',
+      range: [position, position] as [number, number],
+    }));
+}
+
+// The characters acorn skips between tokens (the same set as /\s/).
+function isJsWhitespace(code: number): boolean {
+  if (code <= 32) return code === 32 || (code >= 9 && code <= 13);
+  if (code < 160) return false;
+  return (
+    code === 160 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
 }
 
 // The runtime preludes are the same text in every compile, so their parse,

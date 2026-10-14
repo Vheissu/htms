@@ -11,14 +11,12 @@ import * as acorn from 'acorn';
 import { scopeExpression, scopeStatements } from './scope';
 import {
   BOOLEAN_ATTRIBUTES,
-  RAW_TEXT_ELEMENTS,
   URL_ATTRIBUTES,
-  VOID_ELEMENTS,
-  escapeHtml,
   renderEventPreamble,
   resolveWholeAttributeInterpolation,
   serializeTextValue,
 } from './template-serializer';
+import { isPlainTemplate, templateNodeHtml } from './template-shape';
 import {
   SourceComment,
   SourceDocument,
@@ -278,8 +276,6 @@ const GLOBAL_TARGETS = new Map([
   [':host', 'this'],
   ['host', 'this'],
 ]);
-
-const WHITESPACE_TAGS = new Set(['pre', 'textarea', 'listing']);
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1462,48 +1458,17 @@ class BlockCompiler {
   }
 
   private templateHtml(block: BlockPlan): string {
-    return block.roots.map((node) => this.nodeHtml(node, null)).join('');
-  }
-
-  private nodeHtml(node: PNode, parent: PElement | null): string {
-    if (node.kind === 'comment') {
-      return `<!--${node.data}-->`;
-    }
-    if (node.kind === 'text') {
-      if (node.dynamic) return ' ';
-      if (parent && parent.ns === 'html' && RAW_TEXT_ELEMENTS.has(parent.tag)) {
-        return node.text.replace(/<\/(style|script)/gi, '<\\/$1');
-      }
-      return escapeHtml(node.text);
-    }
-    const attrs = node.attrs
-      .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
-      .join('');
-    if (node.ns === 'html' && VOID_ELEMENTS.has(node.tag)) {
-      return `<${node.tag}${attrs}>`;
-    }
-    let children = node.children
-      .map((child) => this.nodeHtml(child, node))
-      .join('');
-    const first = node.children[0];
-    if (
-      node.ns === 'html' &&
-      WHITESPACE_TAGS.has(node.tag) &&
-      first?.kind === 'text' &&
-      !first.dynamic &&
-      first.text.startsWith('\n')
-    ) {
-      // The parser drops one leading newline in these elements.
-      children = `\n${children}`;
-    }
-    return `<${node.tag}${attrs}>${children}</${node.tag}>`;
+    return block.roots.map((node) => templateNodeHtml(node, null)).join('');
   }
 
   // Parses the generated template and checks it produces exactly the
   // planned node structure. HTML parsing can move nodes (a <div> inside a
   // <p>, text inside a <table>); such templates use the legacy renderer.
+  // Templates built only from markup the parser never restructures skip
+  // the parse.
   private validateTemplate(block: BlockPlan): void {
     const ns = this.templateNamespace(block);
+    if (ns === 'html' && isPlainTemplate(block.roots)) return;
     const template = this.doc.createElement('template');
     const html = this.templateHtml(block);
     template.innerHTML =

@@ -1908,18 +1908,20 @@ function finalizeStateStorage(classCode: string): string {
   );
 }
 
+const MEMBER_START = /^ {2}(?:static |get |set |async )*([$\w]+)\(/gm;
+const HELPER_WORD = /(?<!\w)__htms\w*/g;
+
 function pruneUnusedHelpers(classCode: string): string {
-  const lines = classCode.split('\n');
-  const starts: Array<{ line: number; name: string }> = [];
-  lines.forEach((line, index) => {
-    const match = /^ {2}(?:static |get |set |async )*([$\w]+)\(/.exec(line);
-    if (match) starts.push({ line: index, name: match[1] });
-  });
-  const chunks = starts.map((start, index) => ({
-    name: start.name,
-    from: start.line,
-    to: index + 1 < starts.length ? starts[index + 1].line : lines.length - 1,
-  }));
+  // Each member runs from the start of its first line to the start of the
+  // next member's; the last one stops before the class's closing line.
+  const chunks: Array<{ name: string; from: number; to: number }> = [];
+  for (const match of classCode.matchAll(MEMBER_START)) {
+    const previous = chunks.at(-1);
+    if (previous) previous.to = match.index;
+    chunks.push({ name: match[1], from: match.index, to: 0 });
+  }
+  const last = chunks.at(-1);
+  if (last) last.to = classCode.lastIndexOf('\n') + 1;
   // A helper is kept when its name appears as a whole word in code that is
   // itself kept. Words are collected once per kept chunk instead of
   // re-scanning the growing text with a regular expression per helper.
@@ -1927,11 +1929,14 @@ function pruneUnusedHelpers(classCode: string): string {
   const words = new Set<string>();
   // Only `__htms…` helpers are candidates, so only those words are kept.
   const reach = (from: number, to: number): void => {
-    for (const line of lines.slice(from, to)) {
-      for (const word of line.match(/(?<!\w)__htms\w*/g) ?? []) words.add(word);
+    HELPER_WORD.lastIndex = from;
+    let match = HELPER_WORD.exec(classCode);
+    while (match && match.index < to) {
+      words.add(match[0]);
+      match = HELPER_WORD.exec(classCode);
     }
   };
-  reach(0, chunks[0]?.from ?? lines.length);
+  reach(0, chunks[0]?.from ?? classCode.length);
   chunks.forEach((chunk, index) => {
     if (!chunk.name.startsWith('__htms')) {
       kept.add(index);
@@ -1950,12 +1955,14 @@ function pruneUnusedHelpers(classCode: string): string {
       }
     });
   }
-  const removed = new Set<number>();
+  let output = '';
+  let cursor = 0;
   chunks.forEach((chunk, index) => {
     if (kept.has(index)) return;
-    for (let line = chunk.from; line < chunk.to; line += 1) removed.add(line);
+    output += classCode.slice(cursor, chunk.from);
+    cursor = chunk.to;
   });
-  return lines.filter((_, index) => !removed.has(index)).join('\n');
+  return output + classCode.slice(cursor);
 }
 
 function buildBlockComponentClass(input: BlockClassInput): string {
