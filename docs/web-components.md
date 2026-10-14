@@ -91,7 +91,10 @@ badge.labelText = 'Synced';
 - Prop and top-level state writes are batched in a microtask. Several synchronous writes produce one render.
 - Generated elements expose `requestUpdate()` for in-place nested changes and an `updateComplete` promise for code that needs the updated DOM.
 - Renders preserve focus, selection, scroll position, and unfinished values in uncontrolled form elements. Controlled fields still follow their bound component state.
-- `render()` builds a detached fragment, applies control-flow transformations (`REPEAT`, `IF/ELSE`, etc.), and reconciles it with the current DOM. Compatible elements keep their identity; keyed children match by `data-key` when their order changes.
+- The first `render()` clones the component's static template and records the nodes that can change. Later renders call the generated update method, which re-evaluates each interpolation, binding and directive value and writes to the DOM only when the value differs from the last render.
+- Loops (`REPEAT`, `KEYEDLIST`) and branches (`IF/ELSE`, `SWITCH`) are nested blocks with their own templates. Unkeyed loops reuse rows by position; keyed loops (`key="row.id"`) match rows by key and move them with a longest-increasing-subsequence pass. `KEYEDLIST` rows also carry their key as `data-key`.
+- Selector directives (`<event target>`, `<bind>`, `<setattr>`, `<toggle>`, `<class>`, `<style selector>`, `<append>`) are resolved against the template at compile time. A component whose selectors could match markup created by a loop or branch, or that uses `<while>`, falls back to the reconciling renderer: `render()` builds a detached fragment and reconciles it with the current DOM, matching keyed children by `data-key`.
+- Bubbling events (`click`, `input`, `change`, `keydown` and similar) use one listener per type on the render root. `event.currentTarget` is the element the handler was declared on, and `.stop` stops handlers on enclosing elements.
 - A failed render is stored in `renderError` and reported through a cancelable `htms-error` event that bubbles across the shadow boundary.
 
 ### Events & Handlers
@@ -104,7 +107,7 @@ badge.labelText = 'Synced';
 
 ## Control Flow Translation
 
-- `<repeat>` compiles to loops that rebuild fragments under the owning element during `render()`.
+- `<repeat>` compiles to a list block under the owning element. Rows are created once and updated in place; `key` makes reorders move rows instead of rewriting them.
 - `<keyedlist>` targets a container inside the component root, renders item templates with item/index interpolation, preserves DOM nodes for matching keys across updates, and scopes item events to each generated fragment.
 - `<if>` / `<else>` generate conditional blocks that toggle DOM nodes within the shadow root (no global document access).
 - `<print type="log">` and similar imperative tags run within component methods, with console access sandboxed via `SecurityValidator`.

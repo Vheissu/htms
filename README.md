@@ -24,6 +24,41 @@ The same handler can be written as tags, which is handy when it grows:
 
 No `eval`, no `Function` constructor and no private browser runtime to learn.
 
+## Performance
+
+HTMS compiles templates ahead of time into code that updates exactly the DOM nodes whose values changed, with no virtual DOM. The only runtime is a set of small helpers emitted into the compiled output. The [`bench/`](bench/README.md) suite runs the [js-framework-benchmark](https://github.com/krausest/js-framework-benchmark) operations against that project's official Svelte 5, Solid, Vue, React and vanilla JS implementations, all built by the same Vite production build and measured in Chromium from click to paint:
+
+<!-- bench:start -->
+![Overall time relative to vanilla JS for HTMS, Svelte 5, Solid, Vue, React](bench/results/overall.svg)
+
+![Time per operation relative to vanilla JS](bench/results/speed.svg)
+
+![Bundle size, startup and memory](bench/results/footprint.svg)
+
+|  | **HTMS** | Svelte 5 | Solid | Vue | React | Vanilla JS |
+| :-- | --: | --: | --: | --: | --: | --: |
+| **overall time vs vanilla JS** | **1.05×** | 1.14× | 1.09× | 1.23× | 1.66× | 1.00× |
+| bundle size (min + gzip) | **4.2 KB** | 13.3 KB | 5.7 KB | 24.7 KB | 67.0 KB | 1.6 KB |
+| script time during page load | **10.4 ms** | 12.9 ms | 11.0 ms | 13.3 ms | 23.8 ms | 9.9 ms |
+| JS heap after load | **1.71 MB** | 1.80 MB | 1.73 MB | 1.94 MB | 2.17 MB | 1.70 MB |
+| JS heap with 1,000 rows | **2.32 MB** | 3.24 MB | 2.96 MB | 4.10 MB | 4.52 MB | 2.11 MB |
+| create rows | **30.9 ms** | 31.7 ms | 31.6 ms | 35.0 ms | 37.2 ms | 29.6 ms |
+| replace all rows | **33.4 ms** | 36.4 ms | 35.7 ms | 41.0 ms | 43.0 ms | 32.4 ms |
+| partial update (4× CPU slowdown) | **14.5 ms** | 15.6 ms | 16.5 ms | 17.2 ms | 18.1 ms | 13.3 ms |
+| select row (4× CPU slowdown) | **3.7 ms** | 5.8 ms | 4.1 ms | 4.7 ms | 5.2 ms | 3.5 ms |
+| swap rows (4× CPU slowdown) | 19.8 ms | **18.5 ms** | 19.0 ms | 19.9 ms | 143 ms | 17.5 ms |
+| remove row (2× CPU slowdown) | **15.3 ms** | **15.3 ms** | **15.3 ms** | 18.0 ms | 17.4 ms | 15.0 ms |
+| create many rows | 443 ms | 463 ms | **433 ms** | 505 ms | 687 ms | 425 ms |
+| append rows (2× CPU slowdown) | **108 ms** | 109 ms | 111 ms | 118 ms | 122 ms | 107 ms |
+| clear rows (4× CPU slowdown) | **20.2 ms** | 21.0 ms | 20.6 ms | 26.9 ms | 31.0 ms | 18.8 ms |
+
+HTMS has the lowest overall time of the frameworks tested (1.05× vanilla JS), and it spends the least time in JavaScript of any framework on 9 of 9 operations ([scripting table](bench/results/RESULTS.md#scripting-time-ms-median)). Rows where HTMS matches or beats each framework: Svelte 5 13 of 14, Solid 12 of 14, Vue 14 of 14, React 14 of 14.
+Bold marks the best framework in each row; vanilla JS is the hand-written reference. Chromium 141.0.7390.37 on Apple M2 Max,
+median of 15 runs, measured 2026-10-14. Full tables are in
+[bench/results/RESULTS.md](bench/results/RESULTS.md); the method and caveats are in
+[bench/README.md](bench/README.md).
+<!-- bench:end -->
+
 ## Try it from this repo
 
 The current toolchain requires Node 20.19 or newer.
@@ -52,7 +87,7 @@ or run `npm run demo:serve` and open `http://localhost:5173/demos/`.
 - `htms watch <file>` recompiles without starting a server.
 - `htms render <file>` produces server-rendered Declarative Shadow DOM.
 
-Run `htms <command> --help` for every option. If a file declares several components, pass `--tag <name>` to `dev` or `render`.
+Run `htms <command> --help` for every option. If a file declares several components, pass `--tag <name>` to `dev` or `render`. `compile`, `watch` and `dev` accept `--renderer legacy` to use the reconciling renderer instead of fine-grained blocks.
 
 ## Expressions
 
@@ -162,7 +197,19 @@ await counter.updateComplete;
 
 The DOM now contains the state for `3`, after one render. Assigning a new value to a field declared with `<var>` schedules an update. JavaScript can't observe an in-place nested mutation such as `counter.items.push(value)`, so call `counter.requestUpdate()` after that kind of change. HTMS `<push>` and `<splice>` do this automatically.
 
-Reactive renders reconcile a detached fragment with the current DOM. Compatible non-keyed elements keep their identity, while keyed children can move without being recreated. This also preserves keyboard focus, text selection, scroll position, and unfinished values in uncontrolled form fields. Fields managed by `<bind>`, `<model>`, or `<setprop>` continue to use their component state as the source of truth.
+The compiler turns markup into blocks: a static template cloned once per instance, references to the nodes that can change, and an update method that re-evaluates each `{expression}` and binding and writes to the DOM only when its value changed. An update never rebuilds or diffs markup, so nodes keep their identity, keyboard focus, text selection, scroll position, and unfinished values in uncontrolled form fields. Fields managed by `bind:value`, `<bind>`, `<model>`, or `<setprop>` use their component state as the source of truth.
+
+Lists reuse rows by position, or by identity when the loop has a `key`:
+
+```html
+<repeat variable="todos" item="todo" key="todo.id">
+  <li class:done="todo.done">{todo.text}</li>
+</repeat>
+```
+
+Keyed rows are matched by key and moved with as few DOM moves as possible (a longest-increasing-subsequence pass), so reordering, inserting and removing rows never recreates the rows that stay. A row that still holds the same item object keeps its place without evaluating the key, and a render that changed no order allocates nothing for the list. Event handlers in a component share one listener per event type on the component root.
+
+A component that needs a feature the block renderer does not handle (`<while>`, or a directive selector that could match markup a loop creates) is compiled with the previous renderer, which builds a fragment on each render and reconciles it with the DOM. Pass `renderer: 'legacy'` to `parseHTML` to choose that renderer explicitly.
 
 If a render fails, the component stores the error in `renderError` and emits a bubbling, composed `htms-error` event. Call `event.preventDefault()` after handling the error to suppress the default console report.
 
@@ -188,18 +235,20 @@ htms render component.html \
   --output component.ssr.html
 ```
 
-`<effect>` and `<fetch>` stay dormant on the server. In the browser, load the compiled component bundle and call `hydrate()` from the package. The first client render adopts and reconciles the server tree, including a fallback for parsers that leave Declarative Shadow DOM as a template.
+`<effect>` and `<fetch>` stay dormant on the server. In the browser, load the compiled component bundle and call `hydrate()` from the package. The first client render adopts the server tree in place, including a fallback for parsers that leave Declarative Shadow DOM as a template. Loop and branch content is marked with `<!--[-->` and `<!--]-->` comments in the server output and re-created on hydration; the surrounding markup keeps its server-rendered nodes.
 
 ## How It Works (roughly)
 
 - Parses HTMS markup with JSDOM, converts nodes to directives via tag handlers, resolves component fields in expressions, validates the output with Acorn, then emits JavaScript through Escodegen.
 - A security pass rejects dangerous constructs (`eval`, inline handlers, raw `innerHTML`, path traversal, …).
-- In component mode, standard elements become cached template fragments, while control/state tags compile into instructions that mutate the component instance and re-render the shadow DOM.
+- In component mode, standard elements become cached `<template>` fragments that each instance clones. Control and state tags compile into block methods that update only the nodes whose values changed.
+- Directive selectors such as `<event target="#save">` and `<bind selector="#count">` are resolved at compile time against the template, so they cost nothing at runtime.
+- Directives work inside tables: `<tbody><repeat ...><tr>…</tr></repeat></tbody>` keeps the rows where they are written instead of letting the HTML parser move them out of the table.
 - Component text and attributes can interpolate reactive state and props with `{count}`, `{user.name}`, and `{labelText}`.
 - Components compose through normal custom elements and browser slots. Dynamic SVG and MathML nodes keep their namespaces.
 - Component-owned runtime effects are disposed in `disconnectedCallback`, so cleanup handlers and fetch aborts run when elements leave the page.
 - Effect and fetch helpers share one runtime bootstrap per generated bundle. Components that do not use runtime-backed directives do not include it.
-- Server and client rendering use the same component compiler and reconciliation code.
+- Server and client rendering use the same component compiler and generated code.
 
 ## Tag glossary
 
@@ -211,7 +260,7 @@ htms render component.html \
   - `<push array="state.list" expr="document.getElementById('txt').value" />` — push; notifies bindings.
   - `<splice array="state.list" index="0" delete="1" values='["New"]' />` — remove/insert; notifies bindings.
 - Control Flow
-  - `<repeat variable="items" item="it" index="i">…</repeat>` or `<repeat count="3" index="n">…</repeat>` (`count` may be an expression such as `count="rating"`) — `item` names the loop variable (default `item`); inside, use `{it}`, property paths like `{it.name}`, and the optional index token (`{i}` here) in text or attribute values.
+  - `<repeat variable="items" item="it" index="i">…</repeat>` or `<repeat count="3" index="n">…</repeat>` (`count` may be an expression such as `count="rating"`) — `item` names the loop variable (default `item`); inside, use `{it}`, property paths like `{it.name}`, and the optional index token (`{i}` here) in text or attribute values. Add `key="it.id"` to keep each row's DOM nodes when the array is reordered.
   - `<if condition="flag">…</if><else-if condition="other">…</else-if><else>…</else>` — nested tags allowed.
   - `<while condition="state.count < 3" max="1000">…</while>` — guarded loop; `max` prevents infinite loops.
   - `<switch variable="day">…</switch>` or `<switch expr="this.day">…</switch>` — nested tags allowed.
