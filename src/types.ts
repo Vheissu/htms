@@ -1,4 +1,5 @@
 import type { DirectiveNode, TemplateNode } from './component/ir';
+import { SourceElement } from './source-dom';
 
 export interface ParseOptions {
   maxFileSize?: number;
@@ -40,7 +41,7 @@ export interface CompilerWarning {
 }
 
 export interface TagHandler {
-  (element: Element, options?: TagHandlerOptions): HandlerResult;
+  (element: SourceElement, options?: TagHandlerOptions): HandlerResult;
 }
 
 export interface TagHandlerOptions {

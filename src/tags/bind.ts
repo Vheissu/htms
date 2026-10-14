@@ -4,9 +4,10 @@ import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
+import { SourceElement } from '../source-dom';
 
 export const handleBindTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

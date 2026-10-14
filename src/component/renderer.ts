@@ -18,6 +18,7 @@ import {
   templateTextValue,
 } from './template-utils';
 import { addNodeLocations } from '../diagnostics';
+import { SourceElement } from '../source-dom';
 
 interface ComponentRenderResult {
   ir: ComponentIR;
@@ -25,10 +26,10 @@ interface ComponentRenderResult {
   warnings: CompilerWarning[];
 }
 
-type ConsumableElement = Element & { __htmsConsumed?: boolean };
+type ConsumableElement = SourceElement & { __htmsConsumed?: boolean };
 
 export function elementsToComponentCode(
-  componentElement: Element,
+  componentElement: SourceElement,
   appendTargetVar: string,
   options: ParseOptions,
   componentFields?: ReadonlySet<string>
@@ -68,7 +69,7 @@ export function elementsToComponentCode(
       continue;
     }
 
-    const element = node as Element;
+    const element = node as SourceElement;
     if ((element as ConsumableElement).__htmsConsumed) {
       continue;
     }
@@ -108,7 +109,7 @@ export function elementsToComponentCode(
 
     // Directive tags nested inside markup (e.g. <div><event .../></div>)
     // resolve to embedded template children scoped to the parent element.
-    const resolveChild = (child: Element): TemplateChild[] => {
+    const resolveChild = (child: SourceElement): TemplateChild[] => {
       const result = handleElement(child, handlerOptions);
       if (result.errors.length > 0) {
         errors.push(...result.errors);

@@ -116,7 +116,7 @@ badge.labelText = 'Synced';
 
 ## Compilation Phases
 
-1. **Parse**: JSDOM builds DOM tree; validation rejects unsafe patterns.
+1. **Parse**: parse5 builds the source tree; validation rejects unsafe patterns.
 2. **IR Build**: Convert HTMS DOM into an intermediate representation:
    - `ComponentIR`: metadata + template tree + behaviour graph.
    - `TemplateIR`: serializable DOM fragments and directives.

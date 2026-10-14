@@ -3,6 +3,7 @@ import { DirectiveNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
+import { SourceElement } from '../source-dom';
 
 // Custom event names: a letter/underscore followed by letters, digits,
 // underscores, hyphens or colons (e.g. "change", "todo:added", "value-changed").
@@ -16,7 +17,7 @@ function parseBoolean(value: string | null, fallback: boolean): boolean {
 }
 
 export const handleEmitTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

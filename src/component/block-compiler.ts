@@ -19,6 +19,15 @@ import {
   resolveWholeAttributeInterpolation,
   serializeTextValue,
 } from './template-serializer';
+import {
+  SourceComment,
+  SourceDocument,
+  SourceDocumentFragment,
+  SourceElement,
+  SourceNode,
+  SourceParentNode,
+  SourceText,
+} from '../source-dom';
 
 // The block renderer compiles a component template into "blocks": a static
 // HTML template that is cloned once per instance, the node references the
@@ -43,7 +52,7 @@ export class UnsupportedBlockFeature extends Error {
 
 export interface BlockCompileOptions {
   className: string;
-  document: Document;
+  document: SourceDocument;
   componentFields: string[];
   // Statements an <event> directive runs when it fires, with nested
   // directives applied to `eventRootVar`.
@@ -74,7 +83,7 @@ interface PElement {
   ns: Namespace;
   attrs: Array<[string, string]>;
   children: PNode[];
-  sample: Element;
+  sample: SourceElement;
   local: string | null;
   field: string | null;
   wantLocal: boolean;
@@ -97,7 +106,7 @@ interface PText {
   kind: 'text';
   text: string;
   dynamic: boolean;
-  sample: Text;
+  sample: SourceText;
   local: string | null;
   field: string | null;
   wantLocal: boolean;
@@ -107,7 +116,7 @@ interface PText {
 interface PComment {
   kind: 'comment';
   data: string;
-  sample: Comment;
+  sample: SourceComment;
   local: string | null;
   field: string | null;
   wantLocal: boolean;
@@ -118,13 +127,13 @@ type PNode = PElement | PText | PComment;
 
 interface Container {
   children: PNode[];
-  sample: Node;
+  sample: SourceParentNode;
   element: PElement | null;
 }
 
 type Scope =
-  | { kind: 'fragment'; sample: DocumentFragment }
-  | { kind: 'element'; sample: Element; node: PElement };
+  | { kind: 'fragment'; sample: SourceDocumentFragment }
+  | { kind: 'element'; sample: SourceElement; node: PElement };
 
 interface ListSub {
   kind: 'list';
@@ -215,7 +224,7 @@ interface BlockPlan {
   kind: 'root' | 'loop' | 'branch';
   vars: BlockVar[];
   roots: PNode[];
-  sample: DocumentFragment;
+  sample: SourceDocumentFragment;
   parts: Part[];
   creates: CreateAction[];
   slots: number;
@@ -324,11 +333,11 @@ class BlockCompiler {
   private readonly globals: string[] = [];
   private readonly statements: string[] = [];
   private readonly sampleOwners = new WeakMap<
-    Node,
+    SourceNode,
     { node: PElement; block: BlockPlan }
   >();
   private readonly fields: Set<string>;
-  private readonly doc: Document;
+  private readonly doc: SourceDocument;
   private handlerCount = 0;
   private eventRootCount = 0;
 
@@ -525,7 +534,7 @@ class BlockCompiler {
     this.buildElement(block, container, node);
   }
 
-  private createSampleElement(tag: string, ns: Namespace): Element {
+  private createSampleElement(tag: string, ns: Namespace): SourceElement {
     if (ns === 'svg') return this.doc.createElementNS(SVG_NS, tag);
     if (ns === 'mathml') return this.doc.createElementNS(MATHML_NS, tag);
     return this.doc.createElement(tag);
@@ -632,7 +641,8 @@ class BlockCompiler {
       children: element.children,
       sample:
         ns === 'html' && tag === 'template'
-          ? (element.sample as HTMLTemplateElement).content
+          ? ((element.sample as SourceElement)
+              .content as SourceDocumentFragment)
           : element.sample,
       element,
     };
@@ -1316,7 +1326,7 @@ class BlockCompiler {
         `selector "${trimmed}" depends on runtime state`
       );
     }
-    let matches: Element[];
+    let matches: SourceElement[];
     try {
       matches = Array.from(scope.sample.querySelectorAll(trimmed));
     } catch {
@@ -1502,9 +1512,10 @@ class BlockCompiler {
         : ns === 'mathml'
           ? `<math>${html}</math>`
           : html;
-    let parsed: Node = template.content;
+    const content = template.content as SourceDocumentFragment;
+    let parsed: SourceNode = content;
     if (ns !== 'html') {
-      const wrapper = template.content.firstChild;
+      const wrapper = content.firstChild;
       if (!wrapper) throw new UnsupportedBlockFeature('empty foreign template');
       parsed = wrapper;
     }
@@ -1515,20 +1526,21 @@ class BlockCompiler {
     }
   }
 
-  private sameStructure(parsed: Node, nodes: PNode[]): boolean {
-    const children = Array.from(parsed.childNodes);
+  private sameStructure(parsed: SourceNode, nodes: PNode[]): boolean {
+    const children =
+      parsed instanceof SourceParentNode ? Array.from(parsed.childNodes) : [];
     if (children.length !== nodes.length) return false;
     return nodes.every((node, index) => {
-      const actual = children.at(index) as ChildNode;
+      const actual = children.at(index) as SourceNode;
       if (node.kind === 'comment') return actual.nodeType === 8;
       if (node.kind === 'text') {
         return (
           actual.nodeType === 3 &&
-          (node.dynamic || (actual as Text).data === node.text)
+          (node.dynamic || (actual as SourceText).data === node.text)
         );
       }
       if (actual.nodeType !== 1) return false;
-      const element = actual as Element;
+      const element = actual as SourceElement;
       const namespace =
         node.ns === 'svg' ? SVG_NS : node.ns === 'mathml' ? MATHML_NS : HTML_NS;
       if (

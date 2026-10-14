@@ -2,9 +2,10 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
+import { SourceElement } from '../source-dom';
 
 export const handleObjectTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

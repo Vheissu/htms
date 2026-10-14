@@ -9,12 +9,13 @@ import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
+import { SourceElement } from '../source-dom';
 
 const DEFAULT_MAX_ITERATIONS = 1000;
 const MAX_ITERATION_LIMIT = 10000;
 
 export const handleWhileTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
@@ -98,7 +99,7 @@ export const handleWhileTag: TagHandler = (
         continue;
       }
 
-      const child = node as Element;
+      const child = node as SourceElement;
       const childOptions: TagHandlerOptions = {
         ...options,
         parentContext: 'loop',

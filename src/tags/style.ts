@@ -4,6 +4,7 @@ import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { valueAttributeToExpression } from '../utils/values';
+import { SourceElement } from '../source-dom';
 
 function buildValueExpr(value: string): string | null {
   return valueAttributeToExpression(value, { allowReferences: false });
@@ -14,7 +15,7 @@ function isCssProperty(prop: string): boolean {
 }
 
 export const handleStyleTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

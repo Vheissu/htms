@@ -3,6 +3,7 @@ import { BindDirective, EventDirective, StateDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
+import { SourceElement } from '../source-dom';
 
 const DEFAULT_EVENT = 'input';
 const ALLOWED_EVENTS = new Set(['input', 'change', 'blur', 'keyup', 'keydown']);
@@ -24,7 +25,7 @@ function normalizePath(raw: string): { path: string[]; expr: string } | null {
 }
 
 export const handleModelTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

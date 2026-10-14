@@ -4,9 +4,10 @@ import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 import { DirectiveNode, EventDirective } from '../component/ir';
 import { withLocals } from '../component/scope';
+import { SourceElement } from '../source-dom';
 
 export const handleSubmitTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

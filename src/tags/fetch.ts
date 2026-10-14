@@ -5,6 +5,7 @@ import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { getNodeLocation } from '../diagnostics';
+import { SourceElement } from '../source-dom';
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const ALLOWED_PARSERS = new Set([
@@ -21,7 +22,7 @@ let fetchCounter = 0;
 // Location-based ids keep compiled output deterministic; the counter is a
 // fallback for elements parsed without node locations (unit tests, DOM
 // fragments created directly).
-function stableId(prefix: string, element: Element): string {
+function stableId(prefix: string, element: SourceElement): string {
   const location = getNodeLocation(element);
   if (location) {
     return `${prefix}_${location.line}_${location.column}`;
@@ -119,7 +120,7 @@ function buildAssignment(
 }
 
 export const handleFetchTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

@@ -9,8 +9,9 @@ import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
+import { SourceElement } from '../source-dom';
 
-type ConsumedElement = Element & { __htmsConsumed?: boolean };
+type ConsumedElement = SourceElement & { __htmsConsumed?: boolean };
 
 const ELSEIF_TAGS = new Set(['ELSEIF', 'ELSE-IF']);
 
@@ -54,7 +55,7 @@ function validateCondition(
 }
 
 function collectBranchContent(
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions,
   tag: string,
   errors: HandlerResult['errors'],
@@ -82,7 +83,7 @@ function collectBranchContent(
       continue;
     }
 
-    const child = childNode as Element;
+    const child = childNode as SourceElement;
     const childResult = handleElement(child, options);
     if (childResult.errors.length > 0) {
       errors.push(...childResult.errors);
@@ -100,7 +101,7 @@ function collectBranchContent(
     if (childResult.component?.template) {
       templates.push(...childResult.component.template);
     } else if (isLowerCaseTag(child)) {
-      templates.push(elementToTemplateNode(child as Element));
+      templates.push(elementToTemplateNode(child as SourceElement));
     }
 
     if (childResult.component?.directives) {
@@ -126,7 +127,7 @@ function formatBranchBody(code: string, label: string): string {
 }
 
 export const handleIfElseTags: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

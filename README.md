@@ -239,7 +239,7 @@ htms render component.html \
 
 ## How It Works (roughly)
 
-- Parses HTMS markup with JSDOM, converts nodes to directives via tag handlers, resolves component fields in expressions, validates the output with Acorn, then emits JavaScript through Escodegen.
+- Parses HTMS markup with parse5 into a light source tree, converts nodes to directives via tag handlers, resolves component fields in expressions, validates the output with Acorn, then emits JavaScript through Escodegen.
 - A security pass rejects dangerous constructs (`eval`, inline handlers, raw `innerHTML`, path traversal, …).
 - In component mode, standard elements become cached `<template>` fragments that each instance clones. Control and state tags compile into block methods that update only the nodes whose values changed.
 - Directive selectors such as `<event target="#save">` and `<bind selector="#count">` are resolved at compile time against the template, so they cost nothing at runtime.

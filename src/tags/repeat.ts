@@ -9,11 +9,12 @@ import { SecurityValidator } from '../utils/security';
 import { handlerScope, withLocals } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
+import { SourceElement } from '../source-dom';
 
 const MAX_COUNT = 10000;
 
 export const handleRepeatTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
@@ -206,7 +207,7 @@ export const handleRepeatTag: TagHandler = (
       if (childNode.nodeType !== 1) {
         continue;
       }
-      const child = childNode as Element;
+      const child = childNode as SourceElement;
       const childOptions: TagHandlerOptions = withLocals(
         { ...options, loopVariable, parentContext: 'loop' },
         loopVariable,
@@ -234,24 +235,27 @@ export const handleRepeatTag: TagHandler = (
         componentTemplateChildren.push(...childResult.component.template);
       } else if (isLowerCaseTag(child)) {
         componentTemplateChildren.push(
-          elementToTemplateNode(child as Element, (nested: Element) => {
-            const nestedResult = handleElement(nested, childOptions);
-            errors.push(...nestedResult.errors);
-            warnings.push(...nestedResult.warnings);
-            const children = (nestedResult.component?.template ??
-              []) as TemplateChild[];
-            if (nestedResult.component?.directives) {
-              for (const directive of nestedResult.component.directives) {
-                children.push({ type: 'directive', directive });
+          elementToTemplateNode(
+            child as SourceElement,
+            (nested: SourceElement) => {
+              const nestedResult = handleElement(nested, childOptions);
+              errors.push(...nestedResult.errors);
+              warnings.push(...nestedResult.warnings);
+              const children = (nestedResult.component?.template ??
+                []) as TemplateChild[];
+              if (nestedResult.component?.directives) {
+                for (const directive of nestedResult.component.directives) {
+                  children.push({ type: 'directive', directive });
+                }
+              } else if (nestedResult.code) {
+                children.push({
+                  type: 'directive',
+                  directive: { kind: 'statement', code: nestedResult.code },
+                });
               }
-            } else if (nestedResult.code) {
-              children.push({
-                type: 'directive',
-                directive: { kind: 'statement', code: nestedResult.code },
-              });
+              return children;
             }
-            return children;
-          })
+          )
         );
       }
 

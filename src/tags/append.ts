@@ -4,12 +4,13 @@ import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 import { getNodeLocation } from '../diagnostics';
+import { SourceElement } from '../source-dom';
 
 let appendCounter = 0;
 
 // Location-based ids keep compiled output deterministic; the counter is a
 // fallback for elements parsed without node locations.
-function stableVarName(element: Element): string {
+function stableVarName(element: SourceElement): string {
   const location = getNodeLocation(element);
   if (location) {
     return `__appendTarget_${location.line}_${location.column}`;
@@ -18,7 +19,7 @@ function stableVarName(element: Element): string {
 }
 
 export const handleAppendTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

@@ -1,4 +1,5 @@
 import { CompilerError, CompilerWarning } from './types';
+import { SourceNode } from './source-dom';
 
 export interface SourceLocation {
   line: number;
@@ -7,10 +8,10 @@ export interface SourceLocation {
 
 type Diagnostic = CompilerError | CompilerWarning;
 
-const nodeLocations = new WeakMap<Node, SourceLocation>();
+const nodeLocations = new WeakMap<SourceNode, SourceLocation>();
 
 export function registerNodeLocation(
-  node: Node,
+  node: SourceNode,
   line: number,
   column: number
 ): void {
@@ -19,7 +20,7 @@ export function registerNodeLocation(
 
 export function addNodeLocation<T extends Diagnostic>(
   diagnostic: T,
-  node: Node
+  node: SourceNode
 ): T {
   if (diagnostic.source === 'generated') {
     return diagnostic;
@@ -40,13 +41,13 @@ export function addNodeLocation<T extends Diagnostic>(
   return diagnostic;
 }
 
-export function getNodeLocation(node: Node): SourceLocation | undefined {
+export function getNodeLocation(node: SourceNode): SourceLocation | undefined {
   return nodeLocations.get(node);
 }
 
 export function addNodeLocations<T extends Diagnostic>(
   diagnostics: T[],
-  node: Node
+  node: SourceNode
 ): T[] {
   diagnostics.forEach((diagnostic) => addNodeLocation(diagnostic, node));
   return diagnostics;

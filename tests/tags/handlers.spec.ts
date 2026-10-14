@@ -1,4 +1,4 @@
-import { JSDOM } from 'jsdom';
+import { parseDocument, SourceElement } from '../../src/source-dom';
 import { handleCallTag } from '../../src/tags/call';
 import { handleFunctionTag } from '../../src/tags/function';
 import { handleShowTag } from '../../src/tags/show';
@@ -14,9 +14,9 @@ import { handleSetAttrTag } from '../../src/tags/setattr';
 import { handleSetPropTag } from '../../src/tags/setprop';
 import { handleCommentTag } from '../../src/tags/comment';
 
-function createElement(markup: string): Element {
-  const dom = new JSDOM(`<body>${markup}</body>`);
-  const element = dom.window.document.body.firstElementChild;
+function createElement(markup: string): SourceElement {
+  const document = parseDocument(`<body>${markup}</body>`);
+  const element = document.body?.firstElementChild;
   if (!element) {
     throw new Error('Failed to create element for test');
   }

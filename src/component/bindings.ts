@@ -1,4 +1,5 @@
 import { EventModifiers, TemplateBinding } from './ir';
+import { SourceElement } from '../source-dom';
 
 // Inline directive attributes on ordinary markup:
 //
@@ -147,7 +148,7 @@ function parseEventBinding(rawName: string, value: string): BindingParseResult {
 function parseModelBinding(
   propertyName: string,
   value: string,
-  element: Element
+  element: SourceElement
 ): BindingParseResult {
   const bindable = BINDABLE_PROPERTIES.get(propertyName);
   if (!bindable) {
@@ -184,7 +185,7 @@ function parseModelBinding(
 export function parseBindingAttribute(
   name: string,
   value: string,
-  element: Element
+  element: SourceElement
 ): BindingParseResult {
   const lower = name.toLowerCase();
 

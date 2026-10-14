@@ -3,6 +3,7 @@ import { StateDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
+import { SourceElement } from '../source-dom';
 
 function validateStatePath(path: string): string[] | null {
   const parts = path.split('.').filter(Boolean);
@@ -21,7 +22,7 @@ function validateStatePath(path: string): string[] | null {
 }
 
 export const handleDeriveTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

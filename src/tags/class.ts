@@ -3,6 +3,7 @@ import { ClassDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
+import { SourceElement } from '../source-dom';
 
 const ACTIONS = new Set(['add', 'remove', 'toggle']);
 
@@ -18,7 +19,7 @@ function isValidClassName(name: string): boolean {
 }
 
 export const handleClassTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

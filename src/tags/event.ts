@@ -4,6 +4,7 @@ import { SecurityValidator } from '../utils/security';
 import { handlerScope, withLocals } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
+import { SourceElement } from '../source-dom';
 
 const KNOWN_EVENT_TYPES = new Set([
   'click',
@@ -76,7 +77,7 @@ const SAFE_ACTIONS = new Set([
 ]);
 
 function parseBooleanModifier(
-  element: Element,
+  element: SourceElement,
   name: string
 ): boolean | undefined {
   const raw = element.getAttribute(name);
@@ -87,7 +88,7 @@ function parseBooleanModifier(
 }
 
 export const handleEventTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

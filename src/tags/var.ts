@@ -4,9 +4,10 @@ import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handlerScope } from '../component/scope';
 import { parseJsonLiteral, valueAttributeToExpression } from '../utils/values';
+import { SourceElement } from '../source-dom';
 
 export const handleVarTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

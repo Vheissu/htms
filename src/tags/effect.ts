@@ -5,13 +5,14 @@ import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { handleElement } from '../handlers';
 import { getNodeLocation } from '../diagnostics';
+import { SourceElement } from '../source-dom';
 
 let effectCounter = 0;
 
 // Location-based ids keep compiled output deterministic; the counter is a
 // fallback for elements parsed without node locations (unit tests, DOM
 // fragments created directly).
-function stableId(prefix: string, element: Element): string {
+function stableId(prefix: string, element: SourceElement): string {
   const location = getNodeLocation(element);
   if (location) {
     return `${prefix}_${location.line}_${location.column}`;
@@ -35,7 +36,7 @@ function ensureTerminated(statement: string): string {
 }
 
 export const handleEffectTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
@@ -74,7 +75,7 @@ export const handleEffectTag: TagHandler = (
         }
         collectCode(text);
       } else if (node.nodeType === 1) {
-        const child = node as Element;
+        const child = node as SourceElement;
         const childOptions: TagHandlerOptions = {
           ...options,
           parentContext: 'effect',

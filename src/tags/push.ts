@@ -4,6 +4,7 @@ import { CompilerLogger } from '../utils/logger';
 import { handlerScope } from '../component/scope';
 import { valueAttributeToExpression } from '../utils/values';
 import { StateDirective } from '../component/ir';
+import { SourceElement } from '../source-dom';
 
 function buildValueExpr(
   value: string,
@@ -15,7 +16,7 @@ function buildValueExpr(
 }
 
 export const handlePushTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

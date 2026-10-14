@@ -4,6 +4,7 @@ import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handlerScope } from '../component/scope';
 import { valueAttributeToExpression } from '../utils/values';
+import { SourceElement } from '../source-dom';
 
 const ALLOWED_OPS = new Set(['=', '+=', '-=', '*=', '/=', '++', '--']);
 
@@ -17,7 +18,7 @@ function validatePath(path: string): string[] | null {
 }
 
 export const handleSetTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

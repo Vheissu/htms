@@ -2,11 +2,12 @@ import { CompilerError, CompilerWarning } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { TemplateBinding, TemplateChild, TemplateNode } from './ir';
 import { isBindingAttribute, parseBindingAttribute } from './bindings';
+import { SourceElement, SourceNode } from '../source-dom';
 
 // Resolves a non-template child element (an HTMS directive tag such as
 // <event> or <if>) into template children: embedded directives and/or
 // nested template nodes. Returning an empty array drops the element.
-export type ChildResolver = (element: Element) => TemplateChild[];
+export type ChildResolver = (element: SourceElement) => TemplateChild[];
 
 const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
@@ -161,8 +162,8 @@ const HTMS_DIRECTIVE_TAGS = new Set([
 // Elements whose whitespace is significant and must be kept verbatim.
 const WHITESPACE_PRESERVING_TAGS = new Set(['pre', 'textarea', 'listing']);
 
-export function preservesWhitespace(element: Element | null): boolean {
-  let current: Element | null = element;
+export function preservesWhitespace(element: SourceElement | null): boolean {
+  let current: SourceElement | null = element;
   while (current) {
     if (WHITESPACE_PRESERVING_TAGS.has(current.localName)) {
       return true;
@@ -177,7 +178,7 @@ export function preservesWhitespace(element: Element | null): boolean {
 // the edges of its parent and when it spans a line break (source
 // formatting), but a single space between two inline siblings is kept, so
 // `<b>Hi</b> <em>there</em>` still renders "Hi there".
-export function templateTextValue(node: Node): string | null {
+export function templateTextValue(node: SourceNode): string | null {
   const text = node.textContent ?? '';
   if (text.length === 0) {
     return null;
@@ -194,7 +195,7 @@ export function templateTextValue(node: Node): string | null {
   return ' ';
 }
 
-function templateNamespace(element: Element): TemplateNode['namespace'] {
+function templateNamespace(element: SourceElement): TemplateNode['namespace'] {
   if (element.namespaceURI === SVG_NAMESPACE) {
     return 'svg';
   }
@@ -204,13 +205,13 @@ function templateNamespace(element: Element): TemplateNode['namespace'] {
   return 'html';
 }
 
-function templateChildNodes(element: Element): Node[] {
+function templateChildNodes(element: SourceElement): SourceNode[] {
   if (
     element.namespaceURI === HTML_NAMESPACE &&
-    element.tagName.toLowerCase() === 'template' &&
-    'content' in element
+    element.localName === 'template' &&
+    element.content
   ) {
-    return Array.from((element as HTMLTemplateElement).content.childNodes);
+    return Array.from(element.content.childNodes);
   }
   return Array.from(element.childNodes);
 }
@@ -219,7 +220,7 @@ function templateChildNodes(element: Element): Node[] {
 // inline binding syntax. Directive tags nested in the markup are skipped;
 // their handlers validate them.
 export function collectTemplateSecurityErrors(
-  element: Element
+  element: SourceElement
 ): CompilerError[] {
   const errors: CompilerError[] = [];
   const tag = element.tagName.toUpperCase();
@@ -260,7 +261,7 @@ export function collectTemplateSecurityErrors(
         )
       );
     } else if (child.nodeType === 1 && isTemplateElement(child)) {
-      errors.push(...collectTemplateSecurityErrors(child as Element));
+      errors.push(...collectTemplateSecurityErrors(child as SourceElement));
     }
   }
 
@@ -287,7 +288,7 @@ export function partitionTemplateErrors(
 }
 
 export function elementToTemplateNode(
-  element: Element,
+  element: SourceElement,
   resolveChild?: ChildResolver
 ): TemplateNode {
   const attributes: Record<string, string> = {};
@@ -321,7 +322,7 @@ export function elementToTemplateNode(
       }
       children.push({ type: 'text', textContent: text });
     } else if (child.nodeType === 1) {
-      const elementChild = child as Element;
+      const elementChild = child as SourceElement;
       if (isTemplateElement(elementChild)) {
         children.push(elementToTemplateNode(elementChild, resolveChild));
         continue;
@@ -345,7 +346,7 @@ export function elementToTemplateNode(
 }
 
 export function nodeListToTemplateNodes(
-  nodes: NodeList,
+  nodes: readonly SourceNode[],
   resolveChild?: ChildResolver
 ): TemplateNode[] {
   const templateNodes: TemplateNode[] = [];
@@ -363,12 +364,12 @@ export function nodeListToTemplateNodes(
   return templateNodes;
 }
 
-export function isTemplateElement(node: Node): node is Element {
+export function isTemplateElement(node: SourceNode): node is SourceElement {
   if (node.nodeType !== 1) {
     return false;
   }
 
-  const element = node as Element;
+  const element = node as SourceElement;
   if (element.namespaceURI !== HTML_NAMESPACE) {
     return true;
   }

@@ -9,9 +9,10 @@ import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
+import { SourceElement } from '../source-dom';
 
 export const handleSwitchTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];
@@ -151,7 +152,7 @@ export const handleSwitchTag: TagHandler = (
             continue;
           }
 
-          const grandChild = node as Element;
+          const grandChild = node as SourceElement;
           const gcResult = handleElement(grandChild, options);
           if (gcResult.errors.length > 0) {
             errors.push(
@@ -240,7 +241,7 @@ export const handleSwitchTag: TagHandler = (
             continue;
           }
 
-          const gc = node as Element;
+          const gc = node as SourceElement;
           const gcResult = handleElement(gc, options);
           if (gcResult.errors.length > 0) {
             errors.push(

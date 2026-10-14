@@ -8,12 +8,13 @@ import {
   partitionTemplateErrors,
 } from './component/template-utils';
 import { getNodeLocation } from './diagnostics';
+import { SourceElement } from './source-dom';
 
 // Location-based names keep compiled output deterministic; the counter is a
 // fallback for elements parsed without node locations (tests, direct DOM).
 const elementCounter: Map<string, number> = new Map();
 
-function elementVarName(tagName: string, element: Element): string {
+function elementVarName(tagName: string, element: SourceElement): string {
   const location = getNodeLocation(element);
   if (location) {
     return `${tagName}_${location.line}_${location.column}`;
@@ -24,7 +25,7 @@ function elementVarName(tagName: string, element: Element): string {
 }
 
 export const handleHtmlElement: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

@@ -10,7 +10,7 @@ HTMS (Hyper Text Media Script) is a secure HTML-to-JavaScript compiler that allo
 
 The compilation pipeline consists of three main stages:
 
-1. **HTML Parsing** (`parser.ts:getTopLevelElements`): Uses JSDOM to parse HTML into DOM elements
+1. **HTML Parsing** (`component/source-parser.ts`, `source-dom.ts`): parse5 builds a light DOM-like tree (`SourceElement`, `SourceNode`, ...) with source locations; jsdom is only loaded for server rendering
 2. **Element Processing** (`handlers.ts`): Routes custom tags to specific handlers in the `tags/` directory
 3. **Code Generation** (`parser.ts:generateFinalJsCode`): Uses acorn/escodegen to validate and generate clean JavaScript output
 

@@ -4,12 +4,13 @@ import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
 import { DirectiveNode, MethodDirective } from '../component/ir';
 import { handlerScope, withLocals } from '../component/scope';
+import { SourceElement } from '../source-dom';
 
 // Inside a component, <function name="save" params="item"> becomes a class
 // method. Text is the method body; child tags (<set>, <push>, ...) run in
 // document order with it. Bare field names resolve to `this.<field>`.
 function buildComponentMethod(
-  element: Element,
+  element: SourceElement,
   name: string,
   params: string[],
   options: TagHandlerOptions,
@@ -39,7 +40,7 @@ function buildComponentMethod(
       continue;
     }
     flushText();
-    const result = handleElement(node as Element, childOptions);
+    const result = handleElement(node as SourceElement, childOptions);
     errors.push(...result.errors);
     warnings.push(...result.warnings);
     if (result.component?.directives) {
@@ -62,7 +63,7 @@ function buildComponentMethod(
 }
 
 export const handleFunctionTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

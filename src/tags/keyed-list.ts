@@ -17,13 +17,14 @@ import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { handleElement } from '../handlers';
 import { getNodeLocation } from '../diagnostics';
+import { SourceElement } from '../source-dom';
 
 let keyedCounter = 0;
 
 // Location-based ids keep compiled output deterministic; the counter is a
 // fallback for elements parsed without node locations (unit tests, DOM
 // fragments created directly).
-function stableId(prefix: string, element: Element): string {
+function stableId(prefix: string, element: SourceElement): string {
   const location = getNodeLocation(element);
   if (location) {
     return `${prefix}_${location.line}_${location.column}`;
@@ -36,7 +37,7 @@ function resolveComponentSource(source: string): string {
 }
 
 export const handleKeyedListTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

@@ -1,4 +1,3 @@
-import { JSDOM } from 'jsdom';
 import { handleElement } from './handlers';
 import * as escodegen from 'escodegen';
 import * as acorn from 'acorn';
@@ -11,13 +10,13 @@ import {
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
 import { compileComponents } from './component/compiler';
+import { parseDocument, SourceElement } from './source-dom';
 
-type ConsumableElement = Element & { __htmsConsumed?: boolean };
+type ConsumableElement = SourceElement & { __htmsConsumed?: boolean };
 
-export function getTopLevelElements(htmlContent: string): HTMLCollection {
+export function getTopLevelElements(htmlContent: string): SourceElement[] {
   try {
-    const dom = new JSDOM(htmlContent);
-    const elements = dom.window.document.body.children;
+    const elements = parseDocument(htmlContent).body?.children ?? [];
 
     if (elements.length === 0) {
       throw new Error('No elements found in HTML body');
@@ -34,7 +33,7 @@ export function getTopLevelElements(htmlContent: string): HTMLCollection {
 }
 
 export function elementsToJsSnippets(
-  elements: HTMLCollection,
+  elements: SourceElement[],
   options: ParseOptions = {}
 ): { code: string; errors: CompilerError[]; warnings: CompilerWarning[] } {
   let code = '';

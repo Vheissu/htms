@@ -1,5 +1,11 @@
-import { JSDOM } from 'jsdom';
 import { registerNodeLocation } from '../diagnostics';
+import {
+  HTML_NAMESPACE,
+  parseDocument,
+  SourceDocument,
+  SourceElement,
+  SourceParentNode,
+} from '../source-dom';
 
 // The HTML parser only allows table elements inside <table>, <tbody> and
 // <tr>: anything else is moved in front of the table ("foster parenting"),
@@ -13,7 +19,8 @@ import { registerNodeLocation } from '../diagnostics';
 // tags are parsed as <template data-htms-directive="..."> and turned back
 // into directive elements afterwards, so they keep their written position.
 
-const TABLE_MARKUP = /<(table|thead|tbody|tfoot|tr|td|th|caption|colgroup)[\s>/]/i;
+const TABLE_MARKUP =
+  /<(table|thead|tbody|tfoot|tr|td|th|caption|colgroup)[\s>/]/i;
 
 const PROTECTED_TAGS = [
   'append',
@@ -67,50 +74,47 @@ function protectDirectives(html: string): string {
   );
 }
 
-function restoreDirectives(dom: JSDOM, parent: ParentNode): void {
-  const document = dom.window.document;
-  for (const child of Array.from(parent.children)) {
+function restoreDirectives(
+  document: SourceDocument,
+  parent: SourceParentNode
+): void {
+  for (const child of [...parent.children]) {
     if (
       child.localName === 'template' &&
       child.hasAttribute(MARKER) &&
-      child.namespaceURI === 'http://www.w3.org/1999/xhtml'
+      child.namespaceURI === HTML_NAMESPACE
     ) {
-      const template = child as HTMLTemplateElement;
       const directive = document.createElement(
-        template.getAttribute(MARKER) as string
+        child.getAttribute(MARKER) as string
       );
-      for (const attribute of Array.from(template.attributes)) {
+      for (const attribute of child.attributes) {
         if (attribute.name !== MARKER) {
           directive.setAttribute(attribute.name, attribute.value);
         }
       }
-      directive.appendChild(template.content);
-      const location = dom.nodeLocation(template);
-      if (location) {
-        registerNodeLocation(directive, location.startLine, location.startCol);
-      }
-      template.replaceWith(directive);
-      restoreDirectives(dom, directive);
+      if (child.content) directive.appendChild(child.content);
+      directive.sourceCodeLocation = child.sourceCodeLocation;
+      child.replaceWith(directive);
+      restoreDirectives(document, directive);
     } else {
-      restoreDirectives(dom, child);
+      restoreDirectives(document, child);
     }
   }
 }
 
-export function parseComponentSource(html: string): JSDOM {
+export function parseComponentSource(html: string): SourceDocument {
   const protect = TABLE_MARKUP.test(html);
-  const dom = new JSDOM(protect ? protectDirectives(html) : html, {
-    includeNodeLocations: true,
+  const document = parseDocument(protect ? protectDirectives(html) : html, {
+    locations: true,
   });
-  const document = dom.window.document;
-  if (protect) {
-    restoreDirectives(dom, document.body);
+  if (protect && document.body) {
+    restoreDirectives(document, document.body);
   }
-  for (const element of Array.from(document.querySelectorAll('*'))) {
-    const location = dom.nodeLocation(element);
-    if (location) {
-      registerNodeLocation(element, location.startLine, location.startCol);
+  for (const node of document.descendants()) {
+    const location = node.sourceCodeLocation;
+    if (node instanceof SourceElement && location) {
+      registerNodeLocation(node, location.startLine, location.startCol);
     }
   }
-  return dom;
+  return document;
 }

@@ -40,6 +40,7 @@ import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
 import { isTemplateElement } from './component/template-utils';
 import { addNodeLocations } from './diagnostics';
+import { SourceElement } from './source-dom';
 
 const ALLOWED_STANDARD_ELEMENTS = new Set([
   'INPUT',
@@ -144,10 +145,10 @@ const HANDLERS_MAPPING = new Map<string, TagHandler>([
   ['EMIT', handleEmitTag],
 ]);
 
-type ConsumableElement = Element & { __htmsConsumed?: boolean };
+type ConsumableElement = SourceElement & { __htmsConsumed?: boolean };
 
 export function handleElement(
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult {
   try {
@@ -329,14 +330,14 @@ function suggestTagName(tagName: string): string | null {
   return closest.distance <= threshold ? closest.tag : null;
 }
 
-export function isStandardHtmlElement(element: Element): boolean {
+export function isStandardHtmlElement(element: SourceElement): boolean {
   return (
     ALLOWED_STANDARD_ELEMENTS.has(element.tagName.toUpperCase()) ||
     isTemplateElement(element)
   );
 }
 
-function validateElementSecurity(element: Element): CompilerError[] {
+function validateElementSecurity(element: SourceElement): CompilerError[] {
   const errors: CompilerError[] = [];
 
   // Validate attributes

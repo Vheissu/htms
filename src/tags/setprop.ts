@@ -4,6 +4,7 @@ import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
 import { valueAttributeToExpression } from '../utils/values';
+import { SourceElement } from '../source-dom';
 
 const BLOCKED_PROPERTY_SINKS = new Set(['innerhtml', 'outerhtml', 'srcdoc']);
 
@@ -12,7 +13,7 @@ function buildValueExpr(value: string): string | null {
 }
 
 export const handleSetPropTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

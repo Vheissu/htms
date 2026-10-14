@@ -1,4 +1,5 @@
 import { parseComponentSource } from './source-parser';
+import { NATIVE_ELEMENT_PROPERTIES } from './native-properties';
 import { elementsToComponentCode } from './renderer';
 import {
   BLOCK_RUNTIME,
@@ -48,6 +49,7 @@ import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { addNodeLocation, addNodeLocations } from '../diagnostics';
+import { SourceDocument, SourceElement } from '../source-dom';
 
 interface ComponentMetadata {
   tagName: string;
@@ -109,8 +111,8 @@ function isReservedComponentProperty(name: string): boolean {
   return name.startsWith('__htms') || RESERVED_COMPONENT_PROPERTIES.has(name);
 }
 
-function isNativeElementProperty(element: Element, name: string): boolean {
-  return name in element;
+function isNativeElementProperty(name: string): boolean {
+  return NATIVE_ELEMENT_PROPERTIES.has(name);
 }
 
 function containsState(ir: ComponentIR): boolean {
@@ -235,8 +237,8 @@ export function compileComponents(
   htmlContent: string,
   options: ParseOptions = {}
 ): ComponentCompileResult {
-  const dom = parseComponentSource(htmlContent);
-  const bodyChildren = Array.from(dom.window.document.body.children);
+  const document = parseComponentSource(htmlContent);
+  const bodyChildren = document.body ? [...document.body.children] : [];
   const componentSnippets: string[] = [];
   const errors: CompilerError[] = [];
   const warnings: CompilerWarning[] = [];
@@ -355,7 +357,7 @@ interface ComponentCompileInternalResult {
 }
 
 function compileComponentElement(
-  element: Element,
+  element: SourceElement,
   options: ParseOptions
 ): ComponentCompileInternalResult {
   const errors: CompilerError[] = [];
@@ -388,7 +390,7 @@ function compileComponentElement(
   for (const stateName of collectInitialStateRoots(renderIR)) {
     if (
       isReservedComponentProperty(stateName) ||
-      isNativeElementProperty(element, stateName)
+      isNativeElementProperty(stateName)
     ) {
       errors.push({
         type: 'validation',
@@ -411,7 +413,7 @@ function compileComponentElement(
   for (const method of collectMethods(renderIR)) {
     if (
       isReservedComponentProperty(method.name) ||
-      isNativeElementProperty(element, method.name)
+      isNativeElementProperty(method.name)
     ) {
       errors.push({
         type: 'validation',
@@ -506,7 +508,7 @@ const IDENTIFIER_ROOT = /^(?:this\.)?([a-zA-Z_$][a-zA-Z0-9_$]*)/;
 // to, before any tag handler runs: props, state, derived values and
 // methods. Built-in helpers are included so `$('#id')` works unqualified.
 function collectComponentFields(
-  element: Element,
+  element: SourceElement,
   metadata: ComponentMetadata
 ): Set<string> {
   const fields = new Set<string>(BUILTIN_COMPONENT_FIELDS);
@@ -538,7 +540,7 @@ function collectComponentFields(
 }
 
 function readComponentMetadata(
-  element: Element,
+  element: SourceElement,
   errors: CompilerError[],
   warnings: CompilerWarning[]
 ): ComponentMetadata | null {
@@ -584,11 +586,7 @@ function readComponentMetadata(
     ? (shadowAttr as 'open' | 'closed' | 'none')
     : 'open';
 
-  const props = parseComponentProps(
-    element.getAttribute('props'),
-    element,
-    errors
-  );
+  const props = parseComponentProps(element.getAttribute('props'), errors);
   const explicitObservedAttributes = parseAttributeList(
     element.getAttribute('observed'),
     errors
@@ -596,7 +594,6 @@ function readComponentMetadata(
   const inputs = resolveComponentInputs(
     props,
     explicitObservedAttributes,
-    element,
     errors
   );
   const observedAttributes = Array.from(
@@ -626,7 +623,6 @@ function toClassName(tagName: string): string {
 
 function parseComponentProps(
   value: string | null,
-  element: Element,
   errors: CompilerError[]
 ): ComponentProperty[] {
   if (!value) return [];
@@ -652,7 +648,7 @@ function parseComponentProps(
 
     if (
       isReservedComponentProperty(propName) ||
-      isNativeElementProperty(element, propName)
+      isNativeElementProperty(propName)
     ) {
       errors.push({
         type: 'validation',
@@ -730,7 +726,6 @@ function toPropertyName(attributeName: string): string {
 function resolveComponentInputs(
   props: ComponentProperty[],
   observedAttributes: string[],
-  element: Element,
   errors: CompilerError[]
 ): ComponentInput[] {
   const inputs = new Map<string, ComponentInput>();
@@ -764,7 +759,7 @@ function resolveComponentInputs(
 
     if (
       isReservedComponentProperty(propName) ||
-      isNativeElementProperty(element, propName)
+      isNativeElementProperty(propName)
     ) {
       errors.push({
         type: 'validation',
@@ -797,7 +792,7 @@ function buildComponentClass(
   renderIR: ComponentIR,
   renderTargetVar: string,
   componentFields: ReadonlySet<string> = new Set(),
-  blockDocument: Document | null = null
+  blockDocument: SourceDocument | null = null
 ): { code: string; usesBlocks: boolean } {
   const observedGetter =
     metadata.observedAttributes.length > 0
@@ -1934,9 +1929,10 @@ function pruneUnusedHelpers(classCode: string): string {
   // re-scanning the growing text with a regular expression per helper.
   const kept = new Set<number>();
   const words = new Set<string>();
+  // Only `__htms…` helpers are candidates, so only those words are kept.
   const reach = (from: number, to: number): void => {
     for (const line of lines.slice(from, to)) {
-      for (const word of line.match(/\w+/g) ?? []) words.add(word);
+      for (const word of line.match(/(?<!\w)__htms\w*/g) ?? []) words.add(word);
     }
   };
   reach(0, chunks[0]?.from ?? lines.length);

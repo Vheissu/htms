@@ -2,6 +2,7 @@ import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
+import { SourceElement } from '../source-dom';
 
 // Whitelist of allowed function names for security
 const ALLOWED_FUNCTIONS = new Set([
@@ -33,7 +34,7 @@ const ALLOWED_FUNCTIONS = new Set([
 ]);
 
 export const handleCallTag: TagHandler = (
-  element: Element,
+  element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
   const errors: HandlerResult['errors'] = [];

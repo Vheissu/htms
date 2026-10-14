@@ -1,5 +1,12 @@
-import { JSDOM } from 'jsdom';
+import type { JSDOM as JSDOMType } from 'jsdom';
 import { HydrationManifest } from './hydration';
+
+// jsdom takes ~280ms to load, so it is only required when a component is
+// actually rendered on the server; compiling never loads it.
+function loadJSDOM(): typeof JSDOMType {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return (require('jsdom') as typeof import('jsdom')).JSDOM;
+}
 import { parseHTML } from './parser';
 import { ComponentArtifact, CompilerError } from './types';
 import { SecurityValidator } from './utils/security';
@@ -224,6 +231,7 @@ export function renderToString(
       component,
     ])
   );
+  const JSDOM = loadJSDOM();
   const dom = new JSDOM('<!doctype html><body></body>', {
     runScripts: 'outside-only',
     url: options.url ?? 'http://localhost/',
