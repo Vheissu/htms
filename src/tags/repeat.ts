@@ -295,6 +295,33 @@ export const handleRepeatTag: TagHandler = (
       codeLength: code.length,
     });
 
+    const keyAttr = element.getAttribute('key')?.trim();
+    let componentKey: string | undefined;
+    if (keyAttr) {
+      if (!variable) {
+        errors.push({
+          type: 'validation',
+          message: 'REPEAT key is only supported with variable (array) loops',
+          tag: 'REPEAT',
+        });
+        return { code: '', errors, warnings };
+      }
+      const keyErrors = SecurityValidator.validateContent(keyAttr);
+      if (keyErrors.length > 0) {
+        errors.push(
+          ...keyErrors.map((error) => ({
+            ...error,
+            tag: 'REPEAT',
+            message: `Invalid key expression: ${keyAttr}`,
+          }))
+        );
+        return { code: '', errors, warnings };
+      }
+      componentKey = handlerScope(
+        withLocals(options, loopVariable, indexVar || undefined)
+      ).expression(keyAttr);
+    }
+
     const componentLoopDirective: DirectiveNode | undefined = variable
       ? {
           kind: 'loop',
@@ -302,6 +329,7 @@ export const handleRepeatTag: TagHandler = (
           source: componentSource,
           itemVar: loopVariable,
           indexVar: indexVar || undefined,
+          key: componentKey,
           template: componentTemplateChildren,
           directives: componentDirectives,
         }

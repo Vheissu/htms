@@ -29,7 +29,8 @@ describe('parseHTML', () => {
     expect(result.success).toBe(true);
     expect(result.code).toContain('class DemoBoxComponent extends HTMLElement');
     expect(result.code).toContain("customElements.define('demo-box'");
-    expect(result.code).toContain('componentRoot.appendChild');
+    // Static markup is a cloned template.
+    expect(result.code).toContain('__htmsTpl(\'<div class="box">Demo</div>\'');
   });
 
   it('emits one export list for ESM component bundles', () => {

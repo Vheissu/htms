@@ -1,5 +1,11 @@
-import { JSDOM } from 'jsdom';
+import { parseComponentSource } from './source-parser';
 import { elementsToComponentCode } from './renderer';
+import {
+  BLOCK_RUNTIME,
+  BlockComponentPlan,
+  UnsupportedBlockFeature,
+  compileBlockComponent,
+} from './block-compiler';
 import {
   ComponentIR,
   DirectiveNode,
@@ -41,11 +47,7 @@ import {
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
-import {
-  addNodeLocation,
-  addNodeLocations,
-  registerNodeLocation,
-} from '../diagnostics';
+import { addNodeLocation, addNodeLocations } from '../diagnostics';
 
 interface ComponentMetadata {
   tagName: string;
@@ -233,13 +235,7 @@ export function compileComponents(
   htmlContent: string,
   options: ParseOptions = {}
 ): ComponentCompileResult {
-  const dom = new JSDOM(htmlContent, { includeNodeLocations: true });
-  for (const element of Array.from(dom.window.document.querySelectorAll('*'))) {
-    const location = dom.nodeLocation(element);
-    if (location) {
-      registerNodeLocation(element, location.startLine, location.startCol);
-    }
-  }
+  const dom = parseComponentSource(htmlContent);
   const bodyChildren = Array.from(dom.window.document.body.children);
   const componentSnippets: string[] = [];
   const errors: CompilerError[] = [];
@@ -248,6 +244,7 @@ export function compileComponents(
   const componentNames = new Set<string>();
   const componentClassNames = new Set<string>();
   let requiresRuntime = false;
+  let usesBlocks = false;
 
   if (bodyChildren.length === 0) {
     errors.push({
@@ -272,6 +269,7 @@ export function compileComponents(
 
     const compileResult = compileComponentElement(child, options);
     requiresRuntime ||= compileResult.requiresRuntime;
+    usesBlocks ||= compileResult.usesBlocks === true;
     errors.push(...compileResult.errors);
     warnings.push(...compileResult.warnings);
     if (compileResult.artifact) {
@@ -306,6 +304,9 @@ export function compileComponents(
     return { success: false, errors, warnings, components: [] };
   }
 
+  if (usesBlocks) {
+    componentSnippets.unshift(BLOCK_RUNTIME);
+  }
   if (requiresRuntime) {
     componentSnippets.unshift(ensureRuntime());
   }
@@ -345,6 +346,7 @@ interface ComponentCompileInternalResult {
   errors: CompilerError[];
   warnings: CompilerWarning[];
   requiresRuntime: boolean;
+  usesBlocks?: boolean;
   artifact?: ComponentArtifact;
 }
 
@@ -436,11 +438,12 @@ function compileComponentElement(
     return { codeSnippets: [], errors, warnings, requiresRuntime: false };
   }
 
-  const classCode = buildComponentClass(
+  const { code: classCode, usesBlocks } = buildComponentClass(
     metadata,
     renderIR,
     renderTargetVar,
-    componentFields
+    componentFields,
+    options.renderer === 'legacy' ? null : element.ownerDocument
   );
   const registrationCode = `if (!customElements.get('${metadata.tagName}')) {\n  customElements.define('${metadata.tagName}', ${metadata.className});\n}`;
 
@@ -455,6 +458,7 @@ function compileComponentElement(
     errors,
     warnings,
     requiresRuntime: containsRuntimeDependency(renderIR),
+    usesBlocks,
     artifact: {
       name: metadata.tagName,
       className: metadata.className,
@@ -788,8 +792,9 @@ function buildComponentClass(
   metadata: ComponentMetadata,
   renderIR: ComponentIR,
   renderTargetVar: string,
-  componentFields: ReadonlySet<string> = new Set()
-): string {
+  componentFields: ReadonlySet<string> = new Set(),
+  blockDocument: Document | null = null
+): { code: string; usesBlocks: boolean } {
   const observedGetter =
     metadata.observedAttributes.length > 0
       ? `  static get observedAttributes() { return ${JSON.stringify(metadata.observedAttributes)}; }`
@@ -890,6 +895,33 @@ function buildComponentClass(
     containsBindings(renderIR);
   const controlledSelectors = collectControlledSelectors(renderIR);
   const directiveCounter = { value: 0 };
+
+  let blockPlan: BlockComponentPlan | null = null;
+  if (blockDocument) {
+    try {
+      blockPlan = compileBlockComponent(renderIR, {
+        className: metadata.className,
+        document: blockDocument,
+        componentFields: componentInterpolationVars,
+        renderEventBody: (directive, eventRootVar, scopeVars) =>
+          renderEventBody(
+            directive,
+            eventRootVar,
+            directiveCounter,
+            scopeVars,
+            componentInterpolationVars
+          ),
+      });
+    } catch (error) {
+      if (!(error instanceof UnsupportedBlockFeature)) {
+        throw error;
+      }
+      CompilerLogger.logDebug('Component uses the reconciling renderer', {
+        component: metadata.tagName,
+        reason: error.message,
+      });
+    }
+  }
   const renderDirectiveChild = (
     directive: DirectiveNode,
     targetVar: string
@@ -1083,6 +1115,16 @@ function buildComponentClass(
 
     if (hadOwnValue) {
       this.__htmsState[propName] = ownValue;
+    }
+  }
+
+  __htmsAdoptState(propName) {
+    // A value assigned before the element upgraded is an own property that
+    // would hide the class accessor; move it into state.
+    if (Object.prototype.hasOwnProperty.call(this, propName)) {
+      const value = this[propName];
+      delete this[propName];
+      this.__htmsState[propName] = value;
     }
   }
 
@@ -1285,19 +1327,11 @@ function buildComponentClass(
 
 `;
 
-  const eventHelpers = hasEventDirectives
-    ? `  __htmsMarkListener(target, eventType, handler, options) {
+  const legacyListenerHelpers = `  __htmsMarkListener(target, eventType, handler, options) {
     if (!target.__htmsListeners) {
       target.__htmsListeners = [];
     }
     target.__htmsListeners.push({ eventType, handler, options });
-  }
-
-  __htmsListen(target, eventType, handler, options) {
-    target.addEventListener(eventType, handler, options);
-    this.__htmsRenderCleanups.push(() => {
-      target.removeEventListener(eventType, handler, options);
-    });
   }
 
   __htmsActivateListeners(target, source) {
@@ -1321,6 +1355,15 @@ function buildComponentClass(
       return eventRoot;
     }
     return this.__htmsRoot || this;
+  }
+
+`;
+
+  const sharedEventHelpers = `  __htmsListen(target, eventType, handler, options) {
+    target.addEventListener(eventType, handler, options);
+    this.__htmsRenderCleanups.push(() => {
+      target.removeEventListener(eventType, handler, options);
+    });
   }
 
   __htmsClaimOnce(target, id) {
@@ -1390,7 +1433,10 @@ function buildComponentClass(
     }
   }
 
-`
+`;
+
+  const eventHelpers = hasEventDirectives
+    ? `${legacyListenerHelpers}${sharedEventHelpers}`
     : '';
 
   const reconciliationHelpers = `  __htmsMarkProperty(target, path, value) {
@@ -1734,12 +1780,36 @@ ${bodyLines.join('\n')}
     .join('\n');
   const renderBody = renderLines.map((line) => `  ${line}`).join('\n');
 
-  return `class ${metadata.className} extends HTMLElement {
+  if (blockPlan) {
+    return {
+      code: buildBlockComponentClass({
+        metadata,
+        renderIR,
+        plan: blockPlan,
+        sections: [
+          methodsCode,
+          inputHelpers,
+          stateHelpers,
+          updateHelpers,
+          renderRootHelper,
+        ],
+        sharedEventHelpers,
+        lifecycleSection,
+        shadowInit,
+        statePropertyInitialization,
+        inputInitialization,
+      }),
+      usesBlocks: true,
+    };
+  }
+
+  return {
+    code: finalizeStateStorage(`class ${metadata.className} extends HTMLElement {
 ${staticTemplateProperty}${methodsCode}${inputHelpers}${stateHelpers}${updateHelpers}${eventHelpers}${reconciliationHelpers}${renderRootHelper}${focusHelpers}  constructor() {
     super();
     this.__htmsRoot = null;
-    this.__htmsProps = Object.create(null);
-    this.__htmsState = Object.create(null);
+    this.__htmsProps = Object.create(__HTMS_CLASS__.__htmsStore());
+    this.__htmsState = Object.create(__HTMS_CLASS__.__htmsStore());
     this.__htmsConnected = false;
     this.__htmsRendering = false;
     this.__htmsRenderScheduled = false;
@@ -1778,7 +1848,228 @@ ${renderBody}
       this.__htmsFinishUpdate();
     }
   }
-}`;
+}`),
+    usesBlocks: false,
+  };
+}
+
+interface BlockClassInput {
+  metadata: ComponentMetadata;
+  renderIR: ComponentIR;
+  plan: BlockComponentPlan;
+  // Members shared with the reconciling renderer: methods, prop and state
+  // accessors, the update API and the shadow root helper.
+  sections: string[];
+  sharedEventHelpers: string;
+  lifecycleSection: string;
+  shadowInit: string;
+  statePropertyInitialization: string;
+  inputInitialization: string;
+}
+
+// Drops internal `__htms*` methods nothing reachable calls. Public members
+// and lifecycle callbacks are the roots; a helper is kept when a kept member
+// mentions it.
+// State and input values live in fast-mode store objects (a null-prototype
+// object is a slow dictionary in V8, an object created from one is not).
+// Reactive state becomes class accessors over that store, so reads in
+// render code are monomorphic property loads instead of calls to
+// per-instance closures. A state name that collides with another class
+// member keeps the per-instance property.
+function finalizeStateStorage(classCode: string): string {
+  const header = /^class ([$\w]+) extends HTMLElement \{\n/.exec(classCode);
+  if (!header) return classCode;
+  const className = header[1];
+  const members = new Set<string>();
+  for (const match of classCode.matchAll(
+    /^ {2}(?:static |get |set |async )*([$\w]+)\(/gm
+  )) {
+    members.add(match[1]);
+  }
+  const accessors: string[] = [];
+  const code = classCode
+    .replace(/__HTMS_CLASS__/g, className)
+    .replace(
+      /^ {4}this\.__htmsDefineStateProperty\(("[$\w]+")\);$/gm,
+      (line, quoted: string) => {
+        const name = JSON.parse(quoted) as string;
+        if (
+          members.has(name) ||
+          name === 'constructor' ||
+          name === '__proto__'
+        ) {
+          return line;
+        }
+        accessors.push(
+          `  get ${name}() {\n    return this.__htmsState.${name};\n  }\n\n  set ${name}(value) {\n    if (!Object.is(this.__htmsState.${name}, value)) {\n      this.__htmsState.${name} = value;\n      if (!this.__htmsRendering) this.__htmsRequestRender();\n    }\n  }\n`
+        );
+        return `    this.__htmsAdoptState(${quoted});`;
+      }
+    );
+  const store = `  static __htmsStore() {\n    return this.__htmsStoreProto || (this.__htmsStoreProto = Object.create(null));\n  }\n`;
+  return code.replace(
+    header[0],
+    `${header[0]}${store}\n${accessors.map((accessor) => `${accessor}\n`).join('')}`
+  );
+}
+
+function pruneUnusedHelpers(classCode: string): string {
+  const lines = classCode.split('\n');
+  const starts: Array<{ line: number; name: string }> = [];
+  lines.forEach((line, index) => {
+    const match = /^ {2}(?:static |get |set |async )*([$\w]+)\(/.exec(line);
+    if (match) starts.push({ line: index, name: match[1] });
+  });
+  const chunks = starts.map((start, index) => ({
+    name: start.name,
+    from: start.line,
+    to: index + 1 < starts.length ? starts[index + 1].line : lines.length - 1,
+  }));
+  const text = (from: number, to: number): string =>
+    lines.slice(from, to).join('\n');
+  const kept = new Set<number>();
+  let reachable = text(0, chunks[0]?.from ?? lines.length);
+  chunks.forEach((chunk, index) => {
+    if (!chunk.name.startsWith('__htms')) {
+      kept.add(index);
+      reachable += `\n${text(chunk.from, chunk.to)}`;
+    }
+  });
+  let changed = true;
+  while (changed) {
+    changed = false;
+    chunks.forEach((chunk, index) => {
+      if (kept.has(index)) return;
+      // eslint-disable-next-line security/detect-non-literal-regexp
+      const pattern = new RegExp(`\\b${chunk.name.replace(/\$/g, '\\$')}\\b`);
+      if (pattern.test(reachable)) {
+        kept.add(index);
+        reachable += `\n${text(chunk.from, chunk.to)}`;
+        changed = true;
+      }
+    });
+  }
+  const removed = new Set<number>();
+  chunks.forEach((chunk, index) => {
+    if (kept.has(index)) return;
+    for (let line = chunk.from; line < chunk.to; line += 1) removed.add(line);
+  });
+  return lines.filter((_, index) => !removed.has(index)).join('\n');
+}
+
+function buildBlockComponentClass(input: BlockClassInput): string {
+  const { metadata, renderIR, plan } = input;
+  const className = metadata.className;
+  const delegated = plan.delegatedEvents;
+  const hasListeners = plan.hasHandlers || plan.globalListeners.length > 0;
+
+  const lifecycleState = collectLifecycleStateDirectives(renderIR);
+  const renderLines: string[] = [];
+  for (const directive of lifecycleState.init) {
+    renderLines.push(...renderStateDirective(directive, ''));
+  }
+  for (const directive of lifecycleState.derive) {
+    renderLines.push(...renderStateDirective(directive, ''));
+  }
+  renderLines.push(
+    'if (this.__htmsBlock) {',
+    '  this.__htmsU0(this.__htmsBlock);',
+    '} else {',
+    '  this.__htmsMount(this.__htmsRoot || this);',
+    '}'
+  );
+  if (plan.globalListeners.length > 0) {
+    renderLines.push(
+      'if (!this.__htmsGlobalsBound) {',
+      '  this.__htmsGlobalsBound = true;',
+      ...plan.globalListeners.map((line) => `  ${line}`),
+      '}'
+    );
+  }
+  renderLines.push(...plan.statements.filter((line) => line.trim().length > 0));
+  const renderBody = renderLines.map((line) => `      ${line}`).join('\n');
+
+  const mount = `  __htmsMount(root) {
+    const template = ${className}.__htmsT0();
+    let hydrate = false;
+    if (root.firstChild) {
+      // Server-rendered markup with the template's shape is adopted in
+      // place; anything else is replaced.
+      __htmsStrip(root);
+      hydrate = __htmsSame(root, template);
+      if (!hydrate) {
+        root.textContent = '';
+      }
+    }
+    const container = hydrate ? root : template.cloneNode(true);
+    this.__htmsBlock = this.__htmsC0(container, hydrate);
+    if (!hydrate) {
+      root.appendChild(container);
+    }
+  }
+
+`;
+
+  const delegatedList = JSON.stringify(delegated);
+  const addDelegated =
+    delegated.length > 0
+      ? `    for (const type of ${delegatedList}) {\n      (this.__htmsRoot || this).addEventListener(type, this.__htmsD);\n      (this.__htmsRoot || this).addEventListener(type, this.__htmsD, true);\n    }\n`
+      : '';
+  const removeDelegated =
+    delegated.length > 0
+      ? `    for (const type of ${delegatedList}) {\n      (this.__htmsRoot || this).removeEventListener(type, this.__htmsD);\n      (this.__htmsRoot || this).removeEventListener(type, this.__htmsD, true);\n    }\n`
+      : '';
+
+  const sections = input.sections;
+  const generated = [plan.members, ...sections, renderBody].join('\n');
+  const usesTimers = generated.includes('__htmsDebounce(');
+  const usesGlobals = plan.globalListeners.length > 0;
+
+  return pruneUnusedHelpers(
+    finalizeStateStorage(`class ${className} extends HTMLElement {
+${plan.members}
+${sections.join('')}${hasListeners ? input.sharedEventHelpers : ''}${mount}  constructor() {
+    super();
+    this.__htmsRoot = null;
+    this.__htmsProps = Object.create(__HTMS_CLASS__.__htmsStore());
+    this.__htmsState = Object.create(__HTMS_CLASS__.__htmsStore());
+    this.__htmsConnected = false;
+    this.__htmsRendering = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsResolveUpdate = null;
+    this.__htmsUpdatePromise = Promise.resolve();
+    this.__htmsLastError = null;
+    this.__htmsBlock = null;
+${usesGlobals ? `    this.__htmsRenderCleanups = [];\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsTimers = new Map();\n` : ''}${delegated.length > 0 ? `    this.__htmsD = (event) => __htmsDispatch(this, event);\n` : ''}${input.shadowInit ? `${input.shadowInit}\n` : ''}${input.statePropertyInitialization ? `${input.statePropertyInitialization}\n` : ''}${input.inputInitialization ? `${input.inputInitialization}\n` : ''}  }
+
+  connectedCallback() {
+${metadata.shadowMode === 'none' ? '' : `    this.__htmsEnsureRenderRoot();\n`}    this.__htmsConnected = true;
+${addDelegated}    this.render();
+  }${input.lifecycleSection}
+  disconnectedCallback() {
+    this.__htmsConnected = false;
+    this.__htmsRenderScheduled = false;
+    this.__htmsFinishUpdate();
+${removeDelegated}${usesGlobals ? `    this.__htmsCleanupRenderListeners();\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsClearTimers();\n` : ''}    if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
+      window.__htms.disposeEffectsFor(this);
+    }
+  }
+
+  render() {
+    this.__htmsRenderScheduled = false;
+    this.__htmsRendering = true;
+    this.__htmsLastError = null;
+    try {
+${renderBody}
+    } catch (error) {
+      this.__htmsReportRenderError(error);
+    } finally {
+      this.__htmsRendering = false;
+      this.__htmsFinishUpdate();
+    }
+  }
+}`)
+  );
 }
 
 function renderDirective(
@@ -1963,6 +2254,15 @@ function renderLoopDirective(
       componentInterpolationVars
     )
   );
+  if (directive.mode === 'array' && directive.key) {
+    // Reconciliation matches keyed rows by data-key, so reordering moves
+    // their DOM nodes instead of rewriting them.
+    const keyedVar = `_keyed${counter.value++}`;
+    lines.push(
+      `${innerIndent}const ${keyedVar} = ${fragmentVar}.firstElementChild;`,
+      `${innerIndent}if (${keyedVar}) { ${keyedVar}.setAttribute('data-key', String(${directive.key})); }`
+    );
+  }
   lines.push(`${innerIndent}${targetVar}.appendChild(${fragmentVar});`);
   lines.push(`${indent}}`);
   return lines;
@@ -2043,35 +2343,14 @@ function renderEventDirective(
   // The statements that run when the event fires (or after debounce).
   const bodyLines: string[] = [
     `const ${eventRootVar} = this.__htmsResolveEventRoot(event.currentTarget, ${targetVar});`,
+    ...renderEventBody(
+      directive,
+      eventRootVar,
+      counter,
+      scopeVars,
+      componentInterpolationVars
+    ),
   ];
-  if (directive.body.length > 0) {
-    bodyLines.push(...directive.body);
-  } else {
-    bodyLines.push('// No event body');
-  }
-  if (directive.directives) {
-    for (const nested of directive.directives) {
-      bodyLines.push(
-        ...renderDirective(
-          nested,
-          eventRootVar,
-          counter,
-          '',
-          scopeVars,
-          componentInterpolationVars
-        )
-      );
-    }
-  }
-  let hasStateChange = false;
-  walkDirectives(directive.directives, (nested) => {
-    if (nested.kind === 'state') {
-      hasStateChange = true;
-    }
-  });
-  if (hasStateChange) {
-    bodyLines.push(`this.requestUpdate();`);
-  }
 
   const listenerOptions =
     modifiers.once || modifiers.passive
@@ -2118,6 +2397,48 @@ function renderEventDirective(
   lines.push(`${indent}}`);
 
   return lines;
+}
+
+// The statements an <event> directive runs when it fires: its body, then
+// its nested directives against `eventRootVar`, then a re-render when any of
+// them changed state.
+function renderEventBody(
+  directive: EventDirective,
+  eventRootVar: string,
+  counter: { value: number },
+  scopeVars: string[],
+  componentInterpolationVars: string[]
+): string[] {
+  const bodyLines: string[] = [];
+  if (directive.body.length > 0) {
+    bodyLines.push(...directive.body);
+  } else {
+    bodyLines.push('// No event body');
+  }
+  if (directive.directives) {
+    for (const nested of directive.directives) {
+      bodyLines.push(
+        ...renderDirective(
+          nested,
+          eventRootVar,
+          counter,
+          '',
+          scopeVars,
+          componentInterpolationVars
+        )
+      );
+    }
+  }
+  let hasStateChange = false;
+  walkDirectives(directive.directives, (nested) => {
+    if (nested.kind === 'state') {
+      hasStateChange = true;
+    }
+  });
+  if (hasStateChange) {
+    bodyLines.push(`this.requestUpdate();`);
+  }
+  return bodyLines;
 }
 
 // <event target="window"> and friends listen outside the render root.

@@ -6,6 +6,10 @@ export interface ParseOptions {
   strictMode?: boolean;
   outputFormat?: 'esm' | 'cjs' | 'iife';
   mode?: 'dom' | 'component';
+  // 'auto' (default) compiles templates to fine-grained blocks and falls
+  // back to the reconciling renderer for features blocks do not support.
+  // 'legacy' always uses the reconciling renderer.
+  renderer?: 'auto' | 'legacy';
 }
 
 export interface CompilerResult {

@@ -1,6 +1,17 @@
 import { parseHTML } from '../../src/parser';
 
 describe('Nested directives inside markup', () => {
+  const compileLegacy = (markup: string): string => {
+    const result = parseHTML(markup, {
+      mode: 'component',
+      renderer: 'legacy',
+    });
+    if (!result.success || !result.code) {
+      throw new Error('Compilation failed: ' + JSON.stringify(result.errors));
+    }
+    return result.code;
+  };
+
   const compile = (markup: string): string => {
     const result = parseHTML(markup, { mode: 'component' });
     if (!result.success || !result.code) {
@@ -19,7 +30,7 @@ describe('Nested directives inside markup', () => {
   });
 
   it('renders an <event> nested inside an element', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="nested-event-box">
         <var name="count" value="0" mutable="true"></var>
         <div class="wrap">
@@ -35,7 +46,7 @@ describe('Nested directives inside markup', () => {
   });
 
   it('renders an <if> nested inside an element', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="nested-if-box">
         <var name="count" value="0" mutable="true"></var>
         <div class="wrap">
@@ -77,7 +88,7 @@ describe('Nested directives inside markup', () => {
   });
 
   it('supports custom event types on nested listeners', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="custom-event-box">
         <var name="seen" value="0" mutable="true"></var>
         <div class="wrap">
@@ -93,7 +104,7 @@ describe('Nested directives inside markup', () => {
   });
 
   it('applies event modifiers prevent/stop/once/passive', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="modifier-box">
         <var name="count" value="0" mutable="true"></var>
         <button id="b">x</button>
@@ -164,6 +175,17 @@ describe('Boolean attribute interpolation', () => {
 });
 
 describe('Selector and expression safety', () => {
+  const compileLegacy = (markup: string): string => {
+    const result = parseHTML(markup, {
+      mode: 'component',
+      renderer: 'legacy',
+    });
+    if (!result.success || !result.code) {
+      throw new Error('Compilation failed: ' + JSON.stringify(result.errors));
+    }
+    return result.code;
+  };
+
   const compile = (markup: string): string => {
     const result = parseHTML(markup, { mode: 'component' });
     if (!result.success || !result.code) {
@@ -186,7 +208,7 @@ describe('Selector and expression safety', () => {
   });
 
   it('accepts attribute selectors with quotes', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="attr-selector-box">
         <var name="count" value="0" mutable="true"></var>
         <button id="b">x</button>
@@ -227,14 +249,26 @@ describe('Selector and expression safety', () => {
     expect(result.success).toBe(false);
   });
 
-  it('escapes quotes and backslashes in generated string literals', () => {
-    const code = compile(`
-      <component name="escape-box">
-        <div title='He said "hi" \\ back'>safe</div>
-      </component>
-    `);
-    expect(code).not.toContain('Unterminated');
-    expect(code).toContain('setAttribute');
+  it('escapes quotes and backslashes in generated string literals', async () => {
+    for (const renderer of ['auto', 'legacy'] as const) {
+      const tagName = `escape-box-${renderer}`;
+      const result = parseHTML(
+        `<component name="${tagName}">
+          <div title='He said "hi" \\ back'>safe</div>
+        </component>`,
+        { mode: 'component', renderer }
+      );
+      expect(result.success).toBe(true);
+      new Function((result.code ?? '').replace(/export\s*\{[^}]*\};?/g, ''))();
+      const element = document.createElement(tagName) as HTMLElement & {
+        shadowRoot: ShadowRoot;
+      };
+      document.body.appendChild(element);
+      expect(element.shadowRoot.querySelector('div')?.getAttribute('title')).toBe(
+        'He said "hi" \\ back'
+      );
+      element.remove();
+    }
   });
 });
 

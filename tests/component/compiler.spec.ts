@@ -17,6 +17,19 @@ describe('Component compiler', () => {
     return result.code;
   };
 
+  // The reconciling renderer, used when a component needs a feature the
+  // block renderer does not support.
+  const compileLegacy = (markup: string): string => {
+    const result = parseHTML(markup, {
+      mode: 'component',
+      renderer: 'legacy',
+    });
+    if (!result.success || !result.code) {
+      throw new Error('Compilation failed: ' + JSON.stringify(result.errors));
+    }
+    return result.code;
+  };
+
   const execute = (code: string): void => {
     const runnable = code.replace(/export\s*\{[^}]*\};?/g, '');
     new Function(runnable)();
@@ -76,19 +89,23 @@ describe('Component compiler', () => {
   });
 
   it('renders repeat loops inside render()', () => {
-    const code = compile(`
+    const source = `
       <component name="loop-box">
         <var name="items" value='["One","Two"]' mutable="true"></var>
         <repeat variable="items" index="i">
           <div class="item">{item}</div>
         </repeat>
       </component>
-    `);
-    expect(code).toContain('Array.isArray');
-    expect(code).toContain('const _source');
-    expect(code).toContain('= this.items;');
-    expect(code).toContain('for (let i = 0; i < _items');
-    expect(code).toContain('const _frag');
+    `;
+    const legacy = compileLegacy(source);
+    expect(legacy).toContain('Array.isArray');
+    expect(legacy).toContain('const _source');
+    expect(legacy).toContain('= this.items;');
+    expect(legacy).toContain('for (let i = 0; i < _items');
+    expect(legacy).toContain('const _frag');
+
+    const code = compile(source);
+    expect(code).toContain('__htmsList(this, $$b.L0, this.items');
 
     execute(code);
 
@@ -355,9 +372,9 @@ describe('Component compiler', () => {
       </component>
     `);
 
-    expect(code).toContain(
-      "document.createElementNS('http://www.w3.org/2000/svg'"
-    );
+    // SVG children are parsed inside an <svg> context so they keep the SVG
+    // namespace.
+    expect(code).toContain('<circle cx="5" cy="5" r="4"></circle>');
     execute(code);
 
     const icon = document.createElement('status-icon') as HTMLElement & {
@@ -534,7 +551,7 @@ describe('Component compiler', () => {
   });
 
   it('renders component-scoped keyed lists with item events', async () => {
-    const code = compile(`
+    const source = `
       <component name="keyed-box">
         <var name="items" value='["Alpha","Beta"]' mutable="true"></var>
         <ul id="items"></ul>
@@ -548,12 +565,17 @@ describe('Component compiler', () => {
           </li>
         </keyedlist>
       </component>
-    `);
+    `;
 
-    expect(code).toContain("componentRoot.querySelectorAll('#items')");
+    const legacy = compileLegacy(source);
+    expect(legacy).toContain("componentRoot.querySelectorAll('#items')");
+    expect(legacy).toContain("setAttribute('data-key'");
+    expect(legacy).toContain('__htmsReconcileChildren');
+    expect(legacy).toContain('__htmsFindMatchingNode');
+
+    const code = compile(source);
     expect(code).toContain("setAttribute('data-key'");
-    expect(code).toContain('__htmsReconcileChildren');
-    expect(code).toContain('__htmsFindMatchingNode');
+    expect(code).not.toContain('__htmsReconcileChildren');
 
     execute(code);
 
@@ -588,7 +610,7 @@ describe('Component compiler', () => {
   });
 
   it('handles switch/case branches', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="switch-box">
         <switch variable="mode">
           <case value="on"><div class="on"></div></case>
@@ -602,7 +624,7 @@ describe('Component compiler', () => {
   });
 
   it('accepts switch expressions', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="switch-expr">
         <switch expr="this.mode">
           <case value="on"><div class="on"></div></case>
@@ -615,7 +637,7 @@ describe('Component compiler', () => {
   });
 
   it('supports else-if chains', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="chain-box">
         <if condition="this.mode === 'a'"><div class="a"></div></if>
         <else-if condition="this.mode === 'b'"><div class="b"></div></else-if>
@@ -662,7 +684,7 @@ describe('Component compiler', () => {
   });
 
   it('supports model bindings', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="model-box">
         <var name="name" value="''" mutable="true"></var>
         <input id="name" />
@@ -940,7 +962,7 @@ describe('Component compiler', () => {
   });
 
   it('creates visibility directives for toggle', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="toggle-box">
         <toggle target="#panel" condition="flag"></toggle>
         <div id="panel"></div>
@@ -951,7 +973,7 @@ describe('Component compiler', () => {
   });
 
   it('appends children to existing nodes', () => {
-    const code = compile(`
+    const code = compileLegacy(`
       <component name="append-box">
         <div id="target"></div>
         <append target="#target">

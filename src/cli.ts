@@ -50,6 +50,7 @@ interface CompileCommandOptions {
   maxSize?: string;
   mode?: string;
   declarations?: boolean;
+  renderer?: string;
 }
 
 interface DevCommandOptions extends CompileCommandOptions {
@@ -127,6 +128,11 @@ export function createProgram(): Command {
       'Compilation mode (only component supported)',
       'component'
     )
+    .option(
+      '--renderer <renderer>',
+      'Renderer: auto (fine-grained blocks) or legacy (reconciling)',
+      'auto'
+    )
     .action(async (inputs: string[], options: CompileCommandOptions) => {
       const normalized = normalizeCompileOptions(options);
       if (!normalized.value) {
@@ -177,6 +183,11 @@ export function createProgram(): Command {
       'Compilation mode (only component supported)',
       'component'
     )
+    .option(
+      '--renderer <renderer>',
+      'Renderer: auto (fine-grained blocks) or legacy (reconciling)',
+      'auto'
+    )
     .action(async (input: string, options: CompileCommandOptions) => {
       const normalized = normalizeCompileOptions(options);
       if (!normalized.value) {
@@ -210,6 +221,11 @@ export function createProgram(): Command {
       '--mode <mode>',
       'Compilation mode (only component supported)',
       'component'
+    )
+    .option(
+      '--renderer <renderer>',
+      'Renderer: auto (fine-grained blocks) or legacy (reconciling)',
+      'auto'
     )
     .action(async (input: string, options: DevCommandOptions) => {
       const normalized = normalizeCompileOptions(options);
@@ -327,6 +343,11 @@ function normalizeCompileOptions(options: CompileCommandOptions): {
     errors.push('Only component mode is supported.');
   }
 
+  const renderer = (options.renderer ?? 'auto').toLowerCase();
+  if (renderer !== 'auto' && renderer !== 'legacy') {
+    errors.push('Invalid --renderer. Use auto or legacy.');
+  }
+
   if (errors.length > 0) {
     return { errors };
   }
@@ -338,6 +359,7 @@ function normalizeCompileOptions(options: CompileCommandOptions): {
       strict: Boolean(options.strict),
       maxSize: maxSize ?? DEFAULT_MAX_SIZE,
       mode: 'component',
+      renderer: renderer as 'auto' | 'legacy',
       declarations: options.declarations ?? true,
     },
     errors,

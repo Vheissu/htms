@@ -14,7 +14,7 @@ const IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 // Attributes that are boolean in HTML: presence means true, so a dynamic
 // value must toggle the attribute rather than set a literal string.
-const BOOLEAN_ATTRIBUTES = new Set([
+export const BOOLEAN_ATTRIBUTES = new Set([
   'allowfullscreen',
   'async',
   'autofocus',
@@ -116,7 +116,7 @@ export function templateNodesToHTML(nodes: TemplateNode[]): string {
 
 // Elements with no closing tag. Serializing `<br></br>` would make the HTML
 // parser insert a second <br>.
-const VOID_ELEMENTS = new Set([
+export const VOID_ELEMENTS = new Set([
   'area',
   'base',
   'br',
@@ -134,7 +134,7 @@ const VOID_ELEMENTS = new Set([
 
 // Raw text elements: the parser does not decode entities inside them, so
 // their text must be emitted verbatim (only a closing tag needs breaking).
-const RAW_TEXT_ELEMENTS = new Set(['style', 'script']);
+export const RAW_TEXT_ELEMENTS = new Set(['style', 'script']);
 
 function nodeToHtml(node: TemplateNode, parent?: TemplateNode): string {
   if (node.type === 'text') {
@@ -167,7 +167,7 @@ function nodeToHtml(node: TemplateNode, parent?: TemplateNode): string {
   return `${openTag}${children}</${node.tagName}>`;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -457,7 +457,7 @@ function interpolationTokens(value: string): InterpolationToken[] {
   return tokens;
 }
 
-function serializeTextValue(
+export function serializeTextValue(
   value: string,
   interpolationVars: string[],
   componentInterpolationVars: string[]
@@ -501,7 +501,7 @@ function serializeTextValue(
 
 // Returns the resolved expression when the whole attribute value is a
 // single "{expr}" interpolation, otherwise null.
-function resolveWholeAttributeInterpolation(
+export function resolveWholeAttributeInterpolation(
   value: string,
   interpolationVars: string[],
   componentInterpolationVars: string[]

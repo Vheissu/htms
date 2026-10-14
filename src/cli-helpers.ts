@@ -21,6 +21,7 @@ export interface CliCompileOptions {
   maxSize: number;
   mode?: 'component';
   declarations?: boolean;
+  renderer?: 'auto' | 'legacy';
 }
 
 export interface CompileOutcome {
@@ -202,6 +203,7 @@ export async function compileFile(
     maxFileSize: options.maxSize,
     strictMode: options.strict,
     outputFormat: options.format,
+    renderer: options.renderer,
     mode: 'component',
   };
 

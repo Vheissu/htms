@@ -64,6 +64,9 @@ export interface ArrayLoopDirective {
   source: string;
   itemVar: string;
   indexVar?: string;
+  // Identity expression for keyed reconciliation (`key="row.id"`). Rows
+  // with the same key keep their DOM nodes when the array is reordered.
+  key?: string;
   template: TemplateNode[];
   directives?: DirectiveNode[];
 }
