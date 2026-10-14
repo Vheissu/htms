@@ -223,4 +223,143 @@ describe('dirty tracking', () => {
     await element.updateComplete;
     expect(query(element, 'li').textContent).toBe('changed');
   });
+
+  it('skips rows that kept their item when a list is reordered', async () => {
+    const probe = {
+      calls: 0,
+      label(row: { label: string }): string {
+        this.calls++;
+        return row.label;
+      },
+    };
+    const source = `
+      <var name="rows" value='[{"id": 1, "label": "a"}, {"id": 2, "label": "b"}, {"id": 3, "label": "c"}]' mutable="true"></var>
+      <var name="selected" value="0" mutable="true"></var>
+      <var name="probe" value="null" mutable="true"></var>
+      <function name="swap">const row = rows[0]; rows[0] = rows[2]; rows[2] = row;</function>
+      <function name="shout">rows[0].label += '!';</function>
+      <ul><repeat variable="rows" item="row" key="row.id">
+        <li class:active="row.id === selected">{probe ? probe.label(row) : ''}</li>
+      </repeat></ul>
+      <button id="swap" on:click="swap()">Swap</button>
+      <button id="shout" on:click="shout()">Shout</button>
+    `;
+    const code = compileComponent(
+      `<component name="swap-box">${source}</component>`
+    );
+    // Element writes report only the list's own bit: `selected` is only
+    // compared, so it cannot show the change, and nothing inside a row
+    // changed. Writes into a row carry the deep bit.
+    expect(code).toContain('this.__htmsAfterMethod(1);');
+    expect(code).toContain('this.__htmsAfterMethod(1073741825);');
+    expect(code).toMatch(/__htmsList\(.*, \$\$d, 1, false\);/);
+
+    const element = await mountComponent(source);
+    element.probe = probe;
+    await element.updateComplete;
+    expect(probe.calls).toBe(3);
+    await click(element, '#swap');
+    expect(texts(element.shadowRoot as never, 'li')).toEqual(['c', 'b', 'a']);
+    expect(probe.calls).toBe(3);
+    await click(element, '#shout');
+    expect(texts(element.shadowRoot as never, 'li')).toEqual(['c!', 'b', 'a']);
+    expect(probe.calls).toBe(6);
+  });
+
+  it('treats an element write as deep when an alias is rendered', async () => {
+    const code = compileComponent(`
+      <component name="alias-box">
+        <var name="rows" value='[{"label": "a"}, {"label": "b"}]' mutable="true"></var>
+        <var name="current" value="null" mutable="true"></var>
+        <function name="swap">const row = rows[0]; rows[0] = rows[1]; rows[1] = row;</function>
+        <ul><repeat variable="rows" item="row"><li>{row.label}</li></repeat></ul>
+        <p>{current ? current.label : ''}</p>
+        <button on:click="current = rows[0]">Pick</button>
+        <button on:click="swap()">Swap</button>
+      </component>
+    `);
+    // `current` may hold a row, so the write may sit inside a rendered
+    // field: both bits plus the deep bit.
+    expect(code).toContain('this.__htmsAfterMethod(1073741827);');
+  });
+
+  it('updates a moved row that renders its index', async () => {
+    const source = `
+      <var name="rows" value='["a", "b", "c"]' mutable="true"></var>
+      <function name="swap">const row = rows[0]; rows[0] = rows[2]; rows[2] = row;</function>
+      <ul><repeat variable="rows" item="row" index="i" key="row"><li>{i}:{row}</li></repeat></ul>
+      <button id="swap" on:click="swap()">Swap</button>
+    `;
+    expect(
+      compileComponent(`<component name="index-box">${source}</component>`)
+    ).toMatch(/__htmsList\(.*, \$\$d, 1, true\);/);
+    const element = await mountComponent(source);
+    await click(element, '#swap');
+    expect(texts(element.shadowRoot as never, 'li')).toEqual([
+      '0:c',
+      '1:b',
+      '2:a',
+    ]);
+  });
+
+  it('gives a handler the event only when it reads it', async () => {
+    const source = `
+      <var name="picked" value="''" mutable="true"></var>
+      <var name="count" value="0" mutable="true"></var>
+      <button id="bump" on:click="count++">Bump</button>
+      <button id="pick" data-id="x" on:click="picked = event.currentTarget.dataset.id">Pick</button>
+      <p id="out">{count}:{picked}</p>
+    `;
+    const code = compileComponent(
+      `<component name="event-arg-box">${source}</component>`
+    );
+    expect(code).toContain('__htmsH0($$b) {');
+    expect(code).toContain('__htmsH1(event, $$b) {');
+    const element = await mountComponent(source);
+    await click(element, '#bump');
+    await click(element, '#pick');
+    expect(query(element, '#out').textContent).toBe('1:x');
+  });
+
+  it('gives method parameters what their call sites pass', async () => {
+    const source = `
+      <var name="rows" value='[{"label": "a"}]' mutable="true"></var>
+      <function name="make" params="count">const data = new Array(count); data[0] = { label: 'n' }; return data;</function>
+      <function name="fill">rows = make(1);</function>
+      <function name="rename" params="row">row.label = 'z';</function>
+      <ul><repeat variable="rows" item="row"><li>{row.label}</li></repeat></ul>
+      <button id="rename" on:click="rename(rows[0])">Rename</button>
+      <button id="fill" on:click="fill()">Fill</button>
+    `;
+    const code = compileComponent(
+      `<component name="param-box">${source}</component>`
+    );
+    // `make` writes into an array it built from a number, so it has nothing
+    // to report; `rename` writes into a row of `rows`.
+    expect(code).toMatch(/make\(count\) \{\n\s+const data/);
+    expect(code).toContain('this.__htmsAfterMethod(1073741825);');
+    expect(code).not.toMatch(/__htmsNotifyStateChange\(-?\d+\);/);
+    const element = await mountComponent(source);
+    await click(element, '#rename');
+    expect(query(element, 'li').textContent).toBe('z');
+    await click(element, '#fill');
+    expect(query(element, 'li').textContent).toBe('n');
+  });
+
+  it('creates the update promise only while a render is pending', async () => {
+    const element = await mountComponent(`
+      <var name="count" value="1" mutable="true"></var>
+      <p>{count}</p>
+    `);
+    const idle = element.updateComplete;
+    expect(idle).toBeInstanceOf(Promise);
+    element.count = 2;
+    const pending = element.updateComplete;
+    expect(element.updateComplete).toBe(pending);
+    await pending;
+    expect(query(element, 'p').textContent).toBe('2');
+    expect(element.updateComplete).not.toBe(pending);
+    await element.requestUpdate();
+    expect(query(element, 'p').textContent).toBe('2');
+  });
 });

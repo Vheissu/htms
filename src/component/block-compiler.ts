@@ -8,7 +8,7 @@ import {
   TemplateNode,
 } from './ir';
 import { parseProgram } from '../utils/js-parser';
-import { ALL_DIRTY, DependencyAnalyzer } from './dependencies';
+import { ALL_DIRTY, DEEP_BIT, DependencyAnalyzer } from './dependencies';
 import { scopeExpression, scopeStatements } from './scope';
 import {
   BOOLEAN_ATTRIBUTES,
@@ -221,6 +221,9 @@ type CreateAction =
       node: PElement;
       type: string;
       handler: string;
+      // False for a handler that never reads the event; the dispatcher
+      // then skips exposing currentTarget on it.
+      usesEvent: boolean;
       options: string | null;
     }
   | { kind: 'code'; node: PElement; code: (local: string) => string }
@@ -247,6 +250,12 @@ interface BlockPlan {
   keyMethod: string | null;
   // keyed-list rows carry their key as data-key on the first element.
   dataKeyExpr: string | null;
+  // Fields the block's own expressions read other than through a loop
+  // variable: changes to anything else cannot reach a row whose item and
+  // index stayed the same.
+  direct: number;
+  // Loop index variables the block's expressions read.
+  indexReads: Set<string>;
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -381,9 +390,14 @@ class BlockCompiler {
       members.push(this.generateBlock(block));
     }
     members.push(...this.handlers);
+    // Every binding has been read, so the masks handlers report (which
+    // leave out fields no binding can observe) can now be computed.
+    this.analyzer.completeReads();
 
     return {
-      members: this.resolvePlaceholders(members.join('\n')),
+      members: this.resolveStateMasks(
+        this.resolvePlaceholders(members.join('\n'))
+      ),
       delegatedEvents: Array.from(this.delegated),
       globalListeners: this.globals,
       statements: this.statements,
@@ -413,6 +427,8 @@ class BlockCompiler {
       subs: 0,
       keyMethod: null,
       dataKeyExpr: null,
+      direct: 0,
+      indexReads: new Set(),
     };
     this.blocks.push(block);
     return block;
@@ -427,11 +443,19 @@ class BlockCompiler {
   }
 
   // Loop variables visible in a block, innermost first.
-  private visibleVars(
-    block: BlockPlan
-  ): Array<{ name: string; path: string; mask: number }> {
+  private visibleVars(block: BlockPlan): Array<{
+    name: string;
+    field: 'x' | 'i';
+    path: string;
+    mask: number;
+  }> {
     const seen = new Set<string>();
-    const result: Array<{ name: string; path: string; mask: number }> = [];
+    const result: Array<{
+      name: string;
+      field: 'x' | 'i';
+      path: string;
+      mask: number;
+    }> = [];
     let hops = 0;
     for (
       let current: BlockPlan | null = block;
@@ -443,6 +467,7 @@ class BlockCompiler {
         seen.add(variable.name);
         result.push({
           name: variable.name,
+          field: variable.field,
           path: `${'.P'.repeat(hops)}.${variable.field}`,
           mask: variable.mask,
         });
@@ -464,10 +489,22 @@ class BlockCompiler {
     asExpression = true
   ): number {
     const locals = new Map<string, number>();
-    for (const variable of this.visibleVars(block)) {
+    const visible = this.visibleVars(block);
+    for (const variable of visible) {
       locals.set(variable.name, variable.mask);
     }
-    return this.analyzer.readMask(code, locals, asExpression);
+    const { mask, direct } = this.analyzer.readMasks(
+      code,
+      locals,
+      asExpression
+    );
+    block.direct |= direct;
+    for (const variable of visible) {
+      if (variable.field === 'i' && mentions(code, variable.name)) {
+        block.indexReads.add(variable.name);
+      }
+    }
+    return mask;
   }
 
   // Mask a handler in `block` reports after running `code`: the alias
@@ -487,14 +524,54 @@ class BlockCompiler {
     return this.analyzer.writeMask(code, locals, false);
   }
 
-  // Lines that report a handler body's nested writes, if it has any.
+  // The line that reports a handler body's nested writes. Its mask depends
+  // on which fields bindings read, so it is a placeholder until every
+  // binding has been compiled; a body with nothing to report loses the line.
+  private readonly pendingNotifies: Array<{
+    block: BlockPlan;
+    code: string;
+    inert: readonly string[];
+  }> = [];
+
   private notifyLines(
     block: BlockPlan,
     body: readonly string[],
     inert: readonly string[] = []
   ): string[] {
-    const mask = this.writeMask(block, body.join('\n'), inert);
-    return mask === 0 ? [] : [`this.__htmsNotifyStateChange(${mask});`];
+    const id = this.pendingNotifies.length;
+    this.pendingNotifies.push({ block, code: body.join('\n'), inert });
+    return [`this.__htmsNotifyStateChange(@@notify:${id}@@);`];
+  }
+
+  // Fields read directly (not through a loop variable) anywhere in a block,
+  // including its nested lists and branches.
+  private blockDirect(block: BlockPlan): number {
+    let mask = block.direct;
+    for (const part of block.parts) {
+      if (part.kind === 'list') {
+        mask |= this.blockDirect(part.body);
+      } else if (part.kind === 'cond') {
+        for (const branch of part.branches) {
+          mask |= this.blockDirect(branch.body);
+        }
+      }
+    }
+    return mask;
+  }
+
+  // Whether anything in a loop body renders the index variable `name`.
+  private blockReadsIndex(block: BlockPlan, name: string): boolean {
+    if (block.indexReads.has(name)) return true;
+    for (const part of block.parts) {
+      if (part.kind === 'list') {
+        if (this.blockReadsIndex(part.body, name)) return true;
+      } else if (part.kind === 'cond') {
+        for (const branch of part.branches) {
+          if (this.blockReadsIndex(branch.body, name)) return true;
+        }
+      }
+    }
+    return false;
   }
 
   // Fields whose change can affect anything a block renders, including its
@@ -848,7 +925,12 @@ class BlockCompiler {
     body: string[],
     eventRoot?: { variable: string; expression: (base: string) => string }
   ): void {
-    const name = this.createHandlerMethod(block, modifiers, body, eventRoot);
+    const { name, usesEvent } = this.createHandlerMethod(
+      block,
+      modifiers,
+      body,
+      eventRoot
+    );
     const direct =
       !DELEGATED_EVENTS.has(eventType) ||
       modifiers.capture === true ||
@@ -863,6 +945,7 @@ class BlockCompiler {
         node: element,
         type: eventType,
         handler: name,
+        usesEvent,
         options: entries.length > 0 ? `{ ${entries.join(', ')} }` : null,
       });
     } else {
@@ -872,18 +955,21 @@ class BlockCompiler {
         node: element,
         type: eventType,
         handler: name,
+        usesEvent,
         options: null,
       });
     }
     element.wantLocal = true;
   }
 
+  // A handler takes the event only when something in it reads `event`;
+  // the dispatcher then skips patching currentTarget for the others.
   private createHandlerMethod(
     block: BlockPlan,
     modifiers: EventModifiers,
     body: string[],
     eventRoot?: { variable: string; expression: (base: string) => string }
-  ): string {
+  ): { name: string; usesEvent: boolean } {
     const name = `__htmsH${this.handlerCount++}`;
     const listenerId = JSON.stringify(name);
     const run = eventRoot
@@ -906,10 +992,11 @@ class BlockCompiler {
     const locals = this.declareLocals(block, code, '$$b').map(
       (line) => `    ${line}`
     );
+    const usesEvent = mentions(code, 'event');
     this.handlers.push(
-      `  ${name}(event, $$b) {\n${[...locals, code].join('\n')}\n  }\n`
+      `  ${name}(${usesEvent ? 'event, ' : ''}$$b) {\n${[...locals, code].join('\n')}\n  }\n`
     );
-    return name;
+    return { name, usesEvent };
   }
 
   private addCondition(
@@ -1362,17 +1449,25 @@ class BlockCompiler {
           'global event inside a loop or branch'
         );
       }
-      const name = this.createHandlerMethod(block, modifiers, body, {
-        variable: eventRootVar,
-        expression: () => '(this.__htmsRoot || this)',
-      });
+      const { name, usesEvent } = this.createHandlerMethod(
+        block,
+        modifiers,
+        body,
+        {
+          variable: eventRootVar,
+          expression: () => '(this.__htmsRoot || this)',
+        }
+      );
       const entries: string[] = [];
       if (modifiers.once) entries.push('once: true');
       if (modifiers.passive) entries.push('passive: true');
       if (modifiers.capture) entries.push('capture: true');
       const options = entries.length > 0 ? `, { ${entries.join(', ')} }` : '';
+      const listener = usesEvent
+        ? `(event) => this.${name}(event, this.__htmsBlock)`
+        : `() => this.${name}(this.__htmsBlock)`;
       this.globals.push(
-        `if (typeof window !== 'undefined') { this.__htmsListen(${global}, ${JSON.stringify(directive.eventType)}, (event) => this.${name}(event, this.__htmsBlock)${options}); }`
+        `if (typeof window !== 'undefined') { this.__htmsListen(${global}, ${JSON.stringify(directive.eventType)}, ${listener}${options}); }`
       );
       return;
     }
@@ -1727,8 +1822,11 @@ class BlockCompiler {
             create.push(`${local}.__htmsB = $$b;`);
           }
         } else {
+          const listener = action.usesEvent
+            ? `(event) => this.${action.handler}(event, $$b)`
+            : `() => this.${action.handler}($$b)`;
           create.push(
-            `${local}.addEventListener(${JSON.stringify(action.type)}, (event) => this.${action.handler}(event, $$b)${action.options ? `, ${action.options}` : ''});`
+            `${local}.addEventListener(${JSON.stringify(action.type)}, ${listener}${action.options ? `, ${action.options}` : ''});`
           );
         }
       } else if (action.kind === 'code') {
@@ -1813,13 +1911,44 @@ class BlockCompiler {
   }
 
   private resolvePlaceholders(code: string): string {
-    return code.replace(/@@field:(\d+)@@/g, (_, id: string) => {
-      const node = this.placeholderNodes[Number(id)];
-      if (!node?.field) {
-        throw new Error('HTMS block compiler lost an event scope reference');
-      }
-      return node.field;
-    });
+    return code
+      .replace(/@@field:(\d+)@@/g, (_, id: string) => {
+        const node = this.placeholderNodes[Number(id)];
+        if (!node?.field) {
+          throw new Error('HTMS block compiler lost an event scope reference');
+        }
+        return node.field;
+      })
+      .replace(
+        /^[ \t]*this\.__htmsNotifyStateChange\(@@notify:(\d+)@@\);\n/gm,
+        (line, id: string) => {
+          const pending = this.pendingNotifies.at(Number(id));
+          if (!pending) {
+            throw new Error('HTMS block compiler lost a handler write mask');
+          }
+          const mask = this.writeMask(
+            pending.block,
+            this.resolveStateMasks(pending.code),
+            pending.inert
+          );
+          return mask === 0 ? '' : line.replace(/@@notify:\d+@@/, String(mask));
+        }
+      );
+  }
+
+  // Fills in the masks state helpers report, left as placeholders by the
+  // event body renderer because they depend on every binding's reads.
+  private resolveStateMasks(code: string): string {
+    return code.replace(
+      /@@state:([01]):([^@]*)@@/g,
+      (_, element: string, path: string) =>
+        String(
+          this.analyzer.stateWriteMask(
+            path.split('.').map(decodeURIComponent),
+            element === '1'
+          )
+        )
+    );
   }
 
   // Emits `const $$nX = <path>` for every node that needs a reference,
@@ -1899,8 +2028,15 @@ class BlockCompiler {
     const lines: string[] = [];
     if (part.kind === 'list') {
       const body = part.body;
+      // Bits that reach the body only through its item and index: a row
+      // that kept both has nothing to update for them unless a write went
+      // deep. Index reads keep a moved row updating.
+      const skip = part.mask & ~this.blockDirect(body);
+      const indexVar = body.vars.find((variable) => variable.field === 'i');
+      const readsIndex =
+        indexVar !== undefined && this.blockReadsIndex(body, indexVar.name);
       lines.push(
-        `__htmsList(this, $$b.${part.slot}, ${part.source}, $$b, this.__htmsC${body.id}, this.__htmsU${body.id}, ${body.keyMethod ? `this.${body.keyMethod}` : 'null'}, $$d);`
+        `__htmsList(this, $$b.${part.slot}, ${part.source}, $$b, this.__htmsC${body.id}, this.__htmsU${body.id}, ${body.keyMethod ? `this.${body.keyMethod}` : 'null'}, $$d, ${skip}, ${readsIndex});`
       );
       return { mask: part.mask | this.blockMask(part.body), lines, flag: null };
     }
@@ -2223,20 +2359,27 @@ function __htmsCreate(component, parentBlock, create, items, keys, next, first, 
   }
 }
 
-// \`dirty\` is the mask of changed fields; a row whose item changed since
-// its last update is updated with every bit set.
-// Updates a kept row at its new position. A row that received a different
-// item re-evaluates everything, since the mask describes fields, not rows.
-function __htmsRow(component, block, item, index, update, dirty) {
-  if (block.x !== item) {
-    block.x = item;
-    dirty = -1;
+// Row updates during reconciliation. \`dirty\` is the mask of changed fields
+// and \`kept\` what remains of it for a row that kept its item and position:
+// the bits reaching the body only through the item and index are dropped
+// unless a write went deep (${DEEP_BIT}). A row that moved and renders its
+// index (\`idx\`) keeps the whole mask; one that received a different item
+// re-evaluates everything, since the mask describes fields, not rows.
+function __htmsKeep(component, block, index, update, dirty, kept, idx) {
+  if (block.i !== index) {
+    block.i = index;
+    if (idx) kept = dirty;
   }
-  block.i = index;
-  update.call(component, block, dirty);
+  if (kept !== 0) update.call(component, block, kept);
 }
 
-function __htmsList(component, list, items, parentBlock, create, update, key, dirty) {
+function __htmsTake(component, block, item, index, update) {
+  block.x = item;
+  block.i = index;
+  update.call(component, block, -1);
+}
+
+function __htmsList(component, list, items, parentBlock, create, update, key, dirty, skip, idx) {
   if (!Array.isArray(items)) items = [];
   var old = list.b;
   var oldLength = old.length;
@@ -2254,20 +2397,22 @@ function __htmsList(component, list, items, parentBlock, create, update, key, di
   }
   var common = length < oldLength ? length : oldLength;
   var item;
+  var kept = (dirty & ${DEEP_BIT}) === 0 ? dirty & ~skip : dirty;
   // Rows that kept their item (or, in a keyed list, their key) at the same
   // position update in place, so a render that changed no order allocates
-  // nothing. The same object keeps its row without calling the key.
-  for (i = 0; i < common; i++) {
+  // nothing. The same object keeps its row without calling the key, and
+  // with nothing to update such rows are only compared.
+  i = 0;
+  if (kept === 0) while (i < common && old[i].x === items[i]) i++;
+  for (; i < common; i++) {
     block = old[i];
     item = items[i];
-    if (block.x !== item) {
-      if (key !== null && block.k !== key.call(component, item, i, parentBlock)) break;
-      block.x = item;
-      block.i = i;
-      update.call(component, block, -1);
+    if (block.x === item) {
+      if (kept !== 0) update.call(component, block, kept);
+    } else if (key === null || block.k === key.call(component, item, i, parentBlock)) {
+      __htmsTake(component, block, item, i, update);
     } else {
-      block.i = i;
-      update.call(component, block, dirty);
+      break;
     }
   }
   var same = i;
@@ -2297,22 +2442,22 @@ function __htmsList(component, list, items, parentBlock, create, update, key, di
   // places (a swap). A row matches when it holds the same item or the
   // item's key; keys are only computed when the item changed.
   for (;;) {
-    while (
-      oldStart <= oldEnd &&
-      start <= end &&
-      ((block = old[oldStart]).x === items[start] || block.k === key.call(component, items[start], start, parentBlock))
-    ) {
+    while (oldStart <= oldEnd && start <= end) {
+      block = old[oldStart];
+      item = items[start];
+      if (block.x === item) __htmsKeep(component, block, start, update, dirty, kept, idx);
+      else if (block.k === key.call(component, item, start, parentBlock)) __htmsTake(component, block, item, start, update);
+      else break;
       oldStart++;
-      __htmsRow(component, block, items[start], start, update, dirty);
       next[start++] = block;
     }
-    while (
-      oldStart <= oldEnd &&
-      start <= end &&
-      ((block = old[oldEnd]).x === items[end] || block.k === key.call(component, items[end], end, parentBlock))
-    ) {
+    while (oldStart <= oldEnd && start <= end) {
+      block = old[oldEnd];
+      item = items[end];
+      if (block.x === item) __htmsKeep(component, block, end, update, dirty, kept, idx);
+      else if (block.k === key.call(component, item, end, parentBlock)) __htmsTake(component, block, item, end, update);
+      else break;
       oldEnd--;
-      __htmsRow(component, block, items[end], end, update, dirty);
       next[end--] = block;
     }
     if (oldStart >= oldEnd || start >= end) break;
@@ -2329,21 +2474,23 @@ function __htmsList(component, list, items, parentBlock, create, update, key, di
     before = second.e.nextSibling;
     __htmsIns(second, parent, first.s);
     __htmsIns(first, parent, before);
-    __htmsRow(component, first, items[end], end, update, dirty);
+    if (first.x === items[end]) __htmsKeep(component, first, end, update, dirty, kept, idx);
+    else __htmsTake(component, first, items[end], end, update);
     next[end--] = first;
-    __htmsRow(component, second, items[start], start, update, dirty);
+    if (second.x === items[start]) __htmsKeep(component, second, start, update, dirty, kept, idx);
+    else __htmsTake(component, second, items[start], start, update);
     next[start++] = second;
+  }
+  if (start > end) {
+    for (i = oldStart; i <= oldEnd; i++) __htmsRm(old[i]);
+    list.b = next;
+    return;
   }
   keys = new Array(length);
   for (i = start; i <= end; i++) keys[i] = key.call(component, items[i], i, parentBlock);
   if (oldStart > oldEnd) {
     before = end + 1 < length ? next[end + 1].s : anchor;
     __htmsCreate(component, parentBlock, create, items, keys, next, start, end, parent, before);
-    list.b = next;
-    return;
-  }
-  if (start > end) {
-    for (i = oldStart; i <= oldEnd; i++) __htmsRm(old[i]);
     list.b = next;
     return;
   }
@@ -2361,7 +2508,9 @@ function __htmsList(component, list, items, parentBlock, create, update, key, di
     positions[target - start] = i;
     if (target < last) moved = true;
     else last = target;
-    __htmsRow(component, block, items[target], target, update, dirty);
+    item = items[target];
+    if (block.x === item) __htmsKeep(component, block, target, update, dirty, kept, idx);
+    else __htmsTake(component, block, item, target, update);
     next[target] = block;
     reused++;
   }
@@ -2414,15 +2563,20 @@ function __htmsDispatch(component, event) {
       if (handler !== undefined) {
         var block = node.__htmsB;
         if (block !== undefined && block.c === component) {
-          if (!patched) {
-            patched = true;
-            Object.defineProperty(event, 'currentTarget', {
-              configurable: true,
-              get: function () { return current; }
-            });
+          // A handler that never reads the event takes only its block.
+          if (handler.length === 1) {
+            handler.call(component, block);
+          } else {
+            if (!patched) {
+              patched = true;
+              Object.defineProperty(event, 'currentTarget', {
+                configurable: true,
+                get: function () { return current; }
+              });
+            }
+            current = node;
+            handler.call(component, event, block);
           }
-          current = node;
-          handler.call(component, event, block);
           if (event.cancelBubble) break;
         }
       }

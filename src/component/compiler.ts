@@ -927,8 +927,13 @@ function buildComponentClass(
       lifecycleState,
       methodBodies
     );
-    const stateMasks = (root: string): number =>
-      analyzer?.classMask(root) ?? ALL_DIRTY;
+    // Handlers' write masks depend on which fields bindings read, which the
+    // block compiler only knows once every binding is compiled; it resolves
+    // these placeholders at the end.
+    const stateMasks: StateMasks = (path, elementWrite) =>
+      `@@state:${elementWrite ? 1 : 0}:${path
+        .map((segment) => encodeURIComponent(segment).replace(/\./g, '%2E'))
+        .join('.')}@@`;
     try {
       blockPlan = compileBlockComponent(renderIR, {
         className: metadata.className,
@@ -1265,7 +1270,13 @@ function buildComponentClass(
     : '';
 
   const updateHelpers = `  get updateComplete() {
-    return this.__htmsUpdatePromise;
+    // A promise exists only while a render is pending and someone waits.
+    if (!this.__htmsRenderScheduled && !this.__htmsRendering) {
+      return Promise.resolve();
+    }
+    return this.__htmsUpdatePromise || (this.__htmsUpdatePromise = new Promise(resolve => {
+      this.__htmsResolveUpdate = resolve;
+    }));
   }
 
   get renderError() {
@@ -1274,7 +1285,8 @@ function buildComponentClass(
 
   requestUpdate() {
     this.__htmsDirty = -1;
-    return this.__htmsRequestRender();
+    this.__htmsRequestRender();
+    return this.updateComplete;
   }
 
   $(selector) {
@@ -1323,34 +1335,29 @@ function buildComponentClass(
   }
 
   __htmsRequestRender() {
-    if (!this.__htmsConnected || this.__htmsRenderScheduled) {
-      return this.__htmsUpdatePromise;
+    if (this.__htmsConnected && !this.__htmsRenderScheduled) {
+      this.__htmsRenderScheduled = true;
+      queueMicrotask(this.__htmsFlush);
     }
+  }
 
-    this.__htmsRenderScheduled = true;
-    this.__htmsUpdatePromise = new Promise(resolve => {
-      this.__htmsResolveUpdate = resolve;
-    });
-
-    queueMicrotask(() => {
-      if (!this.__htmsRenderScheduled) {
-        return;
-      }
-      this.__htmsRenderScheduled = false;
-      if (this.__htmsConnected) {
-        this.render();
-      } else {
-        this.__htmsFinishUpdate();
-      }
-    });
-
-    return this.__htmsUpdatePromise;
+  __htmsFlushRender() {
+    if (!this.__htmsRenderScheduled) {
+      return;
+    }
+    this.__htmsRenderScheduled = false;
+    if (this.__htmsConnected) {
+      this.render();
+    } else {
+      this.__htmsFinishUpdate();
+    }
   }
 
   __htmsFinishUpdate() {
     const resolve = this.__htmsResolveUpdate;
-    this.__htmsResolveUpdate = null;
     if (resolve) {
+      this.__htmsResolveUpdate = null;
+      this.__htmsUpdatePromise = null;
       resolve();
     }
   }
@@ -1852,7 +1859,8 @@ ${body}
         shadowInit,
         statePropertyInitialization,
         inputInitialization: inputInitialization(analyzer, usedMask),
-        stateMasks: (root) => analyzer?.classMask(root) ?? ALL_DIRTY,
+        stateMasks: (path, elementWrite) =>
+          analyzer?.stateWriteMask(path, elementWrite) ?? ALL_DIRTY,
       }),
       usesBlocks: true,
     };
@@ -1870,7 +1878,8 @@ ${staticTemplateProperty}${methodsCode}${inputHelpers}${stateHelpers}${updateHel
     this.__htmsRendering = false;
     this.__htmsRenderScheduled = false;
     this.__htmsResolveUpdate = null;
-    this.__htmsUpdatePromise = Promise.resolve();
+    this.__htmsUpdatePromise = null;
+    this.__htmsFlush = () => this.__htmsFlushRender();
     this.__htmsLastError = null;
     this.__htmsDirty = -1;
 ${hasEventDirectives ? `    this.__htmsRenderCleanups = [];\n    this.__htmsTimers = new Map();\n` : ''}
@@ -1922,9 +1931,16 @@ interface BlockClassInput {
   shadowInit: string;
   statePropertyInitialization: string;
   inputInitialization: string;
-  // Class mask of a state root, for the state helpers' notifications.
-  stateMasks: (root: string) => number;
+  // Mask the state helpers report for writing a path.
+  stateMasks: StateMasks;
 }
+
+// The mask a state helper reports for a write to `path`, or a placeholder
+// the block compiler fills in. `elementWrite` for push and splice.
+type StateMasks = (
+  path: readonly string[],
+  elementWrite: boolean
+) => string | number;
 
 // Builds the dependency analyser for a block component: reactive fields get
 // bits, derived values carry their expressions, and every assignment in the
@@ -2084,11 +2100,29 @@ function buildBlockComponentClass(input: BlockClassInput): string {
 
   const lifecycleState = collectLifecycleStateDirectives(renderIR);
   const renderLines: string[] = [];
-  for (const directive of lifecycleState.init) {
-    renderLines.push(...renderStateDirective(directive, '', input.stateMasks));
+  // Initial values are only missing before the first render.
+  if (lifecycleState.init.length > 0) {
+    renderLines.push('if (!this.__htmsBlock) {');
+    for (const directive of lifecycleState.init) {
+      renderLines.push(
+        ...renderStateDirective(directive, '  ', input.stateMasks)
+      );
+    }
+    renderLines.push('}');
   }
   for (const directive of lifecycleState.derive) {
-    renderLines.push(...renderStateDirective(directive, '', input.stateMasks));
+    const [root] = directive.path;
+    if (directive.path.length === 1 && root !== undefined) {
+      // A root path needs no resolving.
+      const target = /^[A-Za-z_$][\w$]*$/.test(root)
+        ? `this.${root}`
+        : `this[${JSON.stringify(root)}]`;
+      renderLines.push(`${target} = (${directive.value ?? 'undefined'});`);
+    } else {
+      renderLines.push(
+        ...renderStateDirective(directive, '', input.stateMasks)
+      );
+    }
   }
   // The fields changed since the last render; the update skips bindings
   // none of them can affect. Changes made while rendering wait for the
@@ -2161,7 +2195,8 @@ ${sections.join('')}${hasListeners ? input.sharedEventHelpers : ''}${mount}  con
     this.__htmsRendering = false;
     this.__htmsRenderScheduled = false;
     this.__htmsResolveUpdate = null;
-    this.__htmsUpdatePromise = Promise.resolve();
+    this.__htmsUpdatePromise = null;
+    this.__htmsFlush = () => this.__htmsFlushRender();
     this.__htmsLastError = null;
     this.__htmsDirty = -1;
     this.__htmsBlock = null;
@@ -2204,7 +2239,7 @@ function renderDirective(
   indent: string,
   scopeVars: string[] = [],
   componentInterpolationVars: string[] = [],
-  stateMasks?: (root: string) => number
+  stateMasks?: StateMasks
 ): string[] {
   if (directive.kind === 'statement') {
     return directive.code
@@ -2534,13 +2569,13 @@ function renderEventBody(
   counter: { value: number },
   scopeVars: string[],
   componentInterpolationVars: string[],
-  stateMasks?: (root: string) => number
+  stateMasks?: StateMasks
 ): string[] {
   const bodyLines: string[] = [];
   if (directive.body.length > 0) {
     bodyLines.push(...directive.body);
   } else {
-    bodyLines.push('// No event body');
+    bodyLines.push('// No statements');
   }
   if (directive.directives) {
     for (const nested of directive.directives) {
@@ -3042,17 +3077,19 @@ function renderKeyedListDirective(
   return lines;
 }
 
-// `stateMasks` gives the class mask the state helpers report for a root;
+// `stateMasks` gives the mask the state helpers report for the write;
 // without it (the reconciling renderer) they report every field.
 function renderStateDirective(
   directive: StateDirective,
   indent: string,
-  stateMasks?: (root: string) => number
+  stateMasks?: StateMasks
 ): string[] {
   const lines: string[] = [];
   const pathLiteral = JSON.stringify(directive.path);
-  const [root] = directive.path;
-  const mask = stateMasks && root !== undefined ? `, ${stateMasks(root)}` : '';
+  const mask =
+    stateMasks && directive.path.length > 0
+      ? `, ${stateMasks(directive.path, directive.mode === 'push' || directive.mode === 'splice')}`
+      : '';
 
   switch (directive.mode) {
     case 'init':

@@ -62,15 +62,25 @@ describe('Component compiler', () => {
   it('generates event handlers that re-render when state changes', () => {
     const code = compile(`
       <component name="event-box">
+        <var name="user" value='{"name": "Al"}' mutable="true"></var>
         <var name="count" value="0" mutable="true"></var>
+        <p>{user.name}</p>
         <button id="inc">Inc</button>
         <event target="#inc" type="click">
+          <set name="user.name" value="Bo"></set>
           <set name="count" op="++"></set>
         </event>
       </component>
     `);
-    expect(code).toContain("this.__htmsSetState(['count'], '++'");
-    expect(code).toContain('this.__htmsNotifyStateChange(1);');
+    // The helper reports the fields its write can affect; a root nothing
+    // renders reports none, since its setter marks it anyway.
+    expect(code).toMatch(
+      /__htmsSetState\(\[\s*'user',\s*'name'\s*\], '=', \(\) => 'Bo', 1\);/
+    );
+    expect(code).toContain(
+      "this.__htmsSetState(['count'], '++', () => undefined, 0);"
+    );
+    expect(code).not.toMatch(/__htmsNotifyStateChange\(-?\d+\);/);
   });
 
   it('emits push and splice helpers', () => {
@@ -208,10 +218,7 @@ describe('Component compiler', () => {
       </component>
     `);
 
-    expect(code).toContain("this.__htmsResolvePath(['count'])");
-    expect(code).toContain(
-      'resolved.target[resolved.key] = this.items.length;'
-    );
+    expect(code).toContain('this.count = this.items.length;');
 
     execute(code);
 

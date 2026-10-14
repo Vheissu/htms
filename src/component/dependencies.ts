@@ -25,11 +25,22 @@ import {
 // mask afterwards. Because two fields can share an object (`editing = todo`
 // hands a row of `todos` to `editing`), fields connected by an assignment
 // form an alias class, and a nested write through one marks the whole class.
+// A field that bindings only ever compare or test (`row.id === selected`)
+// cannot show an in-place change, so it is left out of the masks nested
+// writes report.
+//
+// A reported mask also says how deep the write went. `DEEP_BIT` means an
+// object inside a field changed (`rows[i].label = x`, or anything through a
+// value whose origin is unknown); without it only the field's own value or
+// its direct elements changed (`rows[1] = row`, `rows.push(row)`), so a list
+// row that kept its item has nothing to update.
 
 export const ALL_DIRTY = -1;
+// Set when a write may have changed an object held inside a field.
+export const DEEP_BIT = 1 << 30;
 // Fields beyond the individual bits share this one.
-const SHARED_BIT = 1 << 30;
-const INDIVIDUAL_BITS = 30;
+const SHARED_BIT = 1 << 29;
+const INDIVIDUAL_BITS = 29;
 
 // Identifiers whose members and calls read nothing that changes behind the
 // component's back. `Date.now`, `new Date()` and `Math.random` are the
@@ -247,12 +258,62 @@ function forEachComputedKey(
   }
 }
 
-function pathLiteralRoot(node: AstNode | undefined): string | null {
+function pathLiteral(node: AstNode | undefined): string[] | null {
   if (!node || node.type !== 'ArrayExpression') return null;
-  const [first] = node.elements as Array<AstNode | null>;
-  return first && first.type === 'Literal' && typeof first.value === 'string'
-    ? first.value
-    : null;
+  const path: string[] = [];
+  for (const element of node.elements as Array<AstNode | null>) {
+    if (
+      !element ||
+      element.type !== 'Literal' ||
+      typeof element.value !== 'string'
+    ) {
+      return null;
+    }
+    path.push(element.value);
+  }
+  return path.length > 0 ? path : null;
+}
+
+function pathLiteralRoot(node: AstNode | undefined): string | null {
+  return pathLiteral(node)?.[0] ?? null;
+}
+
+// Whether a value in this position is only compared or tested, so an
+// in-place change to the object it holds can never show.
+function isShallowContext(parent: AstNode | null, key: string): boolean {
+  if (!parent) return false;
+  switch (parent.type) {
+    case 'BinaryExpression':
+      return parent.operator === '===' || parent.operator === '!==';
+    case 'UnaryExpression':
+      return parent.operator === '!' || parent.operator === 'typeof';
+    case 'LogicalExpression':
+      return parent.operator === '&&' && key === 'left';
+    case 'IfStatement':
+    case 'ConditionalExpression':
+    case 'WhileStatement':
+    case 'DoWhileStatement':
+    case 'ForStatement':
+      return key === 'test';
+    default:
+      return false;
+  }
+}
+
+// Adds the deep bit to a mask that reports a write, unless there is nothing
+// to report.
+function deepen(mask: number): number {
+  return mask === 0 ? 0 : mask | DEEP_BIT;
+}
+
+// Whether a state helper writing `path` reaches inside an object held by
+// the root field: a nested path, or an element write (push, splice) to
+// anything below the root.
+export function pathWriteIsDeep(
+  path: readonly string[],
+  elementWrite: boolean
+): boolean {
+  return path.length + (elementWrite ? 1 : 0) > 2;
 }
 
 function isPropertyKey(parent: AstNode | null, key: string): boolean {
@@ -331,11 +392,17 @@ export class DependencyAnalyzer {
   private readonly parents = new Map<number, number>();
   private readonly names: string[] = [];
   private sealed = false;
+  private readsComplete = false;
+  // Bits of the fields some binding reads beyond comparing or testing them.
+  private deepReads = 0;
   private readonly classMasks = new Map<string, number>();
+  private readonly classSizes = new Map<string, number>();
   private readonly fieldReads = new Map<string, number>();
   private readonly methodReads = new Map<string, number>();
   private readonly methodWrites = new Map<string, number>();
   private readonly inProgress = new Set<string>();
+  // The fields each method's call sites pass for each parameter.
+  private paramSources = new Map<string, ReadonlyArray<ReadonlySet<string>>>();
 
   constructor(fields: DependencyFieldSets) {
     this.derived = fields.derived;
@@ -408,6 +475,18 @@ export class DependencyAnalyzer {
   // No alias edge may be added after masks are computed.
   seal(): void {
     this.sealed = true;
+  }
+
+  // Records what call sites pass to each method's parameters.
+  setParamSources(
+    sources: ReadonlyMap<string, ReadonlyArray<ReadonlySet<string>>>
+  ): void {
+    this.paramSources = new Map(sources);
+  }
+
+  // Every binding has been read; write masks may now be computed.
+  completeReads(): void {
+    this.readsComplete = true;
   }
 
   private walkAliases(
@@ -524,30 +603,64 @@ export class DependencyAnalyzer {
     return found;
   }
 
-  // Every bit of every field sharing an alias class with a field in `mask`.
+  // The class mask of every field in `mask`: what a write through a value
+  // holding any of them must report.
   expand(mask: number): number {
     if (mask === ALL_DIRTY || mask === 0) return mask;
-    let result = mask;
+    let result = 0;
     for (const name of this.names) {
       if ((this.bit(name) & mask) !== 0) result |= this.classMask(name);
     }
     return result;
   }
 
-  // Bits of every field that may share objects with `name`.
+  // Bits a nested write through `name` must report: every field that may
+  // share objects with it and that some binding reads deeply. Fields only
+  // compared or tested cannot show the change.
   classMask(name: string): number {
     if (!this.sealed) throw new Error('alias classes are not sealed');
+    if (!this.readsComplete) throw new Error('bindings are still being read');
     const cached = this.classMasks.get(name);
     if (cached !== undefined) return cached;
     const index = this.names.indexOf(name);
     if (index < 0) return ALL_DIRTY;
     const root = this.find(index);
     let mask = 0;
+    let size = 0;
     this.names.forEach((other, otherIndex) => {
-      if (this.find(otherIndex) === root) mask |= this.bit(other);
+      if (this.find(otherIndex) !== root) return;
+      size++;
+      mask |= this.bit(other) & this.deepReads;
     });
     this.classMasks.set(name, mask);
+    this.classSizes.set(name, size);
     return mask;
+  }
+
+  // Mask a write reports when it changes `name`'s own value or direct
+  // contents (`deep` false) or an object held further inside it. A direct
+  // write counts as deep when another observable field shares the class,
+  // since the write may sit inside that field (`editing = todos[1]`, then
+  // `editing.title = x`).
+  fieldWrite(name: string, deep: boolean): number {
+    const mask = this.classMask(name);
+    if (mask === 0) return 0;
+    if (deep) return mask | DEEP_BIT;
+    const bit = this.bit(name);
+    const others =
+      bit === SHARED_BIT
+        ? (this.classSizes.get(name) ?? 1) > 1
+        : (mask & ~bit) !== 0;
+    return others ? mask | DEEP_BIT : mask;
+  }
+
+  // Mask a state helper reports for writing `path`; `elementWrite` for
+  // push and splice, which change the array at the path rather than the
+  // path itself.
+  stateWriteMask(path: readonly string[], elementWrite: boolean): number {
+    const [root] = path;
+    if (root === undefined) return ALL_DIRTY;
+    return this.fieldWrite(root, pathWriteIsDeep(path, elementWrite));
   }
 
   // ---------------------------------------------------------------------
@@ -557,8 +670,22 @@ export class DependencyAnalyzer {
   // the snippet (loop variables) to the mask of their sources; names not
   // listed are globals.
   readMask(code: string, locals: Masks, asExpression: boolean): number {
+    return this.readMasks(code, locals, asExpression).mask;
+  }
+
+  // As `readMask`, also reporting `direct`: the part of the mask the code
+  // reads itself rather than through a local, so a loop body that reads
+  // only its item has nothing to update while the item stays the same.
+  readMasks(
+    code: string,
+    locals: Masks,
+    asExpression: boolean
+  ): { mask: number; direct: number } {
     const root = parseSnippet(code, asExpression);
-    if (!root) return ALL_DIRTY;
+    if (!root) {
+      this.deepReads = ALL_DIRTY;
+      return { mask: ALL_DIRTY, direct: ALL_DIRTY };
+    }
     return this.readNode(root, locals);
   }
 
@@ -596,14 +723,37 @@ export class DependencyAnalyzer {
     return mask;
   }
 
-  private readNode(root: AstNode, locals: Masks): number {
+  private readNode(
+    root: AstNode,
+    locals: Masks
+  ): { mask: number; direct: number } {
     const declared = allDeclaredNames(root);
     let mask = 0;
+    let direct = 0;
     const isGlobal = (name: string): boolean =>
       !declared.has(name) &&
       !locals.has(name) &&
       !this.bits.has(name) &&
       !this.methods.has(name);
+    const everything = (): void => {
+      mask = ALL_DIRTY;
+      direct = ALL_DIRTY;
+      this.deepReads = ALL_DIRTY;
+    };
+    const add = (read: number): void => {
+      if (read === ALL_DIRTY) {
+        everything();
+        return;
+      }
+      mask |= read;
+      direct |= read;
+    };
+    // A field read on its own may only be compared or tested; one read
+    // through a property, a call or any other use is read deeply.
+    const field = (name: string, shallow: boolean): void => {
+      add(this.fieldReadMask(name));
+      if (!shallow) this.deepReads |= this.bit(name);
+    };
     const visit = (
       node: AstNode,
       parent: AstNode | null,
@@ -618,7 +768,7 @@ export class DependencyAnalyzer {
         case 'Super':
         case 'MetaProperty':
           // `this` on its own could be read any way at all.
-          mask = ALL_DIRTY;
+          everything();
           return;
         case 'Identifier': {
           if (isPropertyKey(parent, key)) return;
@@ -626,25 +776,32 @@ export class DependencyAnalyzer {
           if (declared.has(name)) return;
           const local = locals.get(name);
           if (local !== undefined) {
+            // A loop variable holds a value from inside its source.
             mask |= local;
+            this.deepReads |= local;
             return;
           }
           if (this.bits.has(name)) {
-            mask |= this.fieldReadMask(name);
+            field(name, isShallowContext(parent, key));
             return;
           }
           if (this.methods.has(name)) {
-            mask |= this.methodReadMask(name);
+            add(this.methodReadMask(name));
             return;
           }
           if (PURE_GLOBALS.has(name) || name.startsWith('__htms')) return;
-          mask = ALL_DIRTY;
+          everything();
           return;
         }
         case 'MemberExpression': {
           const { root: base, names } = memberChain(node);
           if (base.type === 'ThisExpression') {
-            mask |= this.thisMemberRead(names[0] ?? null);
+            const [first] = names;
+            if (first !== null && first !== undefined && this.bits.has(first)) {
+              field(first, names.length === 1 && isShallowContext(parent, key));
+            } else {
+              add(this.thisMemberRead(first ?? null));
+            }
           } else if (
             base.type === 'Identifier' &&
             isGlobal(base.name as string)
@@ -654,7 +811,7 @@ export class DependencyAnalyzer {
               (!PURE_GLOBALS.has(name) && !name.startsWith('__htms')) ||
               VOLATILE_STATICS.has(`${name}.${names[0]}`)
             ) {
-              mask = ALL_DIRTY;
+              everything();
               return;
             }
           } else {
@@ -672,7 +829,7 @@ export class DependencyAnalyzer {
             callee.name === 'Date' &&
             (node.arguments as AstNode[]).length === 0
           ) {
-            mask = ALL_DIRTY;
+            everything();
             return;
           }
           break;
@@ -681,7 +838,7 @@ export class DependencyAnalyzer {
       forEachChild(node, (childKey, child) => visit(child, node, childKey));
     };
     visit(root, null, '');
-    return mask;
+    return { mask, direct };
   }
 
   private thisMemberRead(name: string | null): number {
@@ -716,11 +873,30 @@ export class DependencyAnalyzer {
     const key = `write:${name}`;
     if (this.inProgress.has(key)) return ALL_DIRTY;
     this.inProgress.add(key);
-    // A parameter may be any state object.
-    const locals = new Map(method.params.map((param) => [param, ALL_DIRTY]));
+    // A parameter holds what the component's call sites pass it; a method
+    // nothing in the component calls may receive any state object.
+    const slots = this.paramSources.get(name);
+    const locals = new Map(
+      method.params.map((param, index) => [
+        param,
+        this.paramTaint(slots, index),
+      ])
+    );
     const mask = this.writeMask(method.body, locals, false);
     this.inProgress.delete(key);
     this.methodWrites.set(name, mask);
+    return mask;
+  }
+
+  private paramTaint(
+    slots: ReadonlyArray<ReadonlySet<string>> | undefined,
+    index: number
+  ): number {
+    if (slots === undefined) return ALL_DIRTY;
+    const slot = slots.at(index);
+    if (slot === undefined) return 0;
+    let mask = 0;
+    for (const field of slot) mask |= this.classMask(field);
     return mask;
   }
 
@@ -785,7 +961,9 @@ export class DependencyAnalyzer {
 
   // What a write to `target` must report. A depth-one write to a reactive
   // field goes through its setter; `viaSetter` is false for `delete`, which
-  // bypasses setters.
+  // bypasses setters. A write one level below a field changes the field's
+  // own contents; anything further down, or through a value of unknown
+  // origin, is deep.
   private targetWrite(
     target: AstNode,
     taints: Masks,
@@ -796,9 +974,10 @@ export class DependencyAnalyzer {
       const [first] = names;
       if (first === null || first === undefined) return ALL_DIRTY;
       if (this.bits.has(first)) {
-        return names.length === 1 && viaSetter && !this.derived.has(first)
-          ? 0
-          : this.classMask(first);
+        if (names.length === 1 && viaSetter && !this.derived.has(first)) {
+          return 0;
+        }
+        return this.fieldWrite(first, names.length > 2);
       }
       // A helper's internals, or a plain property nothing declared. The
       // latter is read as volatile, but only a render re-reads it.
@@ -807,12 +986,13 @@ export class DependencyAnalyzer {
     if (root.type === 'Identifier') {
       const name = root.name as string;
       const taint = taints.get(name);
-      if (taint !== undefined) return names.length === 0 ? 0 : taint;
+      if (taint !== undefined) return names.length === 0 ? 0 : deepen(taint);
       if (this.bits.has(name)) {
         // Unscoped code: a bare field name.
-        return names.length === 0 && viaSetter && !this.derived.has(name)
-          ? 0
-          : this.classMask(name);
+        if (names.length === 0 && viaSetter && !this.derived.has(name)) {
+          return 0;
+        }
+        return this.fieldWrite(name, names.length > 1);
       }
       return 0;
     }
@@ -821,9 +1001,9 @@ export class DependencyAnalyzer {
       const { root: calleeRoot } = memberChain(root.callee as AstNode);
       return calleeRoot.type === 'ThisExpression'
         ? ALL_DIRTY
-        : this.valueTaint(root, taints);
+        : deepen(this.valueTaint(root, taints));
     }
-    return this.valueTaint(root, taints);
+    return deepen(this.valueTaint(root, taints));
   }
 
   private callWrite(node: AstNode, taints: Masks): number {
@@ -834,17 +1014,17 @@ export class DependencyAnalyzer {
       const [first] = names;
       if (first === null || first === undefined) return ALL_DIRTY;
       if (names.length === 1) {
-        if (this.methods.has(first)) return this.methodWriteMask(first);
-        if (PATH_HELPERS.has(first)) {
-          const target = pathLiteralRoot(args[0]);
-          return target === null ? ALL_DIRTY : this.classMask(target);
-        }
+        // A method reports its own nested writes when it returns, and the
+        // state helpers report theirs.
+        if (this.methods.has(first) || PATH_HELPERS.has(first)) return 0;
         if (INERT_HELPERS.has(first) || DOM_HELPERS.has(first)) return 0;
         // requestUpdate, other helpers and element methods.
         return ALL_DIRTY;
       }
       if (this.bits.has(first)) {
-        return isPureMethod(method) ? 0 : this.classMask(first);
+        return isPureMethod(method)
+          ? 0
+          : this.fieldWrite(first, names.length > 2);
       }
       return first.startsWith('__htms') ? ALL_DIRTY : 0;
     }
@@ -853,22 +1033,24 @@ export class DependencyAnalyzer {
       const taint = taints.get(name);
       if (names.length === 0) {
         if (taint !== undefined) return 0;
-        if (this.methods.has(name)) return this.methodWriteMask(name);
+        if (this.methods.has(name)) return 0;
         if (PURE_GLOBALS.has(name) || name.startsWith('__htms')) return 0;
         // An unknown function may change the state objects it receives.
-        return this.argumentsTaint(args, taints);
+        return deepen(this.argumentsTaint(args, taints));
       }
-      if (taint !== undefined) return isPureMethod(method) ? 0 : taint;
+      if (taint !== undefined) return isPureMethod(method) ? 0 : deepen(taint);
       if (this.bits.has(name)) {
-        return isPureMethod(method) ? 0 : this.classMask(name);
+        return isPureMethod(method)
+          ? 0
+          : this.fieldWrite(name, names.length > 1);
       }
       if (PURE_GLOBALS.has(name)) {
         const [first] = args;
         return MUTATING_STATICS.has(`${name}.${method}`) && first
-          ? this.valueTaint(first, taints)
+          ? deepen(this.valueTaint(first, taints))
           : 0;
       }
-      return this.argumentsTaint(args, taints);
+      return deepen(this.argumentsTaint(args, taints));
     }
     return 0;
   }
@@ -1215,4 +1397,5 @@ export function collectAliases(
       for (const directive of method.body) walkDirective(directive, locals);
     }
   }
+  analyzer.setParamSources(callArguments);
 }
