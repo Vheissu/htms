@@ -100,14 +100,90 @@ export function elementsToJsSnippets(
   }
 }
 
+interface FormattedChunk {
+  code: string;
+  errors: CompilerError[];
+}
+
+// Parses one chunk of generated JavaScript, checks it for dangerous calls
+// and prints it back formatted. Throws acorn's SyntaxError on invalid code.
+function formatChunk(
+  source: string,
+  sourceType: 'module' | 'script'
+): FormattedChunk {
+  // Validate generated JavaScript syntax. Acorn parses modern syntax
+  // (optional chaining, nullish coalescing, etc.) that esprima could not.
+  // Ranges are all escodegen needs to place comments; line/column
+  // locations would only add an object per node.
+  const comments: acorn.Comment[] = [];
+  const tokens: acorn.Token[] = [];
+  const ast = acorn.parse(source, {
+    ecmaVersion: 'latest',
+    sourceType,
+    ranges: true,
+    onComment: comments,
+    onToken: tokens,
+  }) as acorn.Program & { comments?: unknown[]; tokens?: unknown[] };
+
+  const errors = validateASTSecurity(ast);
+
+  // Attach comments in the esprima-compatible shape escodegen expects
+  const esprimaComments = comments.map((comment) => ({
+    type: comment.type === 'Line' ? 'Line' : 'Block',
+    value: comment.value,
+    range: comment.range,
+  }));
+  const esprimaTokens = tokens.map((token) => ({
+    type: 'Punctuator',
+    value: source.slice(token.start, token.end),
+    range: token.range,
+  }));
+  ast.comments = esprimaComments;
+  ast.tokens = esprimaTokens;
+  const astWithComments = escodegen.attachComments(
+    ast,
+    esprimaComments,
+    esprimaTokens
+  );
+
+  const code = escodegen.generate(astWithComments, {
+    comment: true,
+    format: {
+      preserveBlankLines: true,
+      indent: {
+        style: '  ',
+      },
+    },
+  });
+  return { code, errors };
+}
+
+// The runtime preludes are the same text in every compile, so their parse,
+// security check and formatting are done once per process.
+const formattedPreludes = new Map<string, FormattedChunk>();
+
+function formatPrelude(
+  source: string,
+  sourceType: 'module' | 'script'
+): FormattedChunk {
+  const key = `${sourceType}\n${source}`;
+  let chunk = formattedPreludes.get(key);
+  if (!chunk) {
+    chunk = formatChunk(source, sourceType);
+    formattedPreludes.set(key, chunk);
+  }
+  return chunk;
+}
+
 export function generateFinalJsCode(
   jsSnippets: string,
-  options: ParseOptions = {}
+  options: ParseOptions = {},
+  preludes: readonly string[] = []
 ): { code: string; errors: CompilerError[]; warnings: CompilerWarning[] } {
   const errors: CompilerError[] = [];
   const warnings: CompilerWarning[] = [];
 
-  if (!jsSnippets.trim()) {
+  if (!jsSnippets.trim() && preludes.length === 0) {
     errors.push({
       type: 'syntax',
       message: 'No valid JavaScript code generated from input',
@@ -116,25 +192,19 @@ export function generateFinalJsCode(
   }
 
   try {
-    // Validate generated JavaScript syntax. Acorn parses modern syntax
-    // (optional chaining, nullish coalescing, etc.) that esprima could not.
-    const comments: acorn.Comment[] = [];
-    const tokens: acorn.Token[] = [];
     const sourceType =
       options.outputFormat === undefined || options.outputFormat === 'esm'
         ? 'module'
         : 'script';
-    const ast = acorn.parse(jsSnippets, {
-      ecmaVersion: 'latest',
-      sourceType,
-      ranges: true,
-      locations: true,
-      onComment: comments,
-      onToken: tokens,
-    }) as acorn.Program & { comments?: unknown[]; tokens?: unknown[] };
+    const chunks = preludes.map((prelude) =>
+      formatPrelude(prelude, sourceType)
+    );
+    if (jsSnippets.trim()) {
+      chunks.push(formatChunk(jsSnippets, sourceType));
+    }
 
     // Security check on generated AST
-    const securityErrors = validateASTSecurity(ast);
+    const securityErrors = chunks.flatMap((chunk) => chunk.errors);
     if (securityErrors.length > 0) {
       errors.push(...securityErrors);
       if (options.strictMode) {
@@ -142,34 +212,7 @@ export function generateFinalJsCode(
       }
     }
 
-    // Attach comments in the esprima-compatible shape escodegen expects
-    const esprimaComments = comments.map((comment) => ({
-      type: comment.type === 'Line' ? 'Line' : 'Block',
-      value: comment.value,
-      range: comment.range,
-    }));
-    const esprimaTokens = tokens.map((token) => ({
-      type: 'Punctuator',
-      value: jsSnippets.slice(token.start, token.end),
-      range: token.range,
-    }));
-    ast.comments = esprimaComments;
-    ast.tokens = esprimaTokens;
-    const astWithComments = escodegen.attachComments(
-      ast,
-      esprimaComments,
-      esprimaTokens
-    );
-
-    const generatedCode = escodegen.generate(astWithComments, {
-      comment: true,
-      format: {
-        preserveBlankLines: true,
-        indent: {
-          style: '  ',
-        },
-      },
-    });
+    const generatedCode = chunks.map((chunk) => chunk.code).join('\n');
 
     // Wrap in appropriate module format
     const finalCode = wrapInModuleFormat(
@@ -202,10 +245,10 @@ export function generateFinalJsCode(
 function validateASTSecurity(ast: unknown): CompilerError[] {
   const errors: CompilerError[] = [];
 
-  // Simple AST traversal to check for dangerous patterns
+  // Walks every AST node, visiting only child nodes and node arrays.
   function traverse(value: unknown): void {
     if (Array.isArray(value)) {
-      value.forEach(traverse);
+      for (const item of value) traverse(item);
       return;
     }
     if (!value || typeof value !== 'object') return;
@@ -263,14 +306,36 @@ function validateASTSecurity(ast: unknown): CompilerError[] {
       });
     }
 
-    for (const child of Object.values(value)) {
-      traverse(child);
+    for (const [key, child] of Object.entries(value)) {
+      if (
+        child !== null &&
+        typeof child === 'object' &&
+        !NON_CHILD_KEYS.has(key)
+      )
+        traverse(child);
     }
   }
 
   traverse(ast);
   return errors;
 }
+
+// AST properties that never hold child nodes.
+const NON_CHILD_KEYS = new Set([
+  'type',
+  'start',
+  'end',
+  'range',
+  'loc',
+  'raw',
+  'value',
+  'name',
+  'operator',
+  'kind',
+  'regex',
+  'bigint',
+  'sourceType',
+]);
 
 const TIMER_FUNCTIONS = new Set(['setTimeout', 'setInterval']);
 
@@ -369,7 +434,11 @@ export function parseHTML(
 
     const componentResult = compileComponents(htmlContent, parseOptions);
     const codeResult = componentResult.code
-      ? generateFinalJsCode(componentResult.code, parseOptions)
+      ? generateFinalJsCode(
+          componentResult.body ?? componentResult.code,
+          parseOptions,
+          componentResult.body === undefined ? [] : componentResult.preludes
+        )
       : { code: '', errors: [], warnings: [] };
 
     const allErrors = [...componentResult.errors, ...codeResult.errors];

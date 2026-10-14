@@ -71,6 +71,11 @@ export interface HandlerResult {
 export interface ComponentCompileResult {
   success: boolean;
   code?: string;
+  // `code` split into the shared runtime text that precedes the components
+  // (identical across compiles, so it can be formatted once) and the
+  // component code itself.
+  preludes?: string[];
+  body?: string;
   components: ComponentArtifact[];
   errors: CompilerError[];
   warnings: CompilerWarning[];

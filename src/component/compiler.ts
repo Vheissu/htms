@@ -304,11 +304,12 @@ export function compileComponents(
     return { success: false, errors, warnings, components: [] };
   }
 
-  if (usesBlocks) {
-    componentSnippets.unshift(BLOCK_RUNTIME);
-  }
+  const preludes: string[] = [];
   if (requiresRuntime) {
-    componentSnippets.unshift(ensureRuntime());
+    preludes.push(ensureRuntime());
+  }
+  if (usesBlocks) {
+    preludes.push(BLOCK_RUNTIME);
   }
 
   const classNames = artifacts.map((artifact) => artifact.className);
@@ -323,7 +324,8 @@ export function compileComponents(
     );
   }
 
-  const joinedCode = componentSnippets.join('\n\n');
+  const body = componentSnippets.join('\n\n');
+  const joinedCode = [...preludes, body].join('\n\n');
   if (!joinedCode.trim()) {
     errors.push({
       type: 'runtime',
@@ -335,6 +337,8 @@ export function compileComponents(
   return {
     success: errors.length === 0,
     code: joinedCode,
+    preludes,
+    body,
     components: artifacts,
     errors,
     warnings,
@@ -1925,14 +1929,21 @@ function pruneUnusedHelpers(classCode: string): string {
     from: start.line,
     to: index + 1 < starts.length ? starts[index + 1].line : lines.length - 1,
   }));
-  const text = (from: number, to: number): string =>
-    lines.slice(from, to).join('\n');
+  // A helper is kept when its name appears as a whole word in code that is
+  // itself kept. Words are collected once per kept chunk instead of
+  // re-scanning the growing text with a regular expression per helper.
   const kept = new Set<number>();
-  let reachable = text(0, chunks[0]?.from ?? lines.length);
+  const words = new Set<string>();
+  const reach = (from: number, to: number): void => {
+    for (const line of lines.slice(from, to)) {
+      for (const word of line.match(/\w+/g) ?? []) words.add(word);
+    }
+  };
+  reach(0, chunks[0]?.from ?? lines.length);
   chunks.forEach((chunk, index) => {
     if (!chunk.name.startsWith('__htms')) {
       kept.add(index);
-      reachable += `\n${text(chunk.from, chunk.to)}`;
+      reach(chunk.from, chunk.to);
     }
   });
   let changed = true;
@@ -1940,11 +1951,9 @@ function pruneUnusedHelpers(classCode: string): string {
     changed = false;
     chunks.forEach((chunk, index) => {
       if (kept.has(index)) return;
-      // eslint-disable-next-line security/detect-non-literal-regexp
-      const pattern = new RegExp(`\\b${chunk.name.replace(/\$/g, '\\$')}\\b`);
-      if (pattern.test(reachable)) {
+      if (words.has(chunk.name)) {
         kept.add(index);
-        reachable += `\n${text(chunk.from, chunk.to)}`;
+        reach(chunk.from, chunk.to);
         changed = true;
       }
     });

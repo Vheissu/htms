@@ -1,4 +1,3 @@
-import validator from 'validator';
 import * as acorn from 'acorn';
 import { CompilerError } from '../types';
 
@@ -85,6 +84,21 @@ const EVENT_HANDLER_ATTRIBUTES = new Set([
   'ontouchstart',
   'onwheel',
 ]);
+
+// HTML entity escaping and decimal-number check, matching validator.js's
+// `escape` and `isNumeric` so the package itself need not be loaded.
+const HTML_ESCAPE_PATTERN = /[&"'<>/\\`]/g;
+const HTML_ESCAPES = new Map([
+  ['&', '&amp;'],
+  ['"', '&quot;'],
+  ["'", '&#x27;'],
+  ['<', '&lt;'],
+  ['>', '&gt;'],
+  ['/', '&#x2F;'],
+  ['\\', '&#x5C;'],
+  ['`', '&#96;'],
+]);
+const NUMERIC_VALUE = /^[+-]?(?:[0-9]+|[0-9]*\.[0-9]+)$/;
 
 const VALID_JS_IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 const RESERVED_WORDS = new Set([
@@ -254,7 +268,10 @@ export class SecurityValidator {
       throw new Error('Input must be a string');
     }
 
-    return validator.escape(input);
+    return input.replace(
+      HTML_ESCAPE_PATTERN,
+      (char) => HTML_ESCAPES.get(char) as string
+    );
   }
 
   // Embed a runtime string into generated JavaScript source. This is the
@@ -354,7 +371,7 @@ export class SecurityValidator {
   static validateNumericValue(value: string): CompilerError[] {
     const errors: CompilerError[] = [];
 
-    if (!validator.isNumeric(value)) {
+    if (!NUMERIC_VALUE.test(value)) {
       errors.push({
         type: 'validation',
         message: `Invalid numeric value: ${value}`,
