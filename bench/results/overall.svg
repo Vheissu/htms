@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 324" width="760" height="324" role="img" aria-labelledby="overall-title overall-desc">
+<title id="overall-title">Overall speed relative to vanilla JS</title>
+<desc id="overall-desc">Geometric mean of the median time of nine js-framework-benchmark operations, divided by vanilla JS. Lower is faster. Vanilla JS 1.00×, HTMS 1.05×, Solid 1.09×, Svelte 5 1.14×, Vue 1.23×, React 1.66×.</desc>
+
+  <style>
+    .surface { fill: #fcfcfb; }
+    .ink { fill: #0b0b0b; }
+    .secondary { fill: #52514e; }
+    .grid { stroke: #e1e0d9; stroke-width: 1; }
+    .axis { stroke: #c3c2b7; stroke-width: 1; }
+    .reference { stroke: #52514e; stroke-width: 1.5; stroke-dasharray: 4 3; }
+    .s1 { fill: #2a78d6; } .s2 { fill: #eb6834; } .s3 { fill: #1baf7a; }
+    .s4 { fill: #eda100; } .s5 { fill: #e87ba4; } .s6 { fill: #008300; }
+    text { font-family: system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+    @media (prefers-color-scheme: dark) {
+      .surface { fill: #1a1a19; }
+      .ink { fill: #f0efec; }
+      .secondary { fill: #c3c2b7; }
+      .grid { stroke: #2c2c2a; }
+      .axis { stroke: #383835; }
+      .reference { stroke: #c3c2b7; }
+      .s1 { fill: #3987e5; } .s2 { fill: #d95926; } .s3 { fill: #199e70; }
+      .s4 { fill: #c98500; } .s5 { fill: #d55181; } .s6 { fill: #008300; }
+    }
+  </style>
+<rect class="surface" width="760" height="324" rx="8"/>
+<text class="ink" x="24" y="32" font-size="17" font-weight="600">Overall time relative to vanilla JS (lower is faster)</text>
+<text class="secondary" x="24" y="52" font-size="12">Geometric mean over 9 operations · Median of 15 runs · Chromium 141.0.7390.37 · Apple M2 Max</text>
+<line class="grid" x1="150" x2="150" y1="70" y2="286"/>
+<text class="secondary" x="150" y="304" font-size="11" text-anchor="middle">0.00×</text>
+<line class="grid" x1="224.5070488798907" x2="224.5070488798907" y1="70" y2="286"/>
+<text class="secondary" x="224.5070488798907" y="304" font-size="11" text-anchor="middle">0.25×</text>
+<line class="grid" x1="299.0140977597814" x2="299.0140977597814" y1="70" y2="286"/>
+<text class="secondary" x="299.0140977597814" y="304" font-size="11" text-anchor="middle">0.50×</text>
+<line class="grid" x1="373.52114663967205" x2="373.52114663967205" y1="70" y2="286"/>
+<text class="secondary" x="373.52114663967205" y="304" font-size="11" text-anchor="middle">0.75×</text>
+<line class="reference" x1="448.02819551956276" x2="448.02819551956276" y1="70" y2="286"/>
+<text class="secondary" x="448.02819551956276" y="304" font-size="11" text-anchor="middle">1.00×</text>
+<line class="grid" x1="522.5352443994534" x2="522.5352443994534" y1="70" y2="286"/>
+<text class="secondary" x="522.5352443994534" y="304" font-size="11" text-anchor="middle">1.25×</text>
+<line class="grid" x1="597.0422932793441" x2="597.0422932793441" y1="70" y2="286"/>
+<text class="secondary" x="597.0422932793441" y="304" font-size="11" text-anchor="middle">1.50×</text>
+<text class="ink" x="138" y="92" font-size="13" text-anchor="end">Vanilla JS</text>
+<path class="s6" d="M150,78 h294.02819551956276 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-294.02819551956276 z"/>
+<text class="ink" x="456.02819551956276" y="92" font-size="12.5">1.00×</text>
+<text class="ink" x="138" y="126" font-size="13" text-anchor="end" font-weight="600">HTMS</text>
+<path class="s1" d="M150,112 h309.983424322946 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-309.983424322946 z"/>
+<text class="ink" x="471.983424322946" y="126" font-size="12.5" font-weight="600">1.05×</text>
+<text class="ink" x="138" y="160" font-size="13" text-anchor="end">Solid</text>
+<path class="s3" d="M150,146 h320.89208053687463 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-320.89208053687463 z"/>
+<text class="ink" x="482.89208053687463" y="160" font-size="12.5">1.09×</text>
+<text class="ink" x="138" y="194" font-size="13" text-anchor="end">Svelte 5</text>
+<path class="s2" d="M150,180 h334.37380963524856 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-334.37380963524856 z"/>
+<text class="ink" x="496.37380963524856" y="194" font-size="12.5">1.14×</text>
+<text class="ink" x="138" y="228" font-size="13" text-anchor="end">Vue</text>
+<path class="s4" d="M150,214 h363.37107229452727 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-363.37107229452727 z"/>
+<text class="ink" x="525.3710722945273" y="228" font-size="12.5">1.23×</text>
+<text class="ink" x="138" y="262" font-size="13" text-anchor="end">React</text>
+<path class="s5" d="M150,248 h491.23809523809524 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-491.23809523809524 z"/>
+<text class="ink" x="653.2380952380952" y="262" font-size="12.5">1.66×</text>
+<line class="axis" x1="150" x2="150" y1="70" y2="286"/>
+</svg>
