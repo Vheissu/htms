@@ -1,0 +1,28 @@
+    <section id="playground" class="playground" aria-labelledby="playground-heading">
+      <div class="gallery-heading">
+        <h2 id="playground-heading">Edit. Compile. Try it.</h2>
+        <span class="count">Runs in your browser</span>
+      </div>
+      <div class="editor-toolbar">
+        <label for="example">Example</label>
+        <select id="example" aria-label="Example"></select>
+        <button id="reset" type="button">Reset example</button>
+        <button id="compile" class="compile-button" type="button">Compile &amp; preview</button>
+      </div>
+      <div class="workspace">
+        <section class="editor-pane" aria-labelledby="source-label">
+          <div class="pane-heading"><label id="source-label" for="source">HTMS source</label><span>Ctrl / ⌘ + Enter to compile</span></div>
+          <textarea id="source" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="compile-status" wrap="off"></textarea>
+        </section>
+        <section class="preview-pane" aria-label="Live preview">
+          <div class="pane-heading"><label for="preview-component">Preview</label><select id="preview-component" aria-label="Preview component" disabled></select><button id="stop-preview" type="button">Stop</button></div>
+          <div id="preview">Loading editor…</div>
+          <p id="runtime-status" role="status"></p>
+        </section>
+      </div>
+      <p id="compile-status" role="status">Loading compiler…</p>
+      <ul id="diagnostics" aria-label="Compiler diagnostics" aria-live="polite"></ul>
+      <details class="generated"><summary>Generated JavaScript</summary><pre><code id="generated-code"></code></pre></details>
+      <p class="playground-note">Edits stay in this tab until you reload. The preview runs in a sandbox with fetch and external resources blocked. Fetch examples will show errors here.</p>
+      <noscript>Enable JavaScript to load and edit the examples.</noscript>
+    </section>

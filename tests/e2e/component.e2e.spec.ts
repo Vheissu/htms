@@ -1,7 +1,9 @@
 import path from 'path';
 import { TransformStream } from 'stream/web';
 import { test, expect } from '@playwright/test';
-import { renderToString } from '../../src/server-renderer';
+// Exercise tsc's emitted package; Playwright's TS transform materializes
+// abstract source-DOM fields and can shadow their subclass accessors.
+import { renderToString } from '../../dist/server-renderer';
 
 interface TransformStreamGlobal {
   TransformStream?: typeof TransformStream;

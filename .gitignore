@@ -47,3 +47,8 @@ test-*.js
 # Playwright
 test-results/
 playwright-report/
+
+# Generated browser playground bundles (npm run demo:build)
+demos/playground.js
+demos/playground-worker.js
+output/playwright/

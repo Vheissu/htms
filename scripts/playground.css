@@ -1,0 +1,36 @@
+    .hero { padding: 3.5rem 0; }
+    .hero h1 { font-size: clamp(3.25rem, 7vw, 6rem); }
+    .playground { padding-bottom: 4rem; scroll-margin-top: 1rem; }
+    .editor-toolbar, .pane-heading { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+    .editor-toolbar { margin-bottom: 1rem; }
+    .playground button, .playground select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; min-height: 2.75rem; }
+    .playground button { cursor: pointer; font-weight: 650; }
+    .playground button:hover { border-color: var(--accent); }
+    .playground button:disabled { opacity: .55; cursor: wait; }
+    .playground .compile-button { margin-left: auto; color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--line); border-radius: .9rem; overflow: hidden; background: var(--surface); }
+    .editor-pane, .preview-pane { min-width: 0; }
+    .editor-pane { border-right: 1px solid var(--line); }
+    .pane-heading { min-height: 4.5rem; padding: .75rem 1rem; border-bottom: 1px solid var(--line); font-size: .8125rem; }
+    .pane-heading label { font-weight: 750; }
+    .pane-heading span { margin-left: auto; color: var(--muted); font-size: .75rem; }
+    .pane-heading select { max-width: 65%; min-width: 0; margin-left: auto; }
+    #source { display: block; width: 100%; min-height: 30rem; resize: vertical; border: 0; padding: 1rem; background: var(--surface); color: var(--ink); tab-size: 2; font: 13px/21px ui-monospace, 'SFMono-Regular', Consolas, monospace; }
+    #source:focus-visible { outline-offset: -3px; }
+    #preview { min-height: 26rem; padding: 1rem; color: var(--muted); }
+    #preview:has(iframe) { padding: 0; }
+    #preview iframe { width: 100%; height: 26rem; border: 0; display: block; background: var(--surface); }
+    #runtime-status { margin: 0; padding: .75rem 1rem; color: var(--muted); font-size: .8125rem; overflow-wrap: anywhere; }
+    #compile-status { font-size: .875rem; }
+    #diagnostics { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+    .diagnostic { border-left: 3px solid var(--accent); padding: .75rem 1rem; background: var(--surface); min-width: 0; }
+    .diagnostic button { color: var(--accent); text-align: left; }
+    .diagnostic p { margin: .5rem 0; overflow-wrap: anywhere; }
+    .diagnostic pre { overflow: auto; font-size: .8125rem; }
+    .hint { color: var(--muted); }
+    .generated { margin-top: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface); }
+    .generated summary { padding: 1rem; cursor: pointer; font-weight: 650; }
+    .generated pre { margin: 0; padding: 1rem; max-height: 30rem; overflow: auto; font-size: .8125rem; }
+    .playground-note { max-width: 60rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+    @media (max-width: 58rem) { .workspace { grid-template-columns: 1fr; } .editor-pane { border-right: 0; border-bottom: 1px solid var(--line); } #source { min-height: 24rem; } }
+    @media (max-width: 40rem) { .editor-toolbar select { max-width: 70%; } .playground .compile-button { margin-left: 0; } .playground .gallery-heading { align-items: flex-start; flex-direction: column; gap: .5rem; } .pane-heading select { max-width: 55%; } }

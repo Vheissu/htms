@@ -2,6 +2,19 @@
 
 HTMS source looks like HTML because it is HTML. Normal elements describe the component's DOM. HTMS tags handle state and behaviour, then disappear when the file is compiled.
 
+## Try an example in the browser
+
+Run `npm ci` and `npm run demo:serve`, then open
+`http://localhost:5173/demos/`. Choose an example, edit the source, and press
+**Compile & preview** or Ctrl/⌘ + Enter. Compiler errors and hints appear
+below the editor; click a source location to jump to it. **Reset example**
+restores the original source. Edits survive example switches but not a reload.
+
+The preview is sandboxed and blocks fetch and external resources. To run a
+fetch example with network access, open its standalone
+`/demos/<name>-component.preview.html` page. See the
+[playground instructions](../README.md#component-demos) for limits and build details.
+
 ## Start a component
 
 From this checkout, with Node 20.19 or newer:

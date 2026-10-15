@@ -6,7 +6,7 @@
   <meta name="description" content="Working HTMS examples covering state, events, forms, lists, composition, effects, fetch and server rendering.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
   <link rel="canonical" href="https://vheissu.github.io/htms/">
-  <title>HTMS Component Demos</title>
+  <title>HTMS Component Playground</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -288,6 +288,43 @@
         transition: none;
       }
     }
+        .hero { padding: 3.5rem 0; }
+    .hero h1 { font-size: clamp(3.25rem, 7vw, 6rem); }
+    .playground { padding-bottom: 4rem; scroll-margin-top: 1rem; }
+    .editor-toolbar, .pane-heading { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+    .editor-toolbar { margin-bottom: 1rem; }
+    .playground button, .playground select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; min-height: 2.75rem; }
+    .playground button { cursor: pointer; font-weight: 650; }
+    .playground button:hover { border-color: var(--accent); }
+    .playground button:disabled { opacity: .55; cursor: wait; }
+    .playground .compile-button { margin-left: auto; color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--line); border-radius: .9rem; overflow: hidden; background: var(--surface); }
+    .editor-pane, .preview-pane { min-width: 0; }
+    .editor-pane { border-right: 1px solid var(--line); }
+    .pane-heading { min-height: 4.5rem; padding: .75rem 1rem; border-bottom: 1px solid var(--line); font-size: .8125rem; }
+    .pane-heading label { font-weight: 750; }
+    .pane-heading span { margin-left: auto; color: var(--muted); font-size: .75rem; }
+    .pane-heading select { max-width: 65%; min-width: 0; margin-left: auto; }
+    #source { display: block; width: 100%; min-height: 30rem; resize: vertical; border: 0; padding: 1rem; background: var(--surface); color: var(--ink); tab-size: 2; font: 13px/21px ui-monospace, 'SFMono-Regular', Consolas, monospace; }
+    #source:focus-visible { outline-offset: -3px; }
+    #preview { min-height: 26rem; padding: 1rem; color: var(--muted); }
+    #preview:has(iframe) { padding: 0; }
+    #preview iframe { width: 100%; height: 26rem; border: 0; display: block; background: var(--surface); }
+    #runtime-status { margin: 0; padding: .75rem 1rem; color: var(--muted); font-size: .8125rem; overflow-wrap: anywhere; }
+    #compile-status { font-size: .875rem; }
+    #diagnostics { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+    .diagnostic { border-left: 3px solid var(--accent); padding: .75rem 1rem; background: var(--surface); min-width: 0; }
+    .diagnostic button { color: var(--accent); text-align: left; }
+    .diagnostic p { margin: .5rem 0; overflow-wrap: anywhere; }
+    .diagnostic pre { overflow: auto; font-size: .8125rem; }
+    .hint { color: var(--muted); }
+    .generated { margin-top: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface); }
+    .generated summary { padding: 1rem; cursor: pointer; font-weight: 650; }
+    .generated pre { margin: 0; padding: 1rem; max-height: 30rem; overflow: auto; font-size: .8125rem; }
+    .playground-note { max-width: 60rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+    @media (max-width: 58rem) { .workspace { grid-template-columns: 1fr; } .editor-pane { border-right: 0; border-bottom: 1px solid var(--line); } #source { min-height: 24rem; } }
+    @media (max-width: 40rem) { .editor-toolbar select { max-width: 70%; } .playground .compile-button { margin-left: 0; } .playground .gallery-heading { align-items: flex-start; flex-direction: column; gap: .5rem; } .pane-heading select { max-width: 55%; } }
+
   </style>
 </head>
 <body>
@@ -306,10 +343,39 @@
         <h1>Make HTML do things.</h1>
       </div>
       <div class="intro">
-        <p>Open a working component, try the interaction, then read the HTML that made it happen.</p>
-        <a class="primary-link" href="./counter-component.preview.html">Start with the counter</a>
+        <p>Load an example, edit its HTML, and compile it right here. Try the result and follow compiler hints as you go.</p>
+        <a class="primary-link" href="#example=counter-component">Start with the counter</a>
       </div>
     </section>
+        <section id="playground" class="playground" aria-labelledby="playground-heading">
+      <div class="gallery-heading">
+        <h2 id="playground-heading">Edit. Compile. Try it.</h2>
+        <span class="count">Runs in your browser</span>
+      </div>
+      <div class="editor-toolbar">
+        <label for="example">Example</label>
+        <select id="example" aria-label="Example"></select>
+        <button id="reset" type="button">Reset example</button>
+        <button id="compile" class="compile-button" type="button">Compile &amp; preview</button>
+      </div>
+      <div class="workspace">
+        <section class="editor-pane" aria-labelledby="source-label">
+          <div class="pane-heading"><label id="source-label" for="source">HTMS source</label><span>Ctrl / ⌘ + Enter to compile</span></div>
+          <textarea id="source" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="compile-status" wrap="off"></textarea>
+        </section>
+        <section class="preview-pane" aria-label="Live preview">
+          <div class="pane-heading"><label for="preview-component">Preview</label><select id="preview-component" aria-label="Preview component" disabled></select><button id="stop-preview" type="button">Stop</button></div>
+          <div id="preview">Loading editor…</div>
+          <p id="runtime-status" role="status"></p>
+        </section>
+      </div>
+      <p id="compile-status" role="status">Loading compiler…</p>
+      <ul id="diagnostics" aria-label="Compiler diagnostics" aria-live="polite"></ul>
+      <details class="generated"><summary>Generated JavaScript</summary><pre><code id="generated-code"></code></pre></details>
+      <p class="playground-note">Edits stay in this tab until you reload. The preview runs in a sandbox with fetch and external resources blocked. Fetch examples will show errors here.</p>
+      <noscript>Enable JavaScript to load and edit the examples.</noscript>
+    </section>
+
     <section class="gallery" aria-labelledby="gallery-heading">
       <div class="gallery-heading">
         <h2 id="gallery-heading">Try every component</h2>
@@ -317,134 +383,136 @@
       </div>
       <ul>
       <li>
-        <a href="./bind-component.preview.html">
+        <a href="#example=bind-component">
           <span>
             <strong>Bind</strong>
             <code>&lt;bind-box&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./composition-component.preview.html">
+        <a href="#example=composition-component">
           <span>
             <strong>Composition</strong>
             <code>&lt;composition-demo&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li class="featured">
-        <a href="./counter-component.preview.html">
+        <a href="#example=counter-component">
           <span>
             <strong>Counter</strong>
             <code>&lt;counter-box&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./derived-component.preview.html">
+        <a href="#example=derived-component">
           <span>
             <strong>Derived</strong>
             <code>&lt;derived-box&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./effect-fetch-auto-component.preview.html">
+        <a href="#example=effect-fetch-auto-component">
           <span>
             <strong>Effect Fetch Auto</strong>
             <code>&lt;effect-fetch-auto-demo&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./effect-fetch-component.preview.html">
+        <a href="#example=effect-fetch-component">
           <span>
             <strong>Effect Fetch</strong>
             <code>&lt;effect-fetch-demo&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./effect-fetch-error-component.preview.html">
+        <a href="#example=effect-fetch-error-component">
           <span>
             <strong>Effect Fetch Error</strong>
             <code>&lt;effect-fetch-error-demo&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./emit-component.preview.html">
+        <a href="#example=emit-component">
           <span>
             <strong>Emit</strong>
             <code>&lt;emit-counter&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./event-toggle-component.preview.html">
+        <a href="#example=event-toggle-component">
           <span>
             <strong>Event Toggle</strong>
             <code>&lt;flash-box&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./form-component.preview.html">
+        <a href="#example=form-component">
           <span>
             <strong>Form</strong>
             <code>&lt;form-box&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./hello-world-component.preview.html">
+        <a href="#example=hello-world-component">
           <span>
             <strong>Hello World</strong>
             <code>&lt;hello-world&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./list-component.preview.html">
+        <a href="#example=list-component">
           <span>
             <strong>List</strong>
             <code>&lt;list-box&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./ssr-card-component.preview.html">
+        <a href="#example=ssr-card-component">
           <span>
             <strong>Ssr Card</strong>
             <code>&lt;ssr-card&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       <li>
-        <a href="./todo-component.preview.html">
+        <a href="#example=todo-component">
           <span>
             <strong>Todo</strong>
             <code>&lt;todo-box&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>
       </ul>
     </section>
   </main>
-  <footer class="shell">Each page runs the compiled custom element in isolation.</footer>
+  <footer class="shell">Built with the HTMS compiler. Pick an example above to start editing.</footer>
+<script id="playground-examples" type="application/json">[{"base":"bind-component","tagName":"bind-box","title":"Bind","source":"\u003ccomponent name=\"bind-box\">\n  \u003cdiv id=\"value\" class=\"value\">\u003c/div>\n  \u003cbind selector=\"#value\" prop=\"textContent\" expr=\"'Initial value'\">\u003c/bind>\n\u003c/component>\n"},{"base":"composition-component","tagName":"composition-demo","title":"Composition","source":"\u003ccomponent name=\"composition-demo\">\n  \u003cprofile-card>\n    \u003cspan slot=\"heading\">Ada Lovelace\u003c/span>\n    \u003cp>Wrote the first published algorithm intended for a machine.\u003c/p>\n  \u003c/profile-card>\n\u003c/component>\n\n\u003ccomponent name=\"profile-card\">\n  \u003cstyle>\n    :host {\n      display: block;\n      max-width: 28rem;\n    }\n    article {\n      border: 1px solid #cbd5e1;\n      border-radius: 12px;\n      padding: 1rem;\n    }\n    header {\n      display: flex;\n      align-items: center;\n      gap: 0.65rem;\n      font-weight: 700;\n    }\n    svg {\n      color: #7c3aed;\n    }\n  \u003c/style>\n  \u003carticle>\n    \u003cheader>\n      \u003csvg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" aria-hidden=\"true\">\n        \u003ccircle cx=\"12\" cy=\"8\" r=\"4\" fill=\"currentColor\">\u003c/circle>\n        \u003cpath d=\"M4 22c0-5 3-8 8-8s8 3 8 8\" fill=\"currentColor\">\u003c/path>\n      \u003c/svg>\n      \u003cslot name=\"heading\">Unnamed profile\u003c/slot>\n    \u003c/header>\n    \u003cslot>\u003cp>No biography supplied.\u003c/p>\u003c/slot>\n  \u003c/article>\n\u003c/component>\n"},{"base":"counter-component","tagName":"counter-box","title":"Counter","source":"\u003ccomponent name=\"counter-box\">\n  \u003cvar name=\"count\" value=\"0\" mutable=\"true\">\u003c/var>\n  \u003cdiv id=\"count\" class=\"count\">\u003c/div>\n  \u003cbutton id=\"increment\">Increment\u003c/button>\n  \u003cevent target=\"#increment\" type=\"click\">\n    \u003cset name=\"count\" op=\"++\">\u003c/set>\n  \u003c/event>\n  \u003cbind selector=\"#count\" prop=\"textContent\" expr=\"String(this.count)\">\u003c/bind>\n\u003c/component>\n"},{"base":"derived-component","tagName":"derived-box","title":"Derived","source":"\u003ccomponent name=\"derived-box\" props=\"labelText\" observed=\"label-text\">\n  \u003cvar name=\"items\" value='[\"Alpha\"]' mutable=\"true\">\u003c/var>\n  \u003cderive name=\"count\" expr=\"this.items.length\">\u003c/derive>\n  \u003cderive name=\"statusText\" expr=\"this.labelText + ': ' + this.count\">\u003c/derive>\n\n  \u003cdiv class=\"box\">\n    \u003ch2 id=\"status\">{statusText}\u003c/h2>\n    \u003cp id=\"summary\" title=\"Count {count}\">Total items: {count}\u003c/p>\n    \u003cbutton id=\"add\" type=\"button\">Add item\u003c/button>\n  \u003c/div>\n\n  \u003cevent target=\"#add\" type=\"click\">\n    \u003cpush array=\"items\" expr=\"'Item ' + (this.count + 1)\">\u003c/push>\n  \u003c/event>\n\u003c/component>\n"},{"base":"effect-fetch-auto-component","tagName":"effect-fetch-auto-demo","title":"Effect Fetch Auto","source":"\u003ccomponent name=\"effect-fetch-auto-demo\">\n  \u003cvar name=\"state\" value=\"{}\" mutable=\"true\">\u003c/var>\n  \u003cderive\n    name=\"status\"\n    expr=\"this.state.loading ? 'Loading...' : this.state.error ? 'Error' : this.state.quote ? 'Loaded' : 'Idle'\">\n  \u003c/derive>\n\n  \u003cdiv class=\"demo\">\n    \u003cp id=\"status\">Status: {status}\u003c/p>\n    \u003cblockquote id=\"quote\">{state.quote.text}\u003c/blockquote>\n    \u003cbutton id=\"refresh\">Refresh Quote\u003c/button>\n  \u003c/div>\n\n  \u003cevent target=\"#refresh\" type=\"click\">\n    \u003cset name=\"state.loadNonce\" expr=\"Date.now()\">\u003c/set>\n  \u003c/event>\n\n  \u003c!-- Runs on mount, then again whenever loadNonce changes. -->\n  \u003cfetch\n    url=\"'https://example.com/demo-quote.json'\"\n    into=\"state.quote\"\n    loading=\"state.loading\"\n    error=\"state.error\"\n    deps=\"this.state.loadNonce\">\n  \u003c/fetch>\n\u003c/component>\n"},{"base":"effect-fetch-component","tagName":"effect-fetch-demo","title":"Effect Fetch","source":"\u003ccomponent name=\"effect-fetch-demo\">\n  \u003cvar name=\"state\" value=\"{}\" mutable=\"true\">\u003c/var>\n  \u003cderive\n    name=\"status\"\n    expr=\"this.state.loading ? 'Loading...' : this.state.error ? 'Error' : this.state.quote ? 'Loaded' : 'Idle'\">\n  \u003c/derive>\n\n  \u003cdiv class=\"demo\">\n    \u003cbutton id=\"load\">Load Quote\u003c/button>\n    \u003cp id=\"status\">Status: {status}\u003c/p>\n    \u003cblockquote id=\"quote\">{state.quote.text}\u003c/blockquote>\n    \u003cp id=\"error\" class=\"error\">{state.error}\u003c/p>\n  \u003c/div>\n\n  \u003cevent target=\"#load\" type=\"click\">\n    \u003cset name=\"state.loadNonce\" expr=\"Date.now()\">\u003c/set>\n  \u003c/event>\n\n  \u003cfetch\n    url=\"'https://example.com/demo-quote.json'\"\n    into=\"state.quote\"\n    loading=\"state.loading\"\n    error=\"state.error\"\n    deps=\"this.state.loadNonce\"\n    when=\"Boolean(this.state.loadNonce)\"\n    immediate=\"false\">\n  \u003c/fetch>\n\n  \u003c!-- Effects are for side effects outside the template: here, telling the\n       page that the request status changed. -->\n  \u003ceffect deps=\"this.status\" immediate=\"false\">\n    this.dispatchEvent(new CustomEvent('status-change', { detail: this.status, bubbles: true, composed: true }));\n  \u003c/effect>\n\u003c/component>\n"},{"base":"effect-fetch-error-component","tagName":"effect-fetch-error-demo","title":"Effect Fetch Error","source":"\u003ccomponent name=\"effect-fetch-error-demo\">\n  \u003cvar name=\"state\" value=\"{}\" mutable=\"true\">\u003c/var>\n  \u003cderive\n    name=\"status\"\n    expr=\"this.state.loading ? 'Loading...' : this.state.error ? 'Error' : 'Idle'\">\n  \u003c/derive>\n\n  \u003cdiv class=\"demo\">\n    \u003cbutton id=\"load\">Load Broken Endpoint\u003c/button>\n    \u003cp id=\"status\">Status: {status}\u003c/p>\n    \u003cp id=\"error\" class=\"error\">{state.error}\u003c/p>\n  \u003c/div>\n\n  \u003cevent target=\"#load\" type=\"click\">\n    \u003cset name=\"state.loadNonce\" expr=\"Date.now()\">\u003c/set>\n  \u003c/event>\n\n  \u003cfetch\n    url=\"'https://example.com/demo-error.json'\"\n    into=\"state.data\"\n    loading=\"state.loading\"\n    error=\"state.error\"\n    deps=\"this.state.loadNonce\"\n    when=\"Boolean(this.state.loadNonce)\"\n    immediate=\"false\">\n  \u003c/fetch>\n\u003c/component>\n"},{"base":"emit-component","tagName":"emit-counter","title":"Emit","source":"\u003ccomponent name=\"emit-counter\">\n  \u003cvar name=\"count\" value=\"0\" mutable=\"true\">\u003c/var>\n  \u003cbutton id=\"inc\">Increment\u003c/button>\n  \u003cp id=\"out\">Count: {count}\u003c/p>\n  \u003cevent target=\"#inc\" type=\"click\">\n    \u003cset name=\"count\" op=\"++\">\u003c/set>\n    \u003cemit name=\"count-changed\" detail=\"this.count\">\u003c/emit>\n  \u003c/event>\n\u003c/component>\n"},{"base":"event-toggle-component","tagName":"flash-box","title":"Event Toggle","source":"\u003ccomponent name=\"flash-box\">\n  \u003cbutton id=\"activate\">Activate\u003c/button>\n  \u003cdiv id=\"panel\" class=\"panel\">Ready\u003c/div>\n  \u003cevent target=\"#activate\" type=\"click\">\n    \u003csetattr selector=\"#panel\" name=\"data-state\" value=\"active\">\u003c/setattr>\n    \u003ctoggle target=\"#panel\" condition=\"true\">\u003c/toggle>\n  \u003c/event>\n\u003c/component>\n"},{"base":"form-component","tagName":"form-box","title":"Form","source":"\u003ccomponent name=\"form-box\">\n  \u003cvar name=\"name\" value=\"''\" mutable=\"true\">\u003c/var>\n  \u003cvar name=\"email\" value=\"''\" mutable=\"true\">\u003c/var>\n  \u003cvar name=\"saved\" value=\"null\" mutable=\"true\">\u003c/var>\n\n  \u003cdiv class=\"form\">\n    \u003cform on:submit.prevent=\"saved = { name: name.trim(), email: email.trim() }\">\n      \u003clabel>Name \u003cinput autocomplete=\"off\" bind:value=\"name\" />\u003c/label>\n      \u003clabel>Email \u003cinput type=\"email\" autocomplete=\"off\" bind:value=\"email\" />\u003c/label>\n      \u003cbutton type=\"submit\" disabled=\"{!name.trim() || !email.trim()}\">Save\u003c/button>\n    \u003c/form>\n    \u003cp id=\"summary\">{saved ? 'Saved ' + saved.name + ' (' + saved.email + ')' : 'Fill out the form'}\u003c/p>\n  \u003c/div>\n\u003c/component>\n"},{"base":"hello-world-component","tagName":"hello-world","title":"Hello World","source":"\u003ccomponent name=\"hello-world\">\n  \u003cdiv class=\"message\">Hello from HTMS components!\u003c/div>\n\u003c/component>\n"},{"base":"list-component","tagName":"list-box","title":"List","source":"\u003ccomponent name=\"list-box\">\n  \u003cvar name=\"people\" value='[\"Ada\", \"Lin\", \"Ida\"]' mutable=\"true\">\u003c/var>\n  \u003cdiv class=\"box\">\n    \u003ch3>Favorite Scientists\u003c/h3>\n    \u003cul id=\"people\">\u003c/ul>\n  \u003c/div>\n  \u003ckeyedlist target=\"#people\" of=\"people\" item=\"item\" index=\"i\" key=\"item\">\n    \u003cli class=\"person\">\n      \u003cspan>{item}\u003c/span>\n      \u003cbutton class=\"promote\" type=\"button\">Remove\u003c/button>\n      \u003cevent target=\".promote\" type=\"click\">\n        \u003csplice array=\"people\" index=\"i\" delete=\"1\">\u003c/splice>\n      \u003c/event>\n    \u003c/li>\n  \u003c/keyedlist>\n\u003c/component>\n"},{"base":"ssr-card-component","tagName":"ssr-card","title":"Ssr Card","source":"\u003ccomponent name=\"ssr-card\" props=\"name:string, count:number\">\n  \u003carticle class=\"card\">\n    \u003ch2>{name}\u003c/h2>\n    \u003cp id=\"count\">Server count: {count}\u003c/p>\n    \u003cbutton id=\"increment\" type=\"button\">Increment\u003c/button>\n  \u003c/article>\n\n  \u003cevent target=\"#increment\" type=\"click\">\n    \u003cset name=\"count\" op=\"++\">\u003c/set>\n  \u003c/event>\n\u003c/component>\n"},{"base":"todo-component","tagName":"todo-box","title":"Todo","source":"\u003ccomponent name=\"todo-box\">\n  \u003cvar name=\"todos\" value=\"[]\" mutable=\"true\">\u003c/var>\n  \u003cvar name=\"draft\" value=\"''\" mutable=\"true\">\u003c/var>\n  \u003cderive name=\"remaining\" expr=\"todos.filter((todo) => !todo.done).length\">\u003c/derive>\n\n  \u003cfunction name=\"add\">\n    const text = draft.trim();\n    if (!text) return;\n    todos.push({ id: Date.now(), text, done: false });\n    draft = '';\n  \u003c/function>\n\n  \u003cstyle>\n    .done span { text-decoration: line-through; opacity: 0.6; }\n  \u003c/style>\n\n  \u003cdiv class=\"todo\">\n    \u003ch2>HTMS Todo\u003c/h2>\n    \u003cform class=\"input-row\" on:submit.prevent=\"add()\">\n      \u003cinput type=\"text\" placeholder=\"Add a task\" bind:value=\"draft\" />\n      \u003cbutton type=\"submit\" disabled=\"{!draft.trim()}\">Add\u003c/button>\n    \u003c/form>\n    \u003cul>\n      \u003crepeat variable=\"todos\" item=\"todo\" index=\"i\">\n        \u003cli class=\"todo-item\" class:done=\"todo.done\">\n          \u003clabel>\n            \u003cinput type=\"checkbox\" bind:checked=\"todo.done\" />\n            \u003cspan>{todo.text}\u003c/span>\n          \u003c/label>\n          \u003cbutton class=\"remove\" type=\"button\" aria-label=\"Remove\" on:click=\"todos.splice(i, 1)\">✕\u003c/button>\n        \u003c/li>\n      \u003c/repeat>\n    \u003c/ul>\n    \u003cp class=\"summary\" if=\"todos.length\">{remaining} of {todos.length} left\u003c/p>\n  \u003c/div>\n\u003c/component>\n"}]</script>
+<script src="./playground.js" defer></script>
 </body>
 </html>

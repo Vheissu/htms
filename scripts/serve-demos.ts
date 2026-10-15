@@ -11,7 +11,11 @@ const PORT =
 const DEMOS_ROOT = path.join(process.cwd(), 'demos');
 
 function discoverCuratedFiles(rootDir: string): Set<string> {
-  const files = new Set<string>(['index.html']);
+  const files = new Set<string>([
+    'index.html',
+    'playground.js',
+    'playground-worker.js',
+  ]);
   for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
     if (
       entry.isFile() &&
@@ -74,7 +78,11 @@ const server = http.createServer((req, res) => {
   const urlPath = req.url.replace(/\?.*$/, '').replace(/\/+/g, '/');
 
   // Only serve / or /demos paths
-  if (urlPath === '/' || urlPath === '/demos' || urlPath === '/demos/') {
+  if (urlPath === '/' || urlPath === '/demos') {
+    res.writeHead(302, { Location: '/demos/' });
+    return res.end();
+  }
+  if (urlPath === '/demos/') {
     const fsPath = path.join(DEMOS_ROOT, 'index.html');
     const data = fs.readFileSync(fsPath);
     return send(res, 200, data.toString('utf8'), MIME.get('.html'));

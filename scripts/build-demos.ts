@@ -1,6 +1,7 @@
 #!/usr/bin/env ts-node
 import fs from 'fs';
 import path from 'path';
+import { build } from 'esbuild';
 import { parseHTML } from '../src/parser';
 
 const DEMOS_DIR = path.join(process.cwd(), 'demos');
@@ -12,6 +13,7 @@ interface CompiledDemo {
   base: string;
   tagName: string;
   title: string;
+  source: string;
 }
 
 function titleCase(value: string): string {
@@ -194,6 +196,7 @@ function buildDemo(file: string): CompiledDemo {
     <a href="./">HTMS demos</a>
     <nav class="demo-links" aria-label="Demo links">
       <span>${title}</span>
+      <a href="./#example=${base}">Edit example</a>
       <a href="https://github.com/Vheissu/htms/blob/master/demos/${file}">View source</a>
     </nav>
   </header>
@@ -209,10 +212,19 @@ function buildDemo(file: string): CompiledDemo {
   fs.writeFileSync(previewPath, previewHtml, 'utf8');
 
   console.log(`✓ Built ${file} → ${base}.js`);
-  return { base, tagName, title };
+  return { base, tagName, title, source: html };
 }
 
 function writeGallery(demos: CompiledDemo[]): void {
+  const editor = fs.readFileSync(
+    path.join(__dirname, 'playground.html'),
+    'utf8'
+  );
+  const editorStyles = fs.readFileSync(
+    path.join(__dirname, 'playground.css'),
+    'utf8'
+  );
+  const manifest = JSON.stringify(demos).replace(/</g, '\\u003c');
   const items = demos
     .map(
       ({
@@ -220,12 +232,12 @@ function writeGallery(demos: CompiledDemo[]): void {
         tagName,
         title,
       }) => `      <li${base === 'counter-component' ? ' class="featured"' : ''}>
-        <a href="./${base}.preview.html">
+        <a href="#example=${base}">
           <span>
             <strong>${title}</strong>
             <code>&lt;${tagName}&gt;</code>
           </span>
-          <b>Open demo</b>
+          <b>Edit example</b>
         </a>
       </li>`
     )
@@ -239,7 +251,7 @@ function writeGallery(demos: CompiledDemo[]): void {
   <meta name="description" content="Working HTMS examples covering state, events, forms, lists, composition, effects, fetch and server rendering.">
   <link rel="icon" href="${FAVICON}">
   <link rel="canonical" href="https://vheissu.github.io/htms/">
-  <title>HTMS Component Demos</title>
+  <title>HTMS Component Playground</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -521,6 +533,7 @@ function writeGallery(demos: CompiledDemo[]): void {
         transition: none;
       }
     }
+    ${editorStyles}
   </style>
 </head>
 <body>
@@ -539,10 +552,11 @@ function writeGallery(demos: CompiledDemo[]): void {
         <h1>Make HTML do things.</h1>
       </div>
       <div class="intro">
-        <p>Open a working component, try the interaction, then read the HTML that made it happen.</p>
-        <a class="primary-link" href="./counter-component.preview.html">Start with the counter</a>
+        <p>Load an example, edit its HTML, and compile it right here. Try the result and follow compiler hints as you go.</p>
+        <a class="primary-link" href="#example=counter-component">Start with the counter</a>
       </div>
     </section>
+    ${editor}
     <section class="gallery" aria-labelledby="gallery-heading">
       <div class="gallery-heading">
         <h2 id="gallery-heading">Try every component</h2>
@@ -553,14 +567,16 @@ ${items}
       </ul>
     </section>
   </main>
-  <footer class="shell">Each page runs the compiled custom element in isolation.</footer>
+  <footer class="shell">Built with the HTMS compiler. Pick an example above to start editing.</footer>
+<script id="playground-examples" type="application/json">${manifest}</script>
+<script src="./playground.js" defer></script>
 </body>
 </html>`;
 
   fs.writeFileSync(path.join(DEMOS_DIR, 'index.html'), gallery, 'utf8');
 }
 
-function main(): void {
+async function main(): Promise<void> {
   ensureDir();
   const entries = discover();
   if (entries.length === 0) {
@@ -573,7 +589,34 @@ function main(): void {
     compiled.push(buildDemo(file));
   }
 
+  await build({
+    entryPoints: {
+      playground: 'src/playground/app.ts',
+      'playground-worker': 'src/playground/compiler-worker.ts',
+    },
+    outdir: DEMOS_DIR,
+    bundle: true,
+    platform: 'browser',
+    format: 'iife',
+    target: 'es2022',
+    minify: true,
+    legalComments: 'inline',
+    define: { 'process.env.HTMS_ALLOW_INJECT_TAG': '"false"' },
+    plugins: [
+      {
+        name: 'browser-compiler-logger',
+        setup(builder): void {
+          builder.onResolve({ filter: /utils\/logger$/ }, () => ({
+            path: path.resolve('src/playground/logger.ts'),
+          }));
+        },
+      },
+    ],
+  });
   writeGallery(compiled);
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -74,7 +74,7 @@ Open `http://127.0.0.1:5173/`, click the button, then edit the HTML. The browser
 
 The starter is deliberately small enough to pull apart. HTMS won't replace an existing file unless you pass `--force`.
 
-[Try the live component demos](https://vheissu.github.io/htms/), read the
+[Open the editable component playground](https://vheissu.github.io/htms/), read the
 [getting-started guide](https://github.com/Vheissu/htms/blob/master/docs/getting-started.md),
 or run `npm run demo:serve` and open `http://localhost:5173/demos/`.
 
@@ -293,6 +293,43 @@ htms render component.html \
 
 ## Component Demos
 
+Run `npm run demo:serve`, then open `http://localhost:5173/demos/`.
+Choose an example in the editor or click a gallery card. Edit the HTMS source
+and press **Compile & preview** (or Ctrl/⌘ + Enter). Each successful compile
+starts a fresh preview, so you can redefine the same component repeatedly.
+For files with several components, use the preview selector to choose which
+one to mount. Expand **Generated JavaScript** to inspect the compiler output.
+
+Errors and warnings appear below the editor with the compiler's original
+message, tag, source line and column, and hint when available. Click a source
+location to move the cursor there. Diagnostics about generated JavaScript are
+labelled separately and don't point into the HTML source. Editing clears the
+previous result; failed compiles never run partial output.
+
+Switching examples keeps your edits for this visit. **Reset example** restores
+the selected example, and reloading the page discards all drafts. A link such as
+`http://localhost:5173/demos/#example=counter-component` selects an example;
+it doesn't contain or share your edits.
+
+Compilation runs locally in a Web Worker using the same strict compiler as the
+CLI. The playground limits input to 256 KiB and stops compilation after ten
+seconds. **Stop** removes the running preview. Preview code runs in an iframe
+with `sandbox="allow-scripts"`, without access to the gallery's DOM or storage.
+Its content policy blocks fetch, external resources, nested frames and form
+submission; links are disabled. Fetch examples therefore show blocked requests
+here. The sandbox is not a CPU or memory quota: pathological preview code can
+still make a browser tab unresponsive.
+
+`npm run demo:build` regenerates the static gallery, original standalone
+`*.preview.html` pages, and local editor/compiler bundles. It needs no CDN or
+compilation API and works under a static host's subdirectory, including GitHub
+Pages. The standalone pages still run the checked-in examples without the
+editor's sandbox restrictions. Edit `scripts/playground.html` and
+`scripts/playground.css` for the editor layout, or `src/playground/` for its
+behavior; don't edit the generated bundles. Run `npm test -- tests/playground.spec.ts`
+for diagnostic/preview tests and `npm run test:e2e` for browser checks (including
+the playground); Playwright builds and serves the demos automatically.
+
 - `demos/hello-world-component.html` — minimal “hello” rendered via shadow DOM.
 - `demos/event-toggle-component.html` — `<event>`, `<setattr>`, and `<toggle>` working together.
 - `demos/bind-component.html` — `<bind>` hydrates text content without global state.
@@ -306,7 +343,7 @@ htms render component.html \
 
 ## Security boundary
 
-HTMS rejects known executable sinks and unsafe template attributes, but source files are still application code. Do not compile untrusted markup and execute the result.
+HTMS rejects known executable sinks and unsafe template attributes, but source files are still application code. Do not execute compiled untrusted markup in your application's page. The demo editor uses a separate sandboxed iframe with a restrictive content policy for previews; the compiler alone is not that security boundary.
 
 - `<inject>` is disabled entirely unless `HTMS_ALLOW_INJECT_TAG=true` is set — and even then it writes through `textContent`, never `innerHTML`.
 - Inline event-handler attributes (`onclick`, `onload`, …) are rejected in markup; use `on:click` or `<event>` instead.
