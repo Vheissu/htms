@@ -174,6 +174,102 @@ const PURE_METHODS = new Set([
   'with',
 ]);
 
+// Static calls are whitelisted separately: a global object can expose both
+// pure readers and mutators (for example Object.keys and Object.assign).
+const PURE_GLOBAL_STATIC_METHODS = new Set([
+  'Array.from',
+  'Array.isArray',
+  'Array.of',
+  'BigInt.asIntN',
+  'BigInt.asUintN',
+  'Date.parse',
+  'Date.UTC',
+  'JSON.parse',
+  'JSON.stringify',
+  'Math.abs',
+  'Math.acos',
+  'Math.acosh',
+  'Math.asin',
+  'Math.asinh',
+  'Math.atan',
+  'Math.atan2',
+  'Math.atanh',
+  'Math.cbrt',
+  'Math.ceil',
+  'Math.clz32',
+  'Math.cos',
+  'Math.cosh',
+  'Math.exp',
+  'Math.expm1',
+  'Math.floor',
+  'Math.fround',
+  'Math.hypot',
+  'Math.imul',
+  'Math.log',
+  'Math.log10',
+  'Math.log1p',
+  'Math.log2',
+  'Math.max',
+  'Math.min',
+  'Math.pow',
+  'Math.round',
+  'Math.sign',
+  'Math.sin',
+  'Math.sinh',
+  'Math.sqrt',
+  'Math.tan',
+  'Math.tanh',
+  'Math.trunc',
+  'Number.isFinite',
+  'Number.isInteger',
+  'Number.isNaN',
+  'Number.isSafeInteger',
+  'Number.parseFloat',
+  'Number.parseInt',
+  'Object.entries',
+  'Object.fromEntries',
+  'Object.getOwnPropertyDescriptor',
+  'Object.getOwnPropertyNames',
+  'Object.getOwnPropertySymbols',
+  'Object.hasOwn',
+  'Object.is',
+  'Object.keys',
+  'Object.values',
+  'Reflect.get',
+  'Reflect.getPrototypeOf',
+  'Reflect.has',
+  'Reflect.ownKeys',
+  'String.fromCharCode',
+  'String.fromCodePoint',
+  'String.raw',
+]);
+
+// Methods whose arguments can execute author code. A referenced callback is
+// never assumed pure; only a concise inline callback is inspected.
+const CALLBACK_METHOD_ARGUMENTS = new Map<string, number>([
+  ['every', 0],
+  ['filter', 0],
+  ['find', 0],
+  ['findIndex', 0],
+  ['findLast', 0],
+  ['findLastIndex', 0],
+  ['flatMap', 0],
+  ['forEach', 0],
+  ['map', 0],
+  ['reduce', 0],
+  ['reduceRight', 0],
+  ['some', 0],
+  ['toSorted', 0],
+  ['replace', 1],
+  ['replaceAll', 1],
+]);
+
+const PURE_STATIC_CALLBACK_ARGUMENTS = new Map<string, number>([
+  ['Array.from', 1],
+  ['JSON.parse', 1],
+  ['JSON.stringify', 1],
+]);
+
 // Component helpers whose first argument is a state path literal.
 const PATH_HELPERS = new Set([
   '__htmsInitState',
@@ -370,6 +466,137 @@ function allDeclaredNames(root: AstNode): Set<string> {
 
 function isPureMethod(name: string | null | undefined): boolean {
   return name !== null && name !== undefined && PURE_METHODS.has(name);
+}
+
+// A derive runs during render, so it is only safe to skip when its expression
+// has no observable side effects. This deliberately recognises the small set
+// of calls already treated as pure by the dependency analyser and rejects
+// unknown calls, constructors, assignments and statement-like expressions.
+export function isPureExpression(code: string): boolean {
+  const root = parseSnippet(code, true);
+  return root !== null && pureExpressionNode(root);
+}
+
+function pureExpressionNode(node: AstNode): boolean {
+  switch (node.type) {
+    case 'Identifier':
+    case 'Literal':
+    case 'TemplateElement':
+    case 'ThisExpression':
+    case 'Super':
+    case 'MetaProperty':
+      return true;
+    case 'MemberExpression': {
+      if (!pureExpressionNode(node.object as AstNode)) return false;
+      return (
+        node.computed !== true || pureExpressionNode(node.property as AstNode)
+      );
+    }
+    case 'CallExpression':
+      return pureCallExpression(node);
+    case 'ArrowFunctionExpression':
+    case 'FunctionExpression':
+      // A function body can run arbitrary statements when called. The
+      // expression analyser only treats concise arrow callbacks as pure.
+      return (
+        (node.params as AstNode[]).every(
+          (param) => param.type === 'Identifier'
+        ) &&
+        node.expression === true &&
+        pureExpressionNode(node.body as AstNode)
+      );
+    case 'UnaryExpression':
+      return (
+        node.operator !== 'delete' &&
+        pureExpressionNode(node.argument as AstNode)
+      );
+    case 'ArrayExpression':
+    case 'ObjectExpression':
+    case 'TemplateLiteral':
+    case 'BinaryExpression':
+    case 'LogicalExpression':
+    case 'ConditionalExpression':
+    case 'SequenceExpression':
+    case 'ChainExpression':
+      return allChildExpressionsPure(node);
+    case 'Property':
+      return (
+        (!node.computed || pureExpressionNode(node.key as AstNode)) &&
+        pureExpressionNode(node.value as AstNode)
+      );
+    case 'SpreadElement':
+      return pureExpressionNode(node.argument as AstNode);
+    default:
+      return false;
+  }
+}
+
+function pureCallExpression(node: AstNode): boolean {
+  const callee = node.callee as AstNode;
+  const { root, names } = memberChain(callee);
+  const method = names.at(-1);
+  let allowed = false;
+
+  if (
+    root.type === 'Identifier' &&
+    names.length === 0 &&
+    PURE_GLOBALS.has(root.name as string) &&
+    root.name !== 'Date'
+  ) {
+    allowed = true;
+  } else if (
+    root.type === 'Identifier' &&
+    method !== null &&
+    names.every((name) => name !== null) &&
+    PURE_GLOBAL_STATIC_METHODS.has(`${root.name}.${method}`)
+  ) {
+    allowed = true;
+  } else if (
+    method &&
+    names.every((name) => name !== null) &&
+    isPureMethod(method) &&
+    !(root.type === 'ThisExpression' && names.length === 1)
+  ) {
+    allowed = pureExpressionNode(root);
+  }
+  if (!allowed) return false;
+
+  const args = node.arguments as AstNode[];
+  if (!args.every((argument) => pureExpressionNode(argument))) return false;
+  let callbackIndex: number | undefined;
+  if (method !== null && method !== undefined) {
+    callbackIndex = CALLBACK_METHOD_ARGUMENTS.get(method);
+  }
+  if (
+    callbackIndex === undefined &&
+    root.type === 'Identifier' &&
+    method !== null &&
+    method !== undefined
+  ) {
+    callbackIndex = PURE_STATIC_CALLBACK_ARGUMENTS.get(
+      `${root.name}.${method}`
+    );
+  }
+  if (callbackIndex === undefined) return true;
+  const callback = args.at(callbackIndex);
+  return callback === undefined || isInlinePureCallback(callback);
+}
+
+function isInlinePureCallback(node: AstNode): boolean {
+  return (
+    node.type === 'ArrowFunctionExpression' &&
+    (node.params as AstNode[]).every((param) => param.type === 'Identifier') &&
+    node.expression === true &&
+    pureExpressionNode(node.body as AstNode)
+  );
+}
+
+function allChildExpressionsPure(node: AstNode): boolean {
+  let pure = true;
+  forEachChild(node, (_key, child) => {
+    if (!pureExpressionNode(child)) pure = false;
+  });
+  return pure;
 }
 
 function loopVariableNames(left: AstNode): Set<string> {

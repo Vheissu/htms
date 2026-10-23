@@ -42,6 +42,26 @@ describe('Component declarations', () => {
           card.count = 2;
           card.reset(3);
           card.active = true;
+          const saveButton = card.$('button');
+          saveButton!.disabled = true;
+          saveButton?.click();
+          const buttons = card.$$('button');
+          buttons[0]!.disabled = false;
+          buttons[0]?.click();
+          const circle = card.$('circle');
+          void circle?.cx.baseVal.value;
+          const circles = card.$$('circle');
+          void circles[0]?.r.baseVal.value;
+          const onClick = (event: MouseEvent): void => {
+            void event.clientX;
+          };
+          card.addEventListener('click', onClick);
+          card.removeEventListener('click', onClick);
+          const onSaved = (event: CustomEvent<unknown>): void => {
+            void event.detail;
+          };
+          card.addEventListener('card-saved', onSaved);
+          card.removeEventListener('card-saved', onSaved);
           card.addEventListener('card-saved', event => {
             const detail: unknown = event.detail;
             void detail;
@@ -52,7 +72,7 @@ describe('Component declarations', () => {
     ]);
     const compilerOptions: ts.CompilerOptions = {
       noEmit: true,
-      skipLibCheck: true,
+      skipLibCheck: false,
       strict: true,
       target: ts.ScriptTarget.ES2020,
       types: [],

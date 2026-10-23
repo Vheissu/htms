@@ -86,7 +86,7 @@ badge.labelText = 'Synced';
 - `<var>` tags declare reactive fields. Compiler emits property definitions and update notifications. `<object>` and `<array>` declare state from child tags.
 - Expressions name fields directly (`count`, `todos.length`); the compiler resolves them to `this.<field>`. Loop variables, `event`, declared locals and globals are left alone.
 - `<function>` compiles to a class method that can be called from expressions, handlers and outside code. The component re-renders after a method returns.
-- `<derive name="total" expr="items.length">` recomputes derived fields before each render, so templates, `<bind>`, and downstream derived fields see current values.
+- `<derive name="total" expr="items.length">` updates derived fields before templates and bindings run. The block renderer skips calculations it recognizes as pure when their dependencies haven't changed. Derived chains, nested writes and replacement of a target object invalidate the affected values. Unknown or side-effectful calculations stay eager, and `requestUpdate()` forces recomputation. The legacy renderer recomputes on each render.
 - `<set>`, `<push>`, and `<splice>` update instance fields and schedule a render.
 - Prop and top-level state writes are batched in a microtask. Several synchronous writes produce one render.
 - Generated elements expose `requestUpdate()` for in-place nested changes and an `updateComplete` promise for code that needs the updated DOM.
@@ -203,7 +203,17 @@ Closed declarative shadow roots remain intentionally inaccessible through `eleme
 - typed public props (`string`, `number`, `boolean`, and `json`);
 - `requestUpdate`, `updateComplete`, and `renderError`;
 - typed overloads for events declared with `<emit>` and for `htms-error`;
+- native event types and matching `removeEventListener` overloads;
+- HTML and SVG tag inference for `$` and `$$`, plus explicit element types;
 - an `HTMLElementTagNameMap` entry for each component in the source file.
+
+```ts
+const card = document.createElement('user-badge');
+const button = card.$('button'); // HTMLButtonElement | null
+const circle = card.$('circle'); // SVGCircleElement | null
+const input = card.$<HTMLInputElement>('#name');
+card.addEventListener('click', event => console.log(event.clientX));
+```
 
 ## Platform requirements
 

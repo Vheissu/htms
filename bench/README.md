@@ -36,6 +36,31 @@ node report.mjs        # writes results/RESULTS.md, the charts and the README su
 `node run.mjs --runs 5 --apps htms,svelte --ops run1k,select` runs a subset.
 `node micro.mjs` is a quick script-only comparison (no layout or paint).
 
+## Compiler and effect registration
+
+`compiler.mjs`, `derived.mjs` and `effects.mjs` compare the current package build with a
+baseline build. Both accept the baseline's `dist` directory:
+
+```bash
+# From the repository root, after building both revisions:
+node bench/compiler.mjs /path/to/baseline/dist --runs 15 --warmup 30
+node bench/derived.mjs /path/to/baseline/dist
+node bench/effects.mjs /path/to/baseline/dist --count 5000 --runs 9
+```
+
+These measure compiler throughput and effect registration separately from
+browser layout and paint. They don't update the framework comparison charts.
+The [23 October runtime checks](results/runtime-2026-10-23.md) record the
+derived-calculation and effect-registry changes, including raw samples.
+
+## Vite integration check
+
+After installing the dependencies in this directory, run `npm run test:vite`.
+It builds the package and tests the plugin against Vite in Chromium: a
+production bundle, development imports, reloads, raw HTML imports, compiler
+errors and recovery after an edit. Install the browser with
+`npx playwright install chromium` from the repository root if needed.
+
 ## Method
 
 - **Same toolchain.** Every app is bundled and minified by the same Vite

@@ -9,9 +9,11 @@ import {
 } from './block-compiler';
 import {
   ALL_DIRTY,
+  DEEP_BIT,
   DependencyAnalyzer,
   MethodCode,
   collectAliases,
+  isPureExpression,
 } from './dependencies';
 import {
   ComponentIR,
@@ -919,6 +921,7 @@ function buildComponentClass(
 
   let blockPlan: BlockComponentPlan | null = null;
   let analyzer: DependencyAnalyzer | null = null;
+  let deriveMasks: readonly (number | null)[] = [];
   if (blockDocument) {
     analyzer = createAnalyzer(
       renderIR,
@@ -927,6 +930,11 @@ function buildComponentClass(
       lifecycleState,
       methodBodies
     );
+    // Register derive reads before block compilation resolves write masks.
+    // Effects and fetches can be the only consumers of a derived field, so
+    // their reads would otherwise be absent when a state helper's mask is
+    // finalized.
+    deriveMasks = analyzeDeriveMasks(analyzer, lifecycleState);
     // Handlers' write masks depend on which fields bindings read, which the
     // block compiler only knows once every binding is compiled; it resolves
     // these placeholders at the end.
@@ -1845,6 +1853,7 @@ ${body}
     return {
       code: buildBlockComponentClass({
         metadata,
+        deriveMasks,
         renderIR,
         plan: blockPlan,
         sections: [
@@ -1921,6 +1930,7 @@ ${renderBody}
 
 interface BlockClassInput {
   metadata: ComponentMetadata;
+  deriveMasks: readonly (number | null)[];
   renderIR: ComponentIR;
   plan: BlockComponentPlan;
   // Members shared with the reconciling renderer: methods, prop and state
@@ -1941,6 +1951,40 @@ type StateMasks = (
   path: readonly string[],
   elementWrite: boolean
 ) => string | number;
+
+function guardDerivedLines(
+  lines: string | readonly string[],
+  mask: number | null
+): string[] {
+  const body = typeof lines === 'string' ? [lines] : lines;
+  if (mask === null) return [...body];
+  const condition = mask === 0 ? 'false' : `(this.__htmsDirty & ${mask}) !== 0`;
+  return [
+    `if (this.__htmsDirty === -1 || ${condition}) {`,
+    ...body.map((line) => `  ${line}`),
+    '}',
+  ];
+}
+
+function analyzeDeriveMasks(
+  analyzer: DependencyAnalyzer,
+  lifecycleState: { init: StateDirective[]; derive: StateDirective[] }
+): Array<number | null> {
+  return lifecycleState.derive.map((directive) => {
+    const expression = directive.value ?? 'undefined';
+    const root = directive.path[0];
+    // Always register the read, even when the expression cannot be proven
+    // pure. Its state dependencies still determine handler/effect masks.
+    const sourceMask = analyzer.readMask(expression, new Map(), true);
+    if (!isPureExpression(expression) || root === undefined) return null;
+    const targetMask = analyzer.bit(root);
+    // A nested write carries DEEP_BIT. Include it for any state-dependent
+    // derive, conservatively covering object paths and derived chains.
+    if (sourceMask === ALL_DIRTY || targetMask === ALL_DIRTY) return null;
+    const mask = sourceMask | targetMask;
+    return mask === 0 ? 0 : mask | DEEP_BIT;
+  });
+}
 
 // Builds the dependency analyser for a block component: reactive fields get
 // bits, derived values carry their expressions, and every assignment in the
@@ -2110,20 +2154,28 @@ function buildBlockComponentClass(input: BlockClassInput): string {
     }
     renderLines.push('}');
   }
-  for (const directive of lifecycleState.derive) {
+  lifecycleState.derive.forEach((directive, index) => {
     const [root] = directive.path;
     if (directive.path.length === 1 && root !== undefined) {
       // A root path needs no resolving.
       const target = /^[A-Za-z_$][\w$]*$/.test(root)
         ? `this.${root}`
         : `this[${JSON.stringify(root)}]`;
-      renderLines.push(`${target} = (${directive.value ?? 'undefined'});`);
+      renderLines.push(
+        ...guardDerivedLines(
+          `${target} = (${directive.value ?? 'undefined'});`,
+          input.deriveMasks.at(index) ?? null
+        )
+      );
     } else {
       renderLines.push(
-        ...renderStateDirective(directive, '', input.stateMasks)
+        ...guardDerivedLines(
+          renderStateDirective(directive, '', input.stateMasks),
+          input.deriveMasks.at(index) ?? null
+        )
       );
     }
-  }
+  });
   // The fields changed since the last render; the update skips bindings
   // none of them can affect. Changes made while rendering wait for the
   // next render.

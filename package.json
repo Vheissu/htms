@@ -27,6 +27,14 @@
       "types": "./dist/cli.d.ts",
       "default": "./dist/cli.js"
     },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    },
+    "./vite-client": {
+      "types": "./dist/vite-client.d.ts",
+      "default": "./dist/vite-client.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

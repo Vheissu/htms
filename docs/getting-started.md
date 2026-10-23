@@ -115,6 +115,59 @@ npm run htms -- compile click-counter.html
 
 This writes `click-counter.js` and `click-counter.d.ts`. Load the JavaScript as a module, then place `<click-counter></click-counter>` anywhere on the page.
 
+## Use an existing Vite app
+
+With HTMS installed in your app, add its plugin to `vite.config.ts`:
+
+```ts
+import { defineConfig } from 'vite';
+import { htms } from 'htms/vite';
+
+export default defineConfig({
+  plugins: [htms()],
+});
+```
+
+Import the component from your JavaScript or TypeScript entry:
+
+```ts
+import './click-counter.html?htms';
+```
+
+Then use `<click-counter></click-counter>` in your page. The `?htms` suffix
+opts that file into compilation; your app's `index.html` and ordinary asset
+imports are handled by Vite as usual. `.htm?htms` works too. No generated
+JavaScript needs to be checked in or compiled by a separate watcher.
+
+For TypeScript projects, add this to `src/vite-env.d.ts`:
+
+```ts
+/// <reference types="vite/client" />
+/// <reference types="htms/vite-client" />
+```
+
+The import declarations cover side-effect imports that register elements.
+To get types for each component's props, methods and events, use the
+`.d.ts` files emitted by `htms compile` and include them in your TypeScript
+project.
+
+The plugin accepts `strictMode`, `renderer` and `maxFileSize`:
+
+```ts
+htms({ strictMode: true, maxFileSize: 2 * 1024 * 1024 });
+```
+
+The default size limit is 1 MiB, measured in UTF-8 bytes. Compile errors
+appear in Vite's overlay with their source location when available.
+Generated JavaScript does not yet include source maps back to HTMS markup.
+Asset URLs inside markup are preserved and resolve against the page. Use
+URLs from Vite's public directory, or pass imported asset URLs through props.
+
+Saving a component reloads the document. This resets component state because
+the browser cannot redefine an already registered custom element class.
+Other files keep Vite's usual hot-update behavior. Production builds retain
+component registration even when you don't import the generated class.
+
 ## Where to go next
 
 - [Component inputs, lifecycle and rendering](https://github.com/Vheissu/htms/blob/master/docs/web-components.md)

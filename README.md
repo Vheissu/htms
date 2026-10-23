@@ -78,6 +78,17 @@ The starter is deliberately small enough to pull apart. HTMS won't replace an ex
 [getting-started guide](https://github.com/Vheissu/htms/blob/master/docs/getting-started.md),
 or run `npm run demo:serve` and open `http://localhost:5173/demos/`.
 
+## Use in a Vite app
+
+Add `htms()` from `htms/vite` to your Vite plugins, then import a component
+with `import './click-counter.html?htms'`. Vite compiles it and registers the
+custom element during development and production builds. Ordinary HTML,
+`?raw` and `?url` imports keep their usual behavior.
+
+Saving a component reloads the page, and compiler errors appear in Vite's
+overlay. See the [Vite setup](docs/getting-started.md#use-an-existing-vite-app)
+for configuration and TypeScript imports.
+
 ## CLI
 
 - `htms create <name>` makes an interactive starter. `htms new` is an alias.
@@ -199,6 +210,13 @@ The DOM now contains the state for `3`, after one render. Assigning a new value 
 
 The compiler turns markup into blocks: a static template cloned once per instance, references to the nodes that can change, and an update method that re-evaluates each `{expression}` and binding and writes to the DOM only when its value changed. An update never rebuilds or diffs markup, so nodes keep their identity, keyboard focus, text selection, scroll position, and unfinished values in uncontrolled form fields. Fields managed by `bind:value`, `<bind>`, `<model>`, or `<setprop>` use their component state as the source of truth.
 
+Derived calculations such as `items.map(item => item.price)` and
+`prices.reduce((sum, price) => sum + price, 0)` keep their previous result
+when unrelated state changes. The compiler follows their dependencies,
+including derived chains and nested writes. Calculations with unknown calls
+or side effects still run on each render; `requestUpdate()` forces all
+derived values to recalculate.
+
 Lists reuse rows by position, or by identity when the loop has a `key`:
 
 ```html
@@ -239,7 +257,7 @@ htms render component.html \
 
 ## How It Works (roughly)
 
-- Parses HTMS markup with parse5 into a light source tree, converts nodes to directives via tag handlers, resolves component fields in expressions, validates the output with Acorn, then emits JavaScript through Escodegen.
+- Parses HTMS markup with parse5 into a light source tree, converts nodes to directives via tag handlers, resolves component fields in expressions, validates the output with Meriyah, then emits JavaScript through Escodegen.
 - A security pass rejects dangerous constructs (`eval`, inline handlers, raw `innerHTML`, path traversal, …).
 - In component mode, standard elements become cached `<template>` fragments that each instance clones. Control and state tags compile into block methods that update only the nodes whose values changed.
 - Directive selectors such as `<event target="#save">` and `<bind selector="#count">` are resolved at compile time against the template, so they cost nothing at runtime.
@@ -255,7 +273,7 @@ htms render component.html \
 - State & Arrays
   - `<var name="x" value="42" mutable="true" />` — declare component state (accepts quoted strings, numbers, booleans and JSON, including arrays of objects).
   - `<object name="user">…<property name="name" value="Ada" /></object>` and `<array name="tags"><value>a</value></array>` — declare object/array state from child tags.
-  - `<derive name="total" expr="this.items.length" />` — compute reactive state before each render.
+  - `<derive name="total" expr="this.items.length" />` — compute reactive state before rendering, reusing known pure results while their dependencies stay unchanged.
   - `<set name="x" op="=|+=|-=|*=|/=|++|--" value="…" />` or `expr="…"` — mutate values; notifies bindings. `+=` concatenates strings.
   - `<push array="state.list" expr="document.getElementById('txt').value" />` — push; notifies bindings.
   - `<splice array="state.list" index="0" delete="1" values='["New"]' />` — remove/insert; notifies bindings.

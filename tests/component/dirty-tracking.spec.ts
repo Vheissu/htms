@@ -195,6 +195,88 @@ describe('dirty tracking', () => {
     expect(query(element, 'p').textContent).toBe('6');
   });
 
+  it('gates pure derives by source and target changes', async () => {
+    const element = await mountComponent(`
+      <var name="count" value="2" mutable="true"></var>
+      <var name="other" value="0" mutable="true"></var>
+      <derive name="double" expr="count * 2"></derive>
+      <p id="double">{double}</p>
+      <p id="other">{other}</p>
+    `);
+    const state = (element as unknown as { __htmsState: { count: number } })
+      .__htmsState;
+    let reads = 0;
+    let count = 2;
+    Object.defineProperty(state, 'count', {
+      configurable: true,
+      get: () => {
+        reads += 1;
+        return count;
+      },
+      set: (value: number) => {
+        count = value;
+      },
+    });
+
+    element.other = 1;
+    await element.updateComplete;
+    expect(reads).toBe(0);
+    expect(query(element, '#double').textContent).toBe('4');
+    expect(query(element, '#other').textContent).toBe('1');
+  });
+
+  it('recomputes a derive after its target object is replaced', async () => {
+    const element = await mountComponent(`
+      <var name="count" value="2" mutable="true"></var>
+      <var name="stats" value="{}" mutable="true"></var>
+      <derive name="stats.total" expr="count * 2"></derive>
+      <p>{stats.total}</p>
+    `);
+    expect(query(element, 'p').textContent).toBe('4');
+    element.stats = {};
+    await element.updateComplete;
+    expect(query(element, 'p').textContent).toBe('4');
+  });
+
+  it('tracks reads for derives consumed only by effects', async () => {
+    const testWindow = window as unknown as {
+      __derivedEffectRuns?: number;
+    };
+    delete testWindow.__derivedEffectRuns;
+    const element = await mountComponent(`
+      <var name="items" value="[1]" mutable="true"></var>
+      <derive name="count" expr="items.length"></derive>
+      <button id="add">Add</button>
+      <event target="#add" type="click">
+        <push array="items" value="2"></push>
+      </event>
+      <effect deps="count" immediate="true">
+        window.__derivedEffectRuns = (window.__derivedEffectRuns || 0) + 1;
+      </effect>
+    `);
+    await Promise.resolve();
+    expect(testWindow.__derivedEffectRuns).toBe(1);
+    await click(element, '#add');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(testWindow.__derivedEffectRuns).toBe(2);
+  });
+
+  it('does not gate unknown or side-effectful derives', () => {
+    const code = compileComponent(`
+      <component name="unguarded-derive">
+        <var name="count" value="0" mutable="true"></var>
+        <derive name="timestamp" expr="Date.now()"></derive>
+        <p>{timestamp} {count}</p>
+      </component>
+    `);
+    const assignment = /this\.timestamp\s*=\s*\(?Date\.now\(\)\)?;/.exec(code);
+    expect(assignment).not.toBeNull();
+    expect(
+      code.slice(Math.max(0, (assignment?.index ?? 0) - 80), assignment?.index)
+    ).not.toContain('this.__htmsDirty === -1');
+  });
+
   it('updates after a nested state path is set by a directive', async () => {
     const element = await mountComponent(`
       <var name="user" value='{"name": "Al"}' mutable="true"></var>

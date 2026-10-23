@@ -5,6 +5,7 @@
   "description": "js-framework-benchmark operations: HTMS vs Svelte, Solid, Vue, React and vanilla JS",
   "scripts": {
     "build": "node build.mjs",
+    "test:vite": "npm --prefix .. run build && node vite-integration.mjs",
     "bench": "node run.mjs",
     "start": "node build.mjs && node run.mjs"
   },

@@ -5,6 +5,64 @@ export function ensureRuntime(): string {
       const runtime = {
         watchers: [],
         effects: [],
+        pendingEffects: [],
+        flushingEffects: false,
+        effectMutationDepth: 0,
+        // Effects are registered from every component render. Looking up an
+        // existing record by scanning the whole effects array makes a page
+        // with many components quadratic in the number of registrations.
+        // Keep the array for flush ordering, and index records by owner/id
+        // for constant-time re-registration.
+        effectOwners: new WeakMap(),
+        globalEffects: new Map(),
+        primitiveEffects: new Map(),
+        effectIndex: function(owner, create){
+          if (owner !== null &&
+              (typeof owner === 'object' || typeof owner === 'function')) {
+            let index = this.effectOwners.get(owner);
+            if (!index && create) {
+              index = new Map();
+              this.effectOwners.set(owner, index);
+            }
+            return index;
+          }
+          if (owner === null) {
+            return this.globalEffects;
+          }
+          let index = this.primitiveEffects.get(owner);
+          if (!index && create) {
+            index = new Map();
+            this.primitiveEffects.set(owner, index);
+          }
+          return index;
+        },
+        removeEffectIndex: function(effect){
+          const index = this.effectIndex(effect.owner, false);
+          if (index && index.get(effect.id) === effect) {
+            index.delete(effect.id);
+            if (effect.owner !== null &&
+                typeof effect.owner !== 'object' &&
+                typeof effect.owner !== 'function' &&
+                index.size === 0) {
+              this.primitiveEffects.delete(effect.owner);
+            }
+          }
+        },
+        commitPendingEffects: function(){
+          if (this.flushingEffects || this.effectMutationDepth > 0) {
+            return;
+          }
+          const pending = this.pendingEffects;
+          this.pendingEffects = [];
+          for (let i = 0; i < pending.length; i++) {
+            const effect = pending[i];
+            if (effect.disposed) {
+              this.removeEffectIndex(effect);
+            } else {
+              this.effects.push(effect);
+            }
+          }
+        },
         flushScheduled: false,
         scheduleFlush: function(){
           if (this.flushScheduled) {
@@ -45,47 +103,63 @@ export function ensureRuntime(): string {
             }
             return !watcher.disposed;
           });
-          this.effects = this.effects.filter(effect => {
-            if (effect.disposed) {
-              return false;
-            }
-            if (effect.owner && !effect.owner.isConnected) {
-              effect.dispose();
-              return false;
-            }
-            const values = [];
-            let shouldRun = effect.dirty || effect.depsFns.length === 0;
-            for (let i = 0; i < effect.depsFns.length; i++) {
-              let value;
-              try {
-                value = effect.depsFns[i]();
-              } catch (error) {
-                console.error('HTMS effect dependency failed:', error);
-                value = undefined;
+          this.commitPendingEffects();
+          const effects = this.effects;
+          const effectCount = effects.length;
+          this.flushingEffects = true;
+          try {
+            for (let effectIndex = 0; effectIndex < effectCount; effectIndex++) {
+              const effect = effects[effectIndex];
+              if (effect.disposed) {
+                continue;
               }
-              values.push(value);
-              if (!shouldRun && (i >= effect.lastValues.length || effect.lastValues[i] !== value)) {
-                shouldRun = true;
-              }
-            }
-            effect.lastValues = values;
-            if (effect.skipInitial && !effect.initialized) {
-              effect.skipInitial = false;
-              effect.dirty = false;
-              effect.initialized = true;
-              return !effect.disposed;
-            }
-            if (shouldRun) {
-              effect.dirty = false;
-              effect.execute();
-              effect.initialized = true;
-              if (effect.once) {
+              if (effect.owner && !effect.owner.isConnected) {
                 effect.dispose();
-                return false;
+                continue;
+              }
+              const values = [];
+              let shouldRun = effect.dirty || effect.depsFns.length === 0;
+              for (let i = 0; i < effect.depsFns.length; i++) {
+                let value;
+                try {
+                  value = effect.depsFns[i]();
+                } catch (error) {
+                  console.error('HTMS effect dependency failed:', error);
+                  value = undefined;
+                }
+                values.push(value);
+                if (!shouldRun && (i >= effect.lastValues.length || effect.lastValues[i] !== value)) {
+                  shouldRun = true;
+                }
+              }
+              effect.lastValues = values;
+              if (effect.skipInitial && !effect.initialized) {
+                effect.skipInitial = false;
+                effect.dirty = false;
+                effect.initialized = true;
+                continue;
+              }
+              if (shouldRun) {
+                effect.dirty = false;
+                effect.execute();
+                effect.initialized = true;
+                if (effect.once) {
+                  effect.dispose();
+                }
               }
             }
-            return !effect.disposed;
-          });
+          } finally {
+            this.flushingEffects = false;
+            let write = 0;
+            for (let read = 0; read < effects.length; read++) {
+              const effect = effects[read];
+              if (!effect.disposed) {
+                effects[write++] = effect;
+              }
+            }
+            effects.length = write;
+            this.commitPendingEffects();
+          }
         },
         bind: function(sel, prop, fn){
           const watcher = { sel, prop, fn, disposed: false, autoDispose: true };
@@ -112,7 +186,9 @@ export function ensureRuntime(): string {
           }
           const owner = spec.owner || null;
           const deps = Array.isArray(spec.deps) ? spec.deps.filter(fn => typeof fn === 'function') : [];
-          let record = this.effects.find(effect => effect.owner === owner && effect.id === spec.id);
+          const runtime = this;
+          const index = this.effectIndex(owner, true);
+          let record = index.get(spec.id);
           if (!record) {
             record = {
               owner,
@@ -127,26 +203,36 @@ export function ensureRuntime(): string {
               once: !!spec.once,
               initialized: false,
               skipInitial: spec.immediate === false,
+              runVersion: 0,
               dispose: function(){
                 if (record.disposed) {
                   return;
                 }
                 record.disposed = true;
-                if (typeof record.cleanup === 'function') {
-                  try {
-                    record.cleanup();
-                  } catch (error) {
-                    console.error('HTMS effect cleanup failed:', error);
+                record.runVersion++;
+                runtime.removeEffectIndex(record);
+                runtime.effectMutationDepth++;
+                try {
+                  if (typeof record.cleanup === 'function') {
+                    try {
+                      record.cleanup();
+                    } catch (error) {
+                      console.error('HTMS effect cleanup failed:', error);
+                    }
                   }
+                } finally {
+                  runtime.effectMutationDepth--;
                 }
                 record.cleanup = undefined;
                 record.initialized = false;
                 record.skipInitial = false;
+                runtime.commitPendingEffects();
               },
               execute: function(){
                 if (record.disposed) {
                   return;
                 }
+                const runVersion = ++record.runVersion;
                 if (typeof record.cleanup === 'function') {
                   try {
                     record.cleanup();
@@ -155,18 +241,30 @@ export function ensureRuntime(): string {
                   }
                   record.cleanup = undefined;
                 }
+                if (record.disposed) {
+                  return;
+                }
                 let nextCleanup = record.cleanupFactory;
+                const finish = function(cleanup){
+                  if (record.disposed || record.runVersion !== runVersion) {
+                    if (typeof cleanup === 'function') {
+                      try {
+                        cleanup();
+                      } catch (error) {
+                        console.error('HTMS effect cleanup failed:', error);
+                      }
+                    }
+                    return;
+                  }
+                  record.cleanup = typeof cleanup === 'function' ? cleanup : undefined;
+                  record.initialized = true;
+                };
                 try {
                   const result = record.run();
                   if (result && typeof result.then === 'function') {
-                    record.initialized = true;
                     result
                       .then(resolved => {
-                        if (typeof resolved === 'function') {
-                          record.cleanup = resolved;
-                        } else if (typeof nextCleanup === 'function') {
-                          record.cleanup = nextCleanup;
-                        }
+                        finish(typeof resolved === 'function' ? resolved : nextCleanup);
                       })
                       .catch(error => {
                         console.error('HTMS effect promise rejected:', error);
@@ -179,11 +277,15 @@ export function ensureRuntime(): string {
                 } catch (error) {
                   console.error('HTMS effect execution failed:', error);
                 }
-                record.cleanup = typeof nextCleanup === 'function' ? nextCleanup : undefined;
-                record.initialized = true;
+                finish(nextCleanup);
               }
             };
-            this.effects.push(record);
+            index.set(spec.id, record);
+            if (this.flushingEffects || this.effectMutationDepth > 0) {
+              this.pendingEffects.push(record);
+            } else {
+              this.effects.push(record);
+            }
           } else {
             record.depsFns = deps;
             record.run = typeof spec.run === 'function' ? spec.run : record.run;
@@ -241,13 +343,41 @@ export function ensureRuntime(): string {
           if (!owner) {
             return;
           }
-          this.effects = this.effects.filter(effect => {
-            if (effect.owner === owner) {
-              effect.dispose();
-              return false;
+          this.effectMutationDepth++;
+          try {
+            const effects = this.effects;
+            const pendingCount = this.pendingEffects.length;
+            if (!this.flushingEffects && this.effectMutationDepth === 1) {
+              for (let i = 0; i < effects.length; i++) {
+                const effect = effects[i];
+                if (effect.owner === owner) {
+                  effect.dispose();
+                }
+              }
+              let write = 0;
+              for (let read = 0; read < effects.length; read++) {
+                const effect = effects[read];
+                if (!effect.disposed) {
+                  effects[write++] = effect;
+                }
+              }
+              effects.length = write;
+            } else {
+              for (let i = 0; i < effects.length; i++) {
+                if (effects[i].owner === owner) {
+                  effects[i].dispose();
+                }
+              }
             }
-            return true;
-          });
+            for (let i = 0; i < pendingCount; i++) {
+              if (this.pendingEffects[i].owner === owner) {
+                this.pendingEffects[i].dispose();
+              }
+            }
+          } finally {
+            this.effectMutationDepth--;
+            this.commitPendingEffects();
+          }
         }
       };
       Object.defineProperty(window, '__htms', {

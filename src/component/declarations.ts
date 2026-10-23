@@ -50,18 +50,59 @@ export declare class ${artifact.className} extends HTMLElement {
 ${properties ? `${properties}\n` : ''}${methods ? `${methods}\n` : ''}  readonly updateComplete: Promise<void>;
   readonly renderError: unknown;
   requestUpdate(): Promise<void>;
-  $(selector: string): Element | null;
-  $$(selector: string): Element[];
-  emit(name: string, detail?: unknown, options?: CustomEventInit): boolean;
+  $<K extends keyof HTMLElementTagNameMap>(
+    selector: K
+  ): HTMLElementTagNameMap[K] | null;
+  $<K extends Exclude<keyof SVGElementTagNameMap, keyof HTMLElementTagNameMap>>(
+    selector: K
+  ): SVGElementTagNameMap[K] | null;
+  $<E extends Element = Element>(selector: string): E | null;
+  $$<K extends keyof HTMLElementTagNameMap>(
+    selector: K
+  ): HTMLElementTagNameMap[K][];
+  $$<K extends Exclude<keyof SVGElementTagNameMap, keyof HTMLElementTagNameMap>>(
+    selector: K
+  ): SVGElementTagNameMap[K][];
+  $$<E extends Element = Element>(selector: string): E[];
+  emit(name: string, detail?: unknown, options?: CustomEventInit<unknown>): boolean;
   addEventListener<K extends keyof ${eventMapName}>(
     type: K,
     listener: (this: ${artifact.className}, event: ${eventMapName}[K]) => unknown,
+    options?: boolean | AddEventListenerOptions
+  ): void;
+  addEventListener<K extends keyof HTMLElementEventMap>(
+    type: K,
+    listener: (
+      this: ${artifact.className},
+      event: HTMLElementEventMap[K]
+    ) => unknown,
     options?: boolean | AddEventListenerOptions
   ): void;
   addEventListener(
     type: string,
     listener: EventListenerOrEventListenerObject,
     options?: boolean | AddEventListenerOptions
+  ): void;
+  removeEventListener<K extends keyof ${eventMapName}>(
+    type: K,
+    listener: (
+      this: ${artifact.className},
+      event: ${eventMapName}[K]
+    ) => unknown,
+    options?: boolean | EventListenerOptions
+  ): void;
+  removeEventListener<K extends keyof HTMLElementEventMap>(
+    type: K,
+    listener: (
+      this: ${artifact.className},
+      event: HTMLElementEventMap[K]
+    ) => unknown,
+    options?: boolean | EventListenerOptions
+  ): void;
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions
   ): void;
 }`;
 }
