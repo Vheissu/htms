@@ -16,9 +16,10 @@ here is 0.35%.
 The full run interleaved seven apps: the five frameworks, vanilla JS and
 the retained HTMS build from `6c8439a`. Each operation has 15 samples. The
 current compiler revision is `d7a563d`; browser, hardware, raw samples and
-startup measurements are in [results.json](results.json). The retained
+startup measurements are in
+[the archived results](row-updates-results-2026-10-24.json). The retained
 build is recorded there as `htms-base`. The generated
-[framework report](RESULTS.md) charts the five current frameworks and vanilla.
+[framework report](RESULTS.md) shows the latest framework run.
 
 | Operation | Before: click to paint | After: click to paint | Solid: click to paint | Before: scripting | After: scripting | Solid: scripting |
 | :-- | --: | --: | --: | --: | --: | --: |

@@ -48,6 +48,8 @@ trace for each app/operation. Use a fresh directory for each comparison.
 The [24 October row update investigation](results/row-updates-2026-10-24.md)
 compares the selection optimization with a retained build of the preceding
 revision, measured alongside the frameworks in the same run.
+The [swap follow-up](results/swaps-2026-10-24.md) profiles DOM moves and
+compares native moves with the previous renderer.
 
 ## Compiler and effect registration
 

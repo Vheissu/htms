@@ -1,0 +1,73 @@
+{
+  "description": "First recorded swap frame per app from the unchanged benchmark runner. Illustrative single traces, not medians. Nested timing events are merged.",
+  "source": {
+    "baseline": "e0dc8e8",
+    "htms": "97be75f"
+  },
+  "cpuSlowdown": 4,
+  "profiles": {
+    "htms-base": {
+      "clickToPaintMs": 24.221,
+      "scriptingMs": 0.796,
+      "style": {
+        "durationMs": 5.024,
+        "elements": [
+          1017
+        ]
+      },
+      "layout": {
+        "durationMs": 7.709,
+        "dirtyObjects": [
+          32
+        ],
+        "totalObjects": [
+          12066
+        ]
+      },
+      "prePaintMs": 3.631,
+      "paintMs": 3.659
+    },
+    "htms": {
+      "clickToPaintMs": 21.541,
+      "scriptingMs": 0.536,
+      "style": {
+        "durationMs": 4.35,
+        "elements": [
+          1001
+        ]
+      },
+      "layout": {
+        "durationMs": 7.48,
+        "dirtyObjects": [
+          32
+        ],
+        "totalObjects": [
+          12066
+        ]
+      },
+      "prePaintMs": 2.736,
+      "paintMs": 3.516
+    },
+    "solid": {
+      "clickToPaintMs": 23.252,
+      "scriptingMs": 1.528,
+      "style": {
+        "durationMs": 4.536,
+        "elements": [
+          1017
+        ]
+      },
+      "layout": {
+        "durationMs": 7.124,
+        "dirtyObjects": [
+          31
+        ],
+        "totalObjects": [
+          12065
+        ]
+      },
+      "prePaintMs": 3.77,
+      "paintMs": 4.477
+    }
+  }
+}
