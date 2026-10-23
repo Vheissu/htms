@@ -36,6 +36,15 @@ node report.mjs        # writes results/RESULTS.md, the charts and the README su
 `node run.mjs --runs 5 --apps htms,svelte --ops run1k,select` runs a subset.
 `node micro.mjs` is a quick script-only comparison (no layout or paint).
 
+`node rows.mjs htms,solid 1000,10000` isolates selection, swaps and removal
+at both list sizes. It rotates app order across nine samples, uses 4× CPU
+slowdown and a high-resolution clock, and lets layout/paint finish outside
+each timed update. Results are written to `results/row-scripting.json`.
+An optional retained build can be included by app directory name.
+
+Pass `--trace-dir /tmp/htms-traces` to `run.mjs` to retain the first browser
+trace for each app/operation. Use a fresh directory for each comparison.
+
 ## Compiler and effect registration
 
 `compiler.mjs`, `derived.mjs` and `effects.mjs` compare the current package build with a

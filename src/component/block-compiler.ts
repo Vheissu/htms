@@ -2035,9 +2035,22 @@ class BlockCompiler {
       const indexVar = body.vars.find((variable) => variable.field === 'i');
       const readsIndex =
         indexVar !== undefined && this.blockReadsIndex(body, indexVar.name);
-      lines.push(
-        `__htmsList(this, $$b.${part.slot}, ${part.source}, $$b, this.__htmsC${body.id}, this.__htmsU${body.id}, ${body.keyMethod ? `this.${body.keyMethod}` : 'null'}, $$d, ${skip}, ${readsIndex});`
-      );
+      const reconcile = `__htmsList(this, $$b.${part.slot}, ${part.source}, $$b, this.__htmsC${body.id}, this.__htmsU${body.id}, ${body.keyMethod ? `this.${body.keyMethod}` : 'null'}, $$d, ${skip}, ${readsIndex});`;
+      const selection = this.listSelection(part);
+      if (selection) {
+        const list = `$$b.${part.slot}`;
+        lines.push(
+          `if ($$d & ${part.mask | DEEP_BIT}) {`,
+          `  ${list}.q = null;`,
+          `  ${list}.v = ${selection};`,
+          `  ${reconcile}`,
+          '} else {',
+          `  __htmsSelect(this, ${list}, ${selection}, this.__htmsU${body.id}, this.${body.keyMethod}, $$d);`,
+          '}'
+        );
+      } else {
+        lines.push(reconcile);
+      }
       return { mask: part.mask | this.blockMask(part.body), lines, flag: null };
     }
     if (part.kind === 'cond') {
@@ -2174,6 +2187,42 @@ class BlockCompiler {
       }
     }
     return { mask: part.mask, lines, flag };
+  }
+
+  // A keyed equality toggle can update just the old/new matching rows when
+  // only its component field changed. Other row bindings must depend solely
+  // on the source; complex keys, branches and additional fields stay generic.
+  private listSelection(list: ListSub): string | null {
+    if (!list.keyed || list.mask === ALL_DIRTY || list.mask === 0) return null;
+    const key = this.keyExpressions.get(list.body)?.replace(/\s+/g, '');
+    const item = list.body.vars.find((variable) => variable.field === 'x');
+    if (
+      !key ||
+      !item ||
+      !key.split('.').every((segment) => /^[A-Za-z_$][\w$]*$/.test(segment)) ||
+      (key !== item.name && !key.startsWith(`${item.name}.`))
+    )
+      return null;
+    let selection: string | null = null;
+    for (const part of list.body.parts) {
+      if (part.kind === 'list' || part.kind === 'cond') return null;
+      if ((part.mask & ~list.mask) === 0) continue;
+      if (selection || part.kind !== 'toggle' || part.node.classWriter)
+        return null;
+      const operands = part.expr.replace(/\s+/g, '').split('===');
+      if (operands.length !== 2) return null;
+      const field =
+        operands[0] === key
+          ? operands[1]
+          : operands[1] === key
+            ? operands[0]
+            : '';
+      if (!/^this\.[A-Za-z_$][\w$]*$/.test(field)) return null;
+      const bit = this.analyzer.bit(field.slice(5));
+      if (bit === ALL_DIRTY || (part.mask & ~list.mask) !== bit) return null;
+      selection = field;
+    }
+    return selection;
   }
 
   private generateCondition(part: CondSub): string[] {
@@ -2377,6 +2426,36 @@ function __htmsTake(component, block, item, index, update) {
   block.x = item;
   block.i = index;
   update.call(component, block, -1);
+}
+
+// Build the lookup lazily: lists that never select a row pay no map cost.
+// Structural/deep writes invalidate it. Duplicate keys retain the ordinary
+// all-row update semantics rather than silently dropping matching rows.
+function __htmsSelect(component, list, value, update, key, dirty) {
+  var previous = list.v;
+  list.v = value;
+  if (previous === value) return;
+  var index = list.q;
+  var blocks = list.b;
+  var i;
+  if (index == null) {
+    index = new Map();
+    for (i = 0; i < blocks.length; i++) {
+      var block = blocks[i];
+      var id = key.call(component, block.x, block.i, block.P);
+      if (index.has(id)) { index = false; break; }
+      index.set(id, block);
+    }
+    list.q = index;
+  }
+  if (index === false) {
+    for (i = 0; i < blocks.length; i++) update.call(component, blocks[i], dirty);
+    return;
+  }
+  var old = index.get(previous);
+  var next = index.get(value);
+  if (old) update.call(component, old, dirty);
+  if (next && next !== old) update.call(component, next, dirty);
 }
 
 function __htmsList(component, list, items, parentBlock, create, update, key, dirty, skip, idx) {

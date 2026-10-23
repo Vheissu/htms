@@ -10,6 +10,7 @@
 // by js-framework-benchmark. CPU throttling matches that benchmark too.
 
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -304,6 +305,12 @@ async function measureOperation(browser, baseUrl, app, operation) {
       () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 50)))
     );
     const trace = await browser.stopTracing();
+    const traceDir = option('trace-dir', '');
+    if (traceDir) {
+      fs.mkdirSync(traceDir, { recursive: true });
+      const tracePath = path.join(traceDir, `${app}-${operation.id}.json`);
+      if (!fs.existsSync(tracePath)) fs.writeFileSync(tracePath, trace);
+    }
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     return traceDuration(trace);
   } finally {
@@ -431,6 +438,18 @@ function stats(values) {
   };
 }
 
+function sourceRevision() {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: path.join(here, '..'),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
 const server = await serve(dist);
 const baseUrl = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({
@@ -447,6 +466,7 @@ const results = {
     cores: os.cpus().length,
     node: process.version,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    htmsRevision: sourceRevision(),
     runs: RUNS,
   },
   operations: OPERATIONS.filter((op) => OPS.includes(op.id)).map(

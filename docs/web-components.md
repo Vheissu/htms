@@ -114,6 +114,14 @@ badge.labelText = 'Synced';
 - `<emit>` compiles to `this.dispatchEvent(new CustomEvent(...))`, letting a component notify its host. It defaults to `composed: true` so the event escapes the shadow root, and runs inside the enclosing handler so it can forward freshly-updated state via `detail`.
 - Registration checks `customElements.get()` before defining a tag, so loading the same compiled bundle twice does not throw. Duplicate names in one HTMS source file are compile errors.
 
+Keyed list rows with a class toggle such as `class:active="row.id === selected"`
+can use a lazy key lookup when the comparison matches the list's key.
+After the first selection, changing `selected` updates the previous and new
+matching rows. Structural updates and deep writes invalidate the lookup.
+Duplicate keys and rows with other component-dependent bindings retain the
+general update path. The first lookup costs a pass over the rows and retains
+a map until the list changes.
+
 ## Compilation Phases
 
 1. **Parse**: parse5 builds the source tree; validation rejects unsafe patterns.
