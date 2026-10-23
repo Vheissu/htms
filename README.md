@@ -37,22 +37,22 @@ HTMS compiles templates ahead of time into code that updates exactly the DOM nod
 
 |  | **HTMS** | Svelte 5 | Solid | Vue | React | Vanilla JS |
 | :-- | --: | --: | --: | --: | --: | --: |
-| **overall time vs vanilla JS** | 1.06× | 1.12× | **1.05×** | 1.22× | 1.60× | 1.00× |
-| bundle size (min + gzip) | **4.4 KB** | 13.3 KB | 5.7 KB | 24.6 KB | 66.9 KB | 1.6 KB |
-| script time during page load | **8.4 ms** | 10.0 ms | 8.7 ms | 10.5 ms | 18.5 ms | 7.8 ms |
-| JS heap after load | **1.73 MB** | 1.80 MB | 1.74 MB | 1.94 MB | 2.16 MB | 1.70 MB |
+| **overall time vs vanilla JS** | **1.02×** | 1.12× | 1.06× | 1.22× | 1.61× | 1.00× |
+| bundle size (min + gzip) | **4.6 KB** | 13.3 KB | 5.7 KB | 24.7 KB | 67.0 KB | 1.6 KB |
+| script time during page load | **10.7 ms** | 13.3 ms | 11.4 ms | 13.6 ms | 24.4 ms | 10.5 ms |
+| JS heap after load | **1.73 MB** | 1.80 MB | **1.73 MB** | 1.94 MB | 2.16 MB | 1.71 MB |
 | JS heap with 1,000 rows | **2.33 MB** | 3.24 MB | 2.96 MB | 4.10 MB | 4.52 MB | 2.11 MB |
-| create rows | **32.4 ms** | 34.4 ms | 33.7 ms | 39.5 ms | 39.7 ms | 31.8 ms |
-| replace all rows | **36.0 ms** | 39.6 ms | 38.5 ms | 43.7 ms | 46.9 ms | 35.9 ms |
-| partial update (4× CPU slowdown) | 26.4 ms | 27.2 ms | **26.1 ms** | 29.7 ms | 31.0 ms | 26.0 ms |
-| select row (4× CPU slowdown) | 8.1 ms | 10.7 ms | **7.2 ms** | 9.3 ms | 9.5 ms | 6.4 ms |
-| swap rows (4× CPU slowdown) | 27.9 ms | 31.3 ms | **27.0 ms** | 32.0 ms | 186 ms | 26.5 ms |
-| remove row (2× CPU slowdown) | 19.7 ms | 19.2 ms | **18.8 ms** | 21.8 ms | 22.3 ms | 19.0 ms |
-| create many rows | **365 ms** | 374 ms | 372 ms | 397 ms | 550 ms | 346 ms |
-| append rows (2× CPU slowdown) | 93.8 ms | **89.2 ms** | 91.8 ms | 93.3 ms | 107 ms | 90.2 ms |
-| clear rows (4× CPU slowdown) | 18.3 ms | 18.6 ms | **18.1 ms** | 24.1 ms | 25.8 ms | 17.2 ms |
+| create rows | **43.2 ms** | 44.8 ms | 43.4 ms | 51.7 ms | 52.8 ms | 42.5 ms |
+| replace all rows | **47.6 ms** | 51.7 ms | 51.3 ms | 57.0 ms | 62.3 ms | 46.3 ms |
+| partial update (4× CPU slowdown) | **26.4 ms** | 29.2 ms | 31.3 ms | 31.4 ms | 33.4 ms | 25.9 ms |
+| select row (4× CPU slowdown) | **6.5 ms** | 9.6 ms | 6.7 ms | 9.0 ms | 9.3 ms | 6.6 ms |
+| swap rows (4× CPU slowdown) | 32.4 ms | 33.3 ms | **32.2 ms** | 34.5 ms | 216 ms | 30.1 ms |
+| remove row (2× CPU slowdown) | **21.6 ms** | 22.5 ms | 22.1 ms | 26.1 ms | 24.5 ms | 21.8 ms |
+| create many rows | 461 ms | 480 ms | **453 ms** | 526 ms | 721 ms | 450 ms |
+| append rows (2× CPU slowdown) | **113 ms** | 116 ms | **113 ms** | 121 ms | 128 ms | 111 ms |
+| clear rows (4× CPU slowdown) | **20.7 ms** | 21.5 ms | 22.2 ms | 27.6 ms | 30.3 ms | 19.5 ms |
 
-HTMS ranks 2 of 5 frameworks on overall time (1.06× vanilla JS). Its scripting time is lowest or tied for lowest on 9 of 9 operations ([scripting table](bench/results/RESULTS.md#scripting-time-ms-median)). Rows where HTMS matches or beats each framework: Svelte 5 12 of 14, Solid 7 of 14, Vue 13 of 14, React 14 of 14.
+HTMS has the lowest overall time of the frameworks tested (1.02× vanilla JS). Its scripting time is lowest or tied for lowest on 9 of 9 operations ([scripting table](bench/results/RESULTS.md#scripting-time-ms-median)). Rows where HTMS matches or beats each framework: Svelte 5 14 of 14, Solid 12 of 14, Vue 14 of 14, React 14 of 14.
 Bold marks the best framework in each row; vanilla JS is the hand-written reference. Chromium 141.0.7390.37 on Apple M2 Max,
 median of 15 runs, measured 2026-10-24. Full tables are in
 [bench/results/RESULTS.md](bench/results/RESULTS.md); the method and caveats are in

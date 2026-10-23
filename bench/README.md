@@ -45,6 +45,10 @@ An optional retained build can be included by app directory name.
 Pass `--trace-dir /tmp/htms-traces` to `run.mjs` to retain the first browser
 trace for each app/operation. Use a fresh directory for each comparison.
 
+The [24 October row update investigation](results/row-updates-2026-10-24.md)
+compares the selection optimization with a retained build of the preceding
+revision, measured alongside the frameworks in the same run.
+
 ## Compiler and effect registration
 
 `compiler.mjs`, `derived.mjs` and `effects.mjs` compare the current package build with a

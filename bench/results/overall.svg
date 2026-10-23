@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 324" width="760" height="324" role="img" aria-labelledby="overall-title overall-desc">
 <title id="overall-title">Overall speed relative to vanilla JS</title>
-<desc id="overall-desc">Geometric mean of the median time of nine js-framework-benchmark operations, divided by vanilla JS. Lower is faster. Vanilla JS 1.00×, Solid 1.05×, HTMS 1.06×, Svelte 5 1.12×, Vue 1.22×, React 1.60×.</desc>
+<desc id="overall-desc">Geometric mean of the median time of nine js-framework-benchmark operations, divided by vanilla JS. Lower is faster. Vanilla JS 1.00×, HTMS 1.02×, Solid 1.06×, Svelte 5 1.12×, Vue 1.22×, React 1.61×.</desc>
 
   <style>
     .surface { fill: #fcfcfb; }
@@ -28,35 +28,35 @@
 <text class="secondary" x="24" y="52" font-size="12">Geometric mean over 9 operations · Median of 15 runs · Chromium 141.0.7390.37 · Apple M2 Max</text>
 <line class="grid" x1="150" x2="150" y1="70" y2="286"/>
 <text class="secondary" x="150" y="304" font-size="11" text-anchor="middle">0.00×</text>
-<line class="grid" x1="227.54031977942495" x2="227.54031977942495" y1="70" y2="286"/>
-<text class="secondary" x="227.54031977942495" y="304" font-size="11" text-anchor="middle">0.25×</text>
-<line class="grid" x1="305.0806395588499" x2="305.0806395588499" y1="70" y2="286"/>
-<text class="secondary" x="305.0806395588499" y="304" font-size="11" text-anchor="middle">0.50×</text>
-<line class="grid" x1="382.6209593382748" x2="382.6209593382748" y1="70" y2="286"/>
-<text class="secondary" x="382.6209593382748" y="304" font-size="11" text-anchor="middle">0.75×</text>
-<line class="reference" x1="460.1612791176998" x2="460.1612791176998" y1="70" y2="286"/>
-<text class="secondary" x="460.1612791176998" y="304" font-size="11" text-anchor="middle">1.00×</text>
-<line class="grid" x1="537.7015988971248" x2="537.7015988971248" y1="70" y2="286"/>
-<text class="secondary" x="537.7015988971248" y="304" font-size="11" text-anchor="middle">1.25×</text>
-<line class="grid" x1="615.2419186765496" x2="615.2419186765496" y1="70" y2="286"/>
-<text class="secondary" x="615.2419186765496" y="304" font-size="11" text-anchor="middle">1.50×</text>
+<line class="grid" x1="227.12095391714553" x2="227.12095391714553" y1="70" y2="286"/>
+<text class="secondary" x="227.12095391714553" y="304" font-size="11" text-anchor="middle">0.25×</text>
+<line class="grid" x1="304.24190783429106" x2="304.24190783429106" y1="70" y2="286"/>
+<text class="secondary" x="304.24190783429106" y="304" font-size="11" text-anchor="middle">0.50×</text>
+<line class="grid" x1="381.36286175143664" x2="381.36286175143664" y1="70" y2="286"/>
+<text class="secondary" x="381.36286175143664" y="304" font-size="11" text-anchor="middle">0.75×</text>
+<line class="reference" x1="458.48381566858217" x2="458.48381566858217" y1="70" y2="286"/>
+<text class="secondary" x="458.48381566858217" y="304" font-size="11" text-anchor="middle">1.00×</text>
+<line class="grid" x1="535.6047695857277" x2="535.6047695857277" y1="70" y2="286"/>
+<text class="secondary" x="535.6047695857277" y="304" font-size="11" text-anchor="middle">1.25×</text>
+<line class="grid" x1="612.7257235028733" x2="612.7257235028733" y1="70" y2="286"/>
+<text class="secondary" x="612.7257235028733" y="304" font-size="11" text-anchor="middle">1.50×</text>
 <text class="ink" x="138" y="92" font-size="13" text-anchor="end">Vanilla JS</text>
-<path class="s6" d="M150,78 h306.1612791176998 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-306.1612791176998 z"/>
-<text class="ink" x="468.1612791176998" y="92" font-size="12.5">1.00×</text>
-<text class="ink" x="138" y="126" font-size="13" text-anchor="end">Solid</text>
-<path class="s3" d="M150,112 h320.2593763764486 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-320.2593763764486 z"/>
-<text class="ink" x="482.2593763764486" y="126" font-size="12.5">1.05×</text>
-<text class="ink" x="138" y="160" font-size="13" text-anchor="end" font-weight="600">HTMS</text>
-<path class="s1" d="M150,146 h324.35713447340646 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-324.35713447340646 z"/>
-<text class="ink" x="486.35713447340646" y="160" font-size="12.5" font-weight="600">1.06×</text>
+<path class="s6" d="M150,78 h304.48381566858217 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-304.48381566858217 z"/>
+<text class="ink" x="466.48381566858217" y="92" font-size="12.5">1.00×</text>
+<text class="ink" x="138" y="126" font-size="13" text-anchor="end" font-weight="600">HTMS</text>
+<path class="s1" d="M150,112 h311.6776643622348 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-311.6776643622348 z"/>
+<text class="ink" x="473.6776643622348" y="126" font-size="12.5" font-weight="600">1.02×</text>
+<text class="ink" x="138" y="160" font-size="13" text-anchor="end">Solid</text>
+<path class="s3" d="M150,146 h324.48672123349235 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-324.48672123349235 z"/>
+<text class="ink" x="486.48672123349235" y="160" font-size="12.5">1.06×</text>
 <text class="ink" x="138" y="194" font-size="13" text-anchor="end">Svelte 5</text>
-<path class="s2" d="M150,180 h344.8391053934752 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-344.8391053934752 z"/>
-<text class="ink" x="506.8391053934752" y="194" font-size="12.5">1.12×</text>
+<path class="s2" d="M150,180 h341.02680253095616 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-341.02680253095616 z"/>
+<text class="ink" x="503.02680253095616" y="194" font-size="12.5">1.12×</text>
 <text class="ink" x="138" y="228" font-size="13" text-anchor="end">Vue</text>
-<path class="s4" d="M150,214 h373.1427322915891 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-373.1427322915891 z"/>
-<text class="ink" x="535.142732291589" y="228" font-size="12.5">1.22×</text>
+<path class="s4" d="M150,214 h373.5584993203664 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-373.5584993203664 z"/>
+<text class="ink" x="535.5584993203664" y="228" font-size="12.5">1.22×</text>
 <text class="ink" x="138" y="262" font-size="13" text-anchor="end">React</text>
 <path class="s5" d="M150,248 h491.23809523809524 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-491.23809523809524 z"/>
-<text class="ink" x="653.2380952380952" y="262" font-size="12.5">1.60×</text>
+<text class="ink" x="653.2380952380952" y="262" font-size="12.5">1.61×</text>
 <line class="axis" x1="150" x2="150" y1="70" y2="286"/>
 </svg>

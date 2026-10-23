@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 740" width="760" height="740" role="img" aria-labelledby="speed-title speed-desc">
 <title id="speed-title">Time per operation relative to vanilla JS</title>
-<desc id="speed-desc">Median time for each js-framework-benchmark operation divided by vanilla JS; lower is faster. create rows: HTMS 32.4 ms, Svelte 5 34.4 ms, Solid 33.7 ms, Vue 39.5 ms, React 39.7 ms, vanilla 31.8 ms. replace all rows: HTMS 36.0 ms, Svelte 5 39.6 ms, Solid 38.5 ms, Vue 43.7 ms, React 46.9 ms, vanilla 35.9 ms. partial update: HTMS 26.4 ms, Svelte 5 27.2 ms, Solid 26.1 ms, Vue 29.7 ms, React 31.0 ms, vanilla 26.0 ms. select row: HTMS 8.1 ms, Svelte 5 10.7 ms, Solid 7.2 ms, Vue 9.3 ms, React 9.5 ms, vanilla 6.4 ms. swap rows: HTMS 27.9 ms, Svelte 5 31.3 ms, Solid 27.0 ms, Vue 32.0 ms, React 186 ms, vanilla 26.5 ms. remove row: HTMS 19.7 ms, Svelte 5 19.2 ms, Solid 18.8 ms, Vue 21.8 ms, React 22.3 ms, vanilla 19.0 ms. create many rows: HTMS 365 ms, Svelte 5 374 ms, Solid 372 ms, Vue 397 ms, React 550 ms, vanilla 346 ms. append rows: HTMS 93.8 ms, Svelte 5 89.2 ms, Solid 91.8 ms, Vue 93.3 ms, React 107 ms, vanilla 90.2 ms. clear rows: HTMS 18.3 ms, Svelte 5 18.6 ms, Solid 18.1 ms, Vue 24.1 ms, React 25.8 ms, vanilla 17.2 ms.</desc>
+<desc id="speed-desc">Median time for each js-framework-benchmark operation divided by vanilla JS; lower is faster. create rows: HTMS 43.2 ms, Svelte 5 44.8 ms, Solid 43.4 ms, Vue 51.7 ms, React 52.8 ms, vanilla 42.5 ms. replace all rows: HTMS 47.6 ms, Svelte 5 51.7 ms, Solid 51.3 ms, Vue 57.0 ms, React 62.3 ms, vanilla 46.3 ms. partial update: HTMS 26.4 ms, Svelte 5 29.2 ms, Solid 31.3 ms, Vue 31.4 ms, React 33.4 ms, vanilla 25.9 ms. select row: HTMS 6.5 ms, Svelte 5 9.6 ms, Solid 6.7 ms, Vue 9.0 ms, React 9.3 ms, vanilla 6.6 ms. swap rows: HTMS 32.4 ms, Svelte 5 33.3 ms, Solid 32.2 ms, Vue 34.5 ms, React 216 ms, vanilla 30.1 ms. remove row: HTMS 21.6 ms, Svelte 5 22.5 ms, Solid 22.1 ms, Vue 26.1 ms, React 24.5 ms, vanilla 21.8 ms. create many rows: HTMS 461 ms, Svelte 5 480 ms, Solid 453 ms, Vue 526 ms, React 721 ms, vanilla 450 ms. append rows: HTMS 113 ms, Svelte 5 116 ms, Solid 113 ms, Vue 121 ms, React 128 ms, vanilla 111 ms. clear rows: HTMS 20.7 ms, Svelte 5 21.5 ms, Solid 22.2 ms, Vue 27.6 ms, React 30.3 ms, vanilla 19.5 ms.</desc>
 
   <style>
     .surface { fill: #fcfcfb; }
@@ -50,77 +50,77 @@
 <line class="grid" x1="610" x2="610" y1="86" y2="710"/>
 <text class="secondary" x="610" y="728" font-size="11" text-anchor="middle">2.5×</text>
 <text class="ink" x="158" y="104" font-size="12.5" text-anchor="end">create rows</text>
-<text class="secondary" x="158" y="119" font-size="10.5" text-anchor="end">vanilla 31.8 ms</text>
-<text class="ink" x="736" y="104" font-size="12" font-weight="600" text-anchor="end">32.4 ms</text>
-<path class="s1" d="M170,92 h175.29405853535985 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-175.29405853535985 z"/>
-<path class="s2" d="M170,102 h185.92237156136164 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-185.92237156136164 z"/>
-<path class="s3" d="M170,112 h182.12536113553574 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-182.12536113553574 z"/>
-<path class="s4" d="M170,122 h214.12083909056656 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-214.12083909056656 z"/>
-<path class="s5" d="M170,132 h215.3312397939957 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-215.3312397939957 z"/>
+<text class="secondary" x="158" y="119" font-size="10.5" text-anchor="end">vanilla 42.5 ms</text>
+<text class="ink" x="736" y="104" font-size="12" font-weight="600" text-anchor="end">43.2 ms</text>
+<path class="s1" d="M170,92 h174.7194731890875 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-174.7194731890875 z"/>
+<path class="s2" d="M170,102 h181.32568203198494 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-181.32568203198494 z"/>
+<path class="s3" d="M170,112 h175.73358419567262 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-175.73358419567262 z"/>
+<path class="s4" d="M170,122 h209.82427093132642 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-209.82427093132642 z"/>
+<path class="s5" d="M170,132 h214.61335841956725 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-214.61335841956725 z"/>
 <text class="ink" x="158" y="172" font-size="12.5" text-anchor="end">replace all rows</text>
-<text class="secondary" x="158" y="187" font-size="10.5" text-anchor="end">vanilla 35.9 ms</text>
-<text class="ink" x="736" y="172" font-size="12" font-weight="600" text-anchor="end">36.0 ms</text>
-<path class="s1" d="M170,160 h172.5645588686508 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-172.5645588686508 z"/>
-<path class="s2" d="M170,170 h190.5175308917464 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-190.5175308917464 z"/>
-<path class="s3" d="M170,180 h185.06831050737773 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-185.06831050737773 z"/>
-<path class="s4" d="M170,190 h210.5470977099663 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-210.5470977099663 z"/>
-<path class="s5" d="M170,200 h226.07983040919362 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-226.07983040919362 z"/>
+<text class="secondary" x="158" y="187" font-size="10.5" text-anchor="end">vanilla 46.3 ms</text>
+<text class="ink" x="736" y="172" font-size="12" font-weight="600" text-anchor="end">47.6 ms</text>
+<path class="s1" d="M170,160 h177.00576611597018 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-177.00576611597018 z"/>
+<path class="s2" d="M170,170 h192.69202030018357 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-192.69202030018357 z"/>
+<path class="s3" d="M170,180 h191.09184753266385 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-191.09184753266385 z"/>
+<path class="s4" d="M170,190 h212.78730158730158 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-212.78730158730158 z"/>
+<path class="s5" d="M170,200 h232.61272000863838 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-232.61272000863838 z"/>
 <text class="ink" x="158" y="240" font-size="12.5" text-anchor="end">partial update</text>
-<text class="secondary" x="158" y="255" font-size="10.5" text-anchor="end">vanilla 26.0 ms · 4× CPU</text>
+<text class="secondary" x="158" y="255" font-size="10.5" text-anchor="end">vanilla 25.9 ms · 4× CPU</text>
 <text class="ink" x="736" y="240" font-size="12" font-weight="600" text-anchor="end">26.4 ms</text>
-<path class="s1" d="M170,228 h174.63637413839578 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-174.63637413839578 z"/>
-<path class="s2" d="M170,238 h180.56652162193387 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-180.56652162193387 z"/>
-<path class="s3" d="M170,248 h172.9284916631368 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-172.9284916631368 z"/>
-<path class="s4" d="M170,258 h197.21837575570873 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-197.21837575570873 z"/>
-<path class="s5" d="M170,268 h206.03565789980357 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-206.03565789980357 z"/>
+<path class="s1" d="M170,228 h175.2860394244493 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-175.2860394244493 z"/>
+<path class="s2" d="M170,238 h194.16039810207153 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-194.16039810207153 z"/>
+<path class="s3" d="M170,248 h208.1668016819041 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-208.1668016819041 z"/>
+<path class="s4" d="M170,258 h209.13767696640053 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-209.13767696640053 z"/>
+<path class="s5" d="M170,268 h222.72993094935003 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-222.72993094935003 z"/>
 <text class="ink" x="158" y="308" font-size="12.5" text-anchor="end">select row</text>
-<text class="secondary" x="158" y="323" font-size="10.5" text-anchor="end">vanilla 6.4 ms · 4× CPU</text>
-<text class="ink" x="736" y="308" font-size="12" font-weight="600" text-anchor="end">8.1 ms</text>
-<path class="s1" d="M170,296 h218.23775351014038 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-218.23775351014038 z"/>
-<path class="s2" d="M170,306 h288.61029641185644 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-288.61029641185644 z"/>
-<path class="s3" d="M170,316 h193.74602184087362 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-193.74602184087362 z"/>
-<path class="s4" d="M170,326 h252.55912636505457 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-252.55912636505457 z"/>
-<path class="s5" d="M170,336 h257.0620904836193 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-257.0620904836193 z"/>
+<text class="secondary" x="158" y="323" font-size="10.5" text-anchor="end">vanilla 6.6 ms · 4× CPU</text>
+<text class="ink" x="736" y="308" font-size="12" font-weight="600" text-anchor="end">6.5 ms</text>
+<path class="s1" d="M170,296 h169.0487804878049 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-169.0487804878049 z"/>
+<path class="s2" d="M170,306 h254.3658536585366 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-254.3658536585366 z"/>
+<path class="s3" d="M170,316 h176.56097560975613 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-176.56097560975613 z"/>
+<path class="s4" d="M170,326 h238.45609756097565 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-238.45609756097565 z"/>
+<path class="s5" d="M170,336 h246.80000000000004 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-246.80000000000004 z"/>
 <text class="ink" x="158" y="376" font-size="12.5" text-anchor="end">swap rows</text>
-<text class="secondary" x="158" y="391" font-size="10.5" text-anchor="end">vanilla 26.5 ms · 4× CPU</text>
-<text class="ink" x="736" y="376" font-size="12" font-weight="600" text-anchor="end">27.9 ms</text>
-<path class="s1" d="M170,364 h181.20374283127074 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-181.20374283127074 z"/>
-<path class="s2" d="M170,374 h203.8877150618774 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-203.8877150618774 z"/>
-<path class="s3" d="M170,384 h175.2472079686085 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-175.2472079686085 z"/>
-<path class="s4" d="M170,394 h208.31029278599453 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-208.31029278599453 z"/>
+<text class="secondary" x="158" y="391" font-size="10.5" text-anchor="end">vanilla 30.1 ms · 4× CPU</text>
+<text class="ink" x="736" y="376" font-size="12" font-weight="600" text-anchor="end">32.4 ms</text>
+<path class="s1" d="M170,364 h185.95096963044273 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-185.95096963044273 z"/>
+<path class="s2" d="M170,374 h191.1672155140871 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-191.1672155140871 z"/>
+<path class="s3" d="M170,384 h184.3819978046103 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-184.3819978046103 z"/>
+<path class="s4" d="M170,394 h198.15148188803514 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-198.15148188803514 z"/>
 <path class="s5" d="M170,404 h436 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-436 z"/>
-<text class="ink" x="616" y="412" font-size="10.5">7.0×</text>
+<text class="ink" x="616" y="412" font-size="10.5">7.2×</text>
 <text class="ink" x="158" y="444" font-size="12.5" text-anchor="end">remove row</text>
-<text class="secondary" x="158" y="459" font-size="10.5" text-anchor="end">vanilla 19.0 ms · 2× CPU</text>
-<text class="ink" x="736" y="444" font-size="12" font-weight="600" text-anchor="end">19.7 ms</text>
-<path class="s1" d="M170,432 h178.2314814814815 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-178.2314814814815 z"/>
-<path class="s2" d="M170,442 h173.56481481481484 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-173.56481481481484 z"/>
-<path class="s3" d="M170,452 h169.62962962962962 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-169.62962962962962 z"/>
-<path class="s4" d="M170,462 h197.59259259259258 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-197.59259259259258 z"/>
-<path class="s5" d="M170,472 h202.62962962962965 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-202.62962962962965 z"/>
+<text class="secondary" x="158" y="459" font-size="10.5" text-anchor="end">vanilla 21.8 ms · 2× CPU</text>
+<text class="ink" x="736" y="444" font-size="12" font-weight="600" text-anchor="end">21.6 ms</text>
+<path class="s1" d="M170,432 h170.43627204030224 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-170.43627204030224 z"/>
+<path class="s2" d="M170,442 h177.6181360201511 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-177.6181360201511 z"/>
+<path class="s3" d="M170,452 h174.0070528967254 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-174.0070528967254 z"/>
+<path class="s4" d="M170,462 h206.49874055415611 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-206.49874055415611 z"/>
+<path class="s5" d="M170,472 h193.1506297229219 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-193.1506297229219 z"/>
 <text class="ink" x="158" y="512" font-size="12.5" text-anchor="end">create many rows</text>
-<text class="secondary" x="158" y="527" font-size="10.5" text-anchor="end">vanilla 346 ms</text>
-<text class="ink" x="736" y="512" font-size="12" font-weight="600" text-anchor="end">365 ms</text>
-<path class="s1" d="M170,500 h181.58592245084486 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-181.58592245084486 z"/>
-<path class="s2" d="M170,510 h186.29361778435947 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-186.29361778435947 z"/>
-<path class="s3" d="M170,520 h185.15894510935897 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-185.15894510935897 z"/>
-<path class="s4" d="M170,530 h198.32807122073683 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-198.32807122073683 z"/>
-<path class="s5" d="M170,540 h276.1037999433103 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-276.1037999433103 z"/>
+<text class="secondary" x="158" y="527" font-size="10.5" text-anchor="end">vanilla 450 ms</text>
+<text class="ink" x="736" y="512" font-size="12" font-weight="600" text-anchor="end">461 ms</text>
+<path class="s1" d="M170,500 h176.37492393047359 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-176.37492393047359 z"/>
+<path class="s2" d="M170,510 h183.64483415732735 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-183.64483415732735 z"/>
+<path class="s3" d="M170,520 h172.90570932334768 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-172.90570932334768 z"/>
+<path class="s4" d="M170,530 h201.65934178204802 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-201.65934178204802 z"/>
+<path class="s5" d="M170,540 h278.0180257015054 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-278.0180257015054 z"/>
 <text class="ink" x="158" y="580" font-size="12.5" text-anchor="end">append rows</text>
-<text class="secondary" x="158" y="595" font-size="10.5" text-anchor="end">vanilla 90.2 ms · 2× CPU</text>
-<text class="ink" x="736" y="580" font-size="12" font-weight="600" text-anchor="end">93.8 ms</text>
-<path class="s1" d="M170,568 h179.15853455638498 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-179.15853455638498 z"/>
-<path class="s2" d="M170,578 h170.12203156715506 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-170.12203156715506 z"/>
-<path class="s3" d="M170,588 h175.26399503089053 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-175.26399503089053 z"/>
-<path class="s4" d="M170,598 h178.0985170314008 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-178.0985170314008 z"/>
-<path class="s5" d="M170,608 h204.85273467395763 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-204.85273467395763 z"/>
+<text class="secondary" x="158" y="595" font-size="10.5" text-anchor="end">vanilla 111 ms · 2× CPU</text>
+<text class="ink" x="736" y="580" font-size="12" font-weight="600" text-anchor="end">113 ms</text>
+<path class="s1" d="M170,568 h173.7981414373363 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-173.7981414373363 z"/>
+<path class="s2" d="M170,578 h179.9108751031538 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-179.9108751031538 z"/>
+<path class="s3" d="M170,588 h174.34437228660616 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-174.34437228660616 z"/>
+<path class="s4" d="M170,598 h186.83348283161712 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-186.83348283161712 z"/>
+<path class="s5" d="M170,608 h198.71163575042158 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-198.71163575042158 z"/>
 <text class="ink" x="158" y="648" font-size="12.5" text-anchor="end">clear rows</text>
-<text class="secondary" x="158" y="663" font-size="10.5" text-anchor="end">vanilla 17.2 ms · 4× CPU</text>
-<text class="ink" x="736" y="648" font-size="12" font-weight="600" text-anchor="end">18.3 ms</text>
-<path class="s1" d="M170,636 h183.73333333333332 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-183.73333333333332 z"/>
-<path class="s2" d="M170,646 h187.2102564102564 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-187.2102564102564 z"/>
-<path class="s3" d="M170,656 h182.05128205128207 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-182.05128205128207 z"/>
-<path class="s4" d="M170,666 h243.16923076923075 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-243.16923076923075 z"/>
-<path class="s5" d="M170,676 h260.8615384615385 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-260.8615384615385 z"/>
+<text class="secondary" x="158" y="663" font-size="10.5" text-anchor="end">vanilla 19.5 ms · 4× CPU</text>
+<text class="ink" x="736" y="648" font-size="12" font-weight="600" text-anchor="end">20.7 ms</text>
+<path class="s1" d="M170,636 h182.96325229994346 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-182.96325229994346 z"/>
+<path class="s2" d="M170,646 h190.4077709821658 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-190.4077709821658 z"/>
+<path class="s3" d="M170,656 h196.69445443799148 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-196.69445443799148 z"/>
+<path class="s4" d="M170,666 h245.61299275325072 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-245.61299275325072 z"/>
+<path class="s5" d="M170,676 h269.98180603381815 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-269.98180603381815 z"/>
 <line class="axis" x1="170" x2="170" y1="86" y2="710"/>
 </svg>
