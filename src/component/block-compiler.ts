@@ -2329,13 +2329,17 @@ function __htmsTpl(html, ns, single) {
 function __htmsIns(block, parent, before) {
   var node = block.s;
   var end = block.e;
+  // Moving an existing child atomically keeps its rendering/focus state.
+  // New rows still need insertion; older browsers use the same fallback.
   if (node === end) {
-    parent.insertBefore(node, before);
+    if (node.parentNode === parent && parent.moveBefore) parent.moveBefore(node, before);
+    else parent.insertBefore(node, before);
     return;
   }
   for (;;) {
     var next = node.nextSibling;
-    parent.insertBefore(node, before);
+    if (node.parentNode === parent && parent.moveBefore) parent.moveBefore(node, before);
+    else parent.insertBefore(node, before);
     if (node === end) return;
     node = next;
   }

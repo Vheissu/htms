@@ -90,7 +90,7 @@ badge.labelText = 'Synced';
 - `<set>`, `<push>`, and `<splice>` update instance fields and schedule a render.
 - Prop and top-level state writes are batched in a microtask. Several synchronous writes produce one render.
 - Generated elements expose `requestUpdate()` for in-place nested changes and an `updateComplete` promise for code that needs the updated DOM.
-- Renders preserve focus, selection, scroll position, and unfinished values in uncontrolled form elements. Controlled fields still follow their bound component state.
+- Updates that leave a form element in place preserve focus, selection, scroll position, and unfinished values. Reordering can affect focus and selection depending on browser support. Controlled fields still follow their bound component state.
 - The first `render()` clones the component's static template and records the nodes that can change. Later renders call the generated update method, which re-evaluates each interpolation, binding and directive value and writes to the DOM only when the value differs from the last render.
 - Loops (`REPEAT`, `KEYEDLIST`) and branches (`IF/ELSE`, `SWITCH`) are nested blocks with their own templates. Unkeyed loops reuse rows by position; keyed loops (`key="row.id"`) match rows by key and move them with a longest-increasing-subsequence pass. `KEYEDLIST` rows also carry their key as `data-key`.
 - Selector directives (`<event target>`, `<bind>`, `<setattr>`, `<toggle>`, `<class>`, `<style selector>`, `<append>`) are resolved against the template at compile time. A component whose selectors could match markup created by a loop or branch, or that uses `<while>`, falls back to the reconciling renderer: `render()` builds a detached fragment and reconciles it with the current DOM, matching keyed children by `data-key`.
@@ -121,6 +121,13 @@ matching rows. Structural updates and deep writes invalidate the lookup.
 Duplicate keys and rows with other component-dependent bindings retain the
 general update path. The first lookup costs a pass over the rows and retains
 a map until the list changes.
+
+When moving existing block nodes within their parent, the renderer uses
+[`moveBefore`](https://developer.mozilla.org/en-US/docs/Web/API/Element/moveBefore)
+where available. This preserves focus and avoids resetting rendering state
+by removing and reinserting the node. New nodes and browsers without the
+API use `insertBefore`. Input selection ranges can still reset during a
+native move in some browser versions.
 
 ## Compilation Phases
 
