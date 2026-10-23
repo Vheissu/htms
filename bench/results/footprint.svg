@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 494" width="760" height="494" role="img" aria-labelledby="footprint-title footprint-desc">
 <title id="footprint-title">Bundle size, startup and memory</title>
-<desc id="footprint-desc">HTMS: 4.5 KB gzip, 7.6 ms script during load, 1.72 MB heap after load, 2.33 MB with 1,000 rows; Svelte 5: 13.3 KB gzip, 9.4 ms script during load, 1.80 MB heap after load, 3.24 MB with 1,000 rows; Solid: 5.7 KB gzip, 8.0 ms script during load, 1.73 MB heap after load, 2.96 MB with 1,000 rows; Vue: 24.7 KB gzip, 9.7 ms script during load, 1.94 MB heap after load, 4.10 MB with 1,000 rows; React: 67.0 KB gzip, 17.1 ms script during load, 2.16 MB heap after load, 4.52 MB with 1,000 rows; Vanilla JS: 1.6 KB gzip, 7.2 ms script during load, 1.71 MB heap after load, 2.11 MB with 1,000 rows. Lower is better.</desc>
+<desc id="footprint-desc">HTMS: 4.4 KB gzip, 8.4 ms script during load, 1.73 MB heap after load, 2.33 MB with 1,000 rows; Svelte 5: 13.3 KB gzip, 10.0 ms script during load, 1.80 MB heap after load, 3.24 MB with 1,000 rows; Solid: 5.7 KB gzip, 8.7 ms script during load, 1.74 MB heap after load, 2.96 MB with 1,000 rows; Vue: 24.6 KB gzip, 10.5 ms script during load, 1.94 MB heap after load, 4.10 MB with 1,000 rows; React: 66.9 KB gzip, 18.5 ms script during load, 2.16 MB heap after load, 4.52 MB with 1,000 rows; Vanilla JS: 1.6 KB gzip, 7.8 ms script during load, 1.70 MB heap after load, 2.11 MB with 1,000 rows. Lower is better.</desc>
 
   <style>
     .surface { fill: #fcfcfb; }
@@ -27,82 +27,82 @@
 <text class="ink" x="24" y="42" font-size="14" font-weight="600">Bundle size (minified + gzip)</text>
 <line class="axis" x1="108" x2="108" y1="56" y2="212"/>
 <text class="ink" x="98" y="72" font-size="12" text-anchor="end" font-weight="600">HTMS</text>
-<path class="s1" d="M108,60 h8.39114079085501 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-8.39114079085501 z"/>
-<text class="ink" x="127.391140790855" y="72" font-size="11.5" font-weight="600">4.5 KB</text>
+<path class="s1" d="M108,60 h8.272293620807865 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-8.272293620807865 z"/>
+<text class="ink" x="127.27229362080786" y="72" font-size="11.5" font-weight="600">4.4 KB</text>
 <text class="ink" x="98" y="98" font-size="12" text-anchor="end">Svelte 5</text>
-<path class="s2" d="M108,86 h33.01070220459582 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-33.01070220459582 z"/>
-<text class="ink" x="152.01070220459582" y="98" font-size="11.5">13.3 KB</text>
+<path class="s2" d="M108,86 h32.9986725211886 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-32.9986725211886 z"/>
+<text class="ink" x="151.9986725211886" y="98" font-size="11.5">13.3 KB</text>
 <text class="ink" x="98" y="124" font-size="12" text-anchor="end">Solid</text>
-<path class="s3" d="M108,112 h11.96556048057856 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-11.96556048057856 z"/>
-<text class="ink" x="130.96556048057857" y="124" font-size="11.5">5.7 KB</text>
+<path class="s3" d="M108,112 h11.937973187845545 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-11.937973187845545 z"/>
+<text class="ink" x="130.93797318784556" y="124" font-size="11.5">5.7 KB</text>
 <text class="ink" x="98" y="150" font-size="12" text-anchor="end">Vue</text>
-<path class="s4" d="M108,138 h64.49705470663712 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-64.49705470663712 z"/>
-<text class="ink" x="183.49705470663713" y="150" font-size="11.5">24.7 KB</text>
+<path class="s4" d="M108,138 h64.32924392058467 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-64.32924392058467 z"/>
+<text class="ink" x="183.32924392058467" y="150" font-size="11.5">24.6 KB</text>
 <text class="ink" x="98" y="176" font-size="12" text-anchor="end">React</text>
 <path class="s5" d="M108,164 h182 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-182 z"/>
-<text class="ink" x="301" y="176" font-size="11.5">67.0 KB</text>
+<text class="ink" x="301" y="176" font-size="11.5">66.9 KB</text>
 <text class="ink" x="98" y="202" font-size="12" text-anchor="end">Vanilla JS</text>
-<path class="s6" d="M108,190 h2.1763822465881253 a2.1763822465881253,2.1763822465881253 0 0 1 2.1763822465881253,2.1763822465881253 v11.64723550682375 a2.1763822465881253,2.1763822465881253 0 0 1 -2.1763822465881253,2.1763822465881253 h-2.1763822465881253 z"/>
-<text class="ink" x="119.35276449317625" y="202" font-size="11.5">1.6 KB</text>
+<path class="s6" d="M108,190 h2.1814999051800847 a2.1814999051800847,2.1814999051800847 0 0 1 2.1814999051800847,2.1814999051800847 v11.637000189639831 a2.1814999051800847,2.1814999051800847 0 0 1 -2.1814999051800847,2.1814999051800847 h-2.1814999051800847 z"/>
+<text class="ink" x="119.36299981036017" y="202" font-size="11.5">1.6 KB</text>
 <text class="ink" x="412" y="42" font-size="14" font-weight="600">Script time during page load</text>
 <line class="axis" x1="496" x2="496" y1="56" y2="212"/>
 <text class="ink" x="486" y="72" font-size="12" text-anchor="end" font-weight="600">HTMS</text>
-<path class="s1" d="M496,60 h78.0074639920695 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-78.0074639920695 z"/>
-<text class="ink" x="585.0074639920695" y="72" font-size="11.5" font-weight="600">7.6 ms</text>
+<path class="s1" d="M496,60 h80.29541761455965 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-80.29541761455965 z"/>
+<text class="ink" x="587.2954176145597" y="72" font-size="11.5" font-weight="600">8.4 ms</text>
 <text class="ink" x="486" y="98" font-size="12" text-anchor="end">Svelte 5</text>
-<path class="s2" d="M496,86 h97.43285322759344 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-97.43285322759344 z"/>
-<text class="ink" x="604.4328532275935" y="98" font-size="11.5">9.4 ms</text>
+<path class="s2" d="M496,86 h96.84822879428013 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-96.84822879428013 z"/>
+<text class="ink" x="603.8482287942801" y="98" font-size="11.5">10.0 ms</text>
 <text class="ink" x="486" y="124" font-size="12" text-anchor="end">Solid</text>
-<path class="s3" d="M496,112 h82.8990611697475 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-82.8990611697475 z"/>
-<text class="ink" x="589.8990611697475" y="124" font-size="11.5">8.0 ms</text>
+<path class="s3" d="M496,112 h83.86187845303867 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-83.86187845303867 z"/>
+<text class="ink" x="590.8618784530387" y="124" font-size="11.5">8.7 ms</text>
 <text class="ink" x="486" y="150" font-size="12" text-anchor="end">Vue</text>
-<path class="s4" d="M496,138 h101.5109918945711 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-101.5109918945711 z"/>
-<text class="ink" x="608.5109918945711" y="150" font-size="11.5">9.7 ms</text>
+<path class="s4" d="M496,138 h102.21806954826128 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-102.21806954826128 z"/>
+<text class="ink" x="609.2180695482613" y="150" font-size="11.5">10.5 ms</text>
 <text class="ink" x="486" y="176" font-size="12" text-anchor="end">React</text>
 <path class="s5" d="M496,164 h182 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-182 z"/>
-<text class="ink" x="689" y="176" font-size="11.5">17.1 ms</text>
+<text class="ink" x="689" y="176" font-size="11.5">18.5 ms</text>
 <text class="ink" x="486" y="202" font-size="12" text-anchor="end">Vanilla JS</text>
-<path class="s6" d="M496,190 h74.50416933932007 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-74.50416933932007 z"/>
-<text class="ink" x="581.50416933932" y="202" font-size="11.5">7.2 ms</text>
+<path class="s6" d="M496,190 h74.46213844653883 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-74.46213844653883 z"/>
+<text class="ink" x="581.4621384465388" y="202" font-size="11.5">7.8 ms</text>
 <text class="ink" x="24" y="260" font-size="14" font-weight="600">JS heap after load</text>
 <line class="axis" x1="108" x2="108" y1="274" y2="430"/>
 <text class="ink" x="98" y="290" font-size="12" text-anchor="end" font-weight="600">HTMS</text>
-<path class="s1" d="M108,278 h143.68664399885603 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-143.68664399885603 z"/>
-<text class="ink" x="262.686643998856" y="290" font-size="11.5" font-weight="600">1.72 MB</text>
+<path class="s1" d="M108,278 h144.77450421026043 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-144.77450421026043 z"/>
+<text class="ink" x="263.77450421026043" y="290" font-size="11.5" font-weight="600">1.73 MB</text>
 <text class="ink" x="98" y="316" font-size="12" text-anchor="end">Svelte 5</text>
-<path class="s2" d="M108,304 h150.85223553338207 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-150.85223553338207 z"/>
-<text class="ink" x="269.8522355333821" y="316" font-size="11.5">1.80 MB</text>
+<path class="s2" d="M108,304 h150.91616397317162 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-150.91616397317162 z"/>
+<text class="ink" x="269.9161639731716" y="316" font-size="11.5">1.80 MB</text>
 <text class="ink" x="98" y="342" font-size="12" text-anchor="end">Solid</text>
-<path class="s3" d="M108,330 h145.12685500015888 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-145.12685500015888 z"/>
-<text class="ink" x="264.1268550001589" y="342" font-size="11.5">1.73 MB</text>
+<path class="s3" d="M108,330 h146.20831382912013 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-146.20831382912013 z"/>
+<text class="ink" x="265.20831382912013" y="342" font-size="11.5">1.74 MB</text>
 <text class="ink" x="98" y="368" font-size="12" text-anchor="end">Vue</text>
-<path class="s4" d="M108,356 h162.9268910144375 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-162.9268910144375 z"/>
-<text class="ink" x="281.9268910144375" y="368" font-size="11.5">1.94 MB</text>
+<path class="s4" d="M108,356 h162.8564731318791 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-162.8564731318791 z"/>
+<text class="ink" x="281.8564731318791" y="368" font-size="11.5">1.94 MB</text>
 <text class="ink" x="98" y="394" font-size="12" text-anchor="end">React</text>
 <path class="s5" d="M108,382 h182 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-182 z"/>
 <text class="ink" x="301" y="394" font-size="11.5">2.16 MB</text>
 <text class="ink" x="98" y="420" font-size="12" text-anchor="end">Vanilla JS</text>
-<path class="s6" d="M108,408 h143.55759636467636 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-143.55759636467636 z"/>
-<text class="ink" x="262.55759636467633" y="420" font-size="11.5">1.71 MB</text>
+<path class="s6" d="M108,408 h142.3008212083368 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-142.3008212083368 z"/>
+<text class="ink" x="261.3008212083368" y="420" font-size="11.5">1.70 MB</text>
 <text class="ink" x="412" y="260" font-size="14" font-weight="600">JS heap with 1,000 rows</text>
 <line class="axis" x1="496" x2="496" y1="274" y2="430"/>
 <text class="ink" x="486" y="290" font-size="12" text-anchor="end" font-weight="600">HTMS</text>
-<path class="s1" d="M496,278 h91.63547640429542 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-91.63547640429542 z"/>
-<text class="ink" x="598.6354764042954" y="290" font-size="11.5" font-weight="600">2.33 MB</text>
+<path class="s1" d="M496,278 h91.65938389524955 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-91.65938389524955 z"/>
+<text class="ink" x="598.6593838952496" y="290" font-size="11.5" font-weight="600">2.33 MB</text>
 <text class="ink" x="486" y="316" font-size="12" text-anchor="end">Svelte 5</text>
-<path class="s2" d="M496,304 h129.25894688911094 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-129.25894688911094 z"/>
-<text class="ink" x="636.2589468891109" y="316" font-size="11.5">3.24 MB</text>
+<path class="s2" d="M496,304 h129.2608210512999 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-129.2608210512999 z"/>
+<text class="ink" x="636.2608210512999" y="316" font-size="11.5">3.24 MB</text>
 <text class="ink" x="486" y="342" font-size="12" text-anchor="end">Solid</text>
-<path class="s3" d="M496,330 h117.72674770114216 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-117.72674770114216 z"/>
-<text class="ink" x="624.7267477011421" y="342" font-size="11.5">2.96 MB</text>
+<path class="s3" d="M496,330 h117.78103611866658 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-117.78103611866658 z"/>
+<text class="ink" x="624.7810361186666" y="342" font-size="11.5">2.96 MB</text>
 <text class="ink" x="486" y="368" font-size="12" text-anchor="end">Vue</text>
-<path class="s4" d="M496,356 h164.38002049050732 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-164.38002049050732 z"/>
-<text class="ink" x="671.3800204905074" y="368" font-size="11.5">4.10 MB</text>
+<path class="s4" d="M496,356 h164.4078284521475 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-164.4078284521475 z"/>
+<text class="ink" x="671.4078284521474" y="368" font-size="11.5">4.10 MB</text>
 <text class="ink" x="486" y="394" font-size="12" text-anchor="end">React</text>
 <path class="s5" d="M496,382 h182 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-182 z"/>
 <text class="ink" x="689" y="394" font-size="11.5">4.52 MB</text>
 <text class="ink" x="486" y="420" font-size="12" text-anchor="end">Vanilla JS</text>
-<path class="s6" d="M496,408 h82.70401335677515 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-82.70401335677515 z"/>
-<text class="ink" x="589.7040133567751" y="420" font-size="11.5">2.11 MB</text>
+<path class="s6" d="M496,408 h82.69583654880131 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-82.69583654880131 z"/>
+<text class="ink" x="589.6958365488013" y="420" font-size="11.5">2.11 MB</text>
 <text class="secondary" x="24" y="476" font-size="11">Lower is better. One Vite production build minifies every app; heap is measured after garbage collection.</text>
 </svg>

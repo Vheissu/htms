@@ -446,6 +446,7 @@ const results = {
     cpu: os.cpus()[0]?.model ?? 'unknown',
     cores: os.cpus().length,
     node: process.version,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     runs: RUNS,
   },
   operations: OPERATIONS.filter((op) => OPS.includes(op.id)).map(

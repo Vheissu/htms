@@ -52,6 +52,8 @@ These measure compiler throughput and effect registration separately from
 browser layout and paint. They don't update the framework comparison charts.
 The [23 October runtime checks](results/runtime-2026-10-23.md) record the
 derived-calculation and effect-registry changes, including raw samples.
+The framework table app uses neither `<derive>` nor `<effect>`, so it does
+not exercise those optimizations.
 
 ## Vite integration check
 
@@ -122,3 +124,7 @@ errors and recovery after an edit. Install the browser with
   numbers measure parse and run cost rather than download time.
 - Results depend on the machine. The environment is recorded in
   `results/results.json` and printed at the top of `results/RESULTS.md`.
+  Report dates use the recorded machine time zone, with UTC as the fallback
+  for older results.
+- Per-row bolding and match counts compare displayed values, so ties can
+  reflect rounding. The overall geometric mean uses unrounded measurements.
