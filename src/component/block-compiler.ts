@@ -12,12 +12,17 @@ import { ALL_DIRTY, DEEP_BIT, DependencyAnalyzer } from './dependencies';
 import { scopeExpression, scopeStatements } from './scope';
 import {
   BOOLEAN_ATTRIBUTES,
+  RAW_TEXT_ELEMENTS,
   URL_ATTRIBUTES,
   renderEventPreamble,
   resolveWholeAttributeInterpolation,
   serializeTextValue,
 } from './template-serializer';
-import { isPlainTemplate, templateNodeHtml } from './template-shape';
+import {
+  isPlainTemplate,
+  templateNodeHtml,
+  TemplateShapeNode,
+} from './template-shape';
 import {
   SourceComment,
   SourceDocument,
@@ -354,6 +359,7 @@ class BlockCompiler {
   private readonly delegated = new Set<string>();
   private readonly globals: string[] = [];
   private readonly statements: string[] = [];
+  private readonly initialTextParents = new Map<TemplateShapeNode, PElement>();
   private readonly sampleOwners = new WeakMap<
     SourceNode,
     { node: PElement; block: BlockPlan }
@@ -1635,6 +1641,51 @@ class BlockCompiler {
       // Every block needs a first and last node to insert and move.
       this.addComment(this.blockContainer(block), '');
     }
+    // Simple cloned blocks can construct leaf text with its initial value,
+    // instead of cloning a placeholder and immediately changing its data.
+    // Keep the regular path for hydration, structural parts, custom-element
+    // callbacks and creation effects that may observe the initial DOM.
+    const nativeTree = (nodes: PNode[]): boolean =>
+      nodes.every(
+        (node) =>
+          node.kind !== 'element' ||
+          (!node.tag.includes('-') &&
+            !node.attrs.some(([name]) => name === 'is') &&
+            nativeTree(node.children))
+      );
+    if (
+      block.kind !== 'root' &&
+      block.roots.length === 1 &&
+      block.parts.every(
+        (part) => part.kind === 'text' || part.kind === 'toggle'
+      ) &&
+      block.creates.every(
+        (action) =>
+          action.kind === 'event' &&
+          action.options === null &&
+          DELEGATED_EVENTS.has(action.type)
+      ) &&
+      nativeTree(block.roots)
+    ) {
+      const visit = (nodes: PNode[]): void => {
+        for (const node of nodes) {
+          if (node.kind !== 'element') continue;
+          const child = node.children[0];
+          if (
+            node.children.length === 1 &&
+            child?.kind === 'text' &&
+            child.dynamic &&
+            !RAW_TEXT_ELEMENTS.has(node.tag) &&
+            !['pre', 'textarea', 'listing', 'template'].includes(node.tag)
+          ) {
+            this.initialTextParents.set(child, node);
+            node.wantLocal = true;
+          }
+          visit(node.children);
+        }
+      };
+      visit(block.roots);
+    }
     this.validateTemplate(block);
   }
 
@@ -1658,7 +1709,13 @@ class BlockCompiler {
   }
 
   private templateHtml(block: BlockPlan): string {
-    return block.roots.map((node) => templateNodeHtml(node, null)).join('');
+    return block.roots
+      .map((node) =>
+        templateNodeHtml(node, null, (child) =>
+          this.initialTextParents.has(child)
+        )
+      )
+      .join('');
   }
 
   // Parses the generated template and checks it produces exactly the
@@ -1692,6 +1749,7 @@ class BlockCompiler {
   }
 
   private sameStructure(parsed: SourceNode, nodes: PNode[]): boolean {
+    nodes = nodes.filter((node) => !this.initialTextParents.has(node));
     const children =
       parsed instanceof SourceParentNode ? Array.from(parsed.childNodes) : [];
     if (children.length !== nodes.length) return false;
@@ -1730,7 +1788,7 @@ class BlockCompiler {
       for (const node of nodes) {
         if (node.wantLocal || node.wantField) {
           const index = counter.value++;
-          node.local = `$$n${index}`;
+          node.local = this.initialTextParents.has(node) ? null : `$$n${index}`;
           if (node.wantField) node.field = `n${index}`;
         }
         if (node.kind === 'element') nameNodes(node.children);
@@ -1768,6 +1826,21 @@ class BlockCompiler {
       if (root.kind === 'element') this.walk('$$r', root.children, create);
     } else {
       this.walk('$$r', block.roots, create);
+    }
+
+    // A metadata property's name identifies its handler. Its value is one
+    // shared weak-map key per block, without a reference to the render DOM.
+    const delegated = new Map<PElement, Map<string, string>>();
+    for (const action of block.creates) {
+      if (
+        action.kind === 'event' &&
+        action.options === null &&
+        DELEGATED_EVENTS.has(action.type)
+      ) {
+        let handlers = delegated.get(action.node);
+        if (!handlers) delegated.set(action.node, (handlers = new Map()));
+        handlers.set(action.type, action.handler);
+      }
     }
 
     const literal: string[] = ['c: this'];
@@ -1809,18 +1882,38 @@ class BlockCompiler {
     }
     create.push(`const $$b = { ${literal.join(', ')} };`);
 
-    const tagged = new Set<PElement>();
+    let registered = false;
+    const indexedNodes = new Set<PElement>();
     for (const action of block.creates) {
       const local = action.node.local as string;
       if (action.kind === 'event') {
         if (action.options === null && DELEGATED_EVENTS.has(action.type)) {
-          create.push(
-            `${local}.__htms_${action.type} = this.${action.handler};`
-          );
-          if (!tagged.has(action.node)) {
-            tagged.add(action.node);
-            create.push(`this.__htmsEventBlocks.set(${local}, $$b);`);
+          // Forms and selects expose enumerable control indices. Preserve
+          // direct property lookup instead of enumerating those controls.
+          if (action.node.tag === 'form' || action.node.tag === 'select') {
+            create.push(
+              `${local}.__htms_${action.type} = this.${action.handler};`
+            );
+            if (!indexedNodes.has(action.node)) {
+              indexedNodes.add(action.node);
+              create.push(`this.__htmsEventBlocks.set(${local}, $$b);`);
+            }
+            continue;
           }
+          if (!registered) {
+            registered = true;
+            create.push(
+              'const $$k = {};',
+              'this.__htmsEventBlocks.set($$k, $$b);'
+            );
+          }
+          // Repeated declarations of the same event overwrite one slot.
+          const handler =
+            delegated.get(action.node)?.get(action.type) ?? action.handler;
+          create.push(
+            `${local}.__htms_${action.type}_${handler} = $$k;`,
+            `$$b.${handler} = this.${action.handler};`
+          );
         } else {
           const listener = action.usesEvent
             ? `(event) => this.${action.handler}(event, $$b)`
@@ -1853,7 +1946,35 @@ class BlockCompiler {
         );
       }
     }
-    create.push(`this.__htmsU${block.id}($$b, -1);`, 'return $$b;');
+    if (
+      block.parts.some(
+        (part) => part.kind === 'text' && this.initialTextParents.has(part.node)
+      )
+    ) {
+      const initial: string[] = [];
+      for (const part of block.parts) {
+        const parent =
+          part.kind === 'text' ? this.initialTextParents.get(part.node) : null;
+        if (part.kind === 'text' && parent) {
+          const raw = rawTextValue(part.expr);
+          initial.push(
+            `$$v = ${raw ?? part.expr};`,
+            `$$b.${part.node.field} = ${parent.local}.appendChild(new Text(${raw === null ? '$$v' : '__htmsS($$v)'}));`,
+            `$$b.${part.slot} = ${raw === null ? '$$v' : "typeof $$v === 'object' && $$v !== null ? __htmsNone : $$v"};`
+          );
+        } else {
+          initial.push(...this.partUpdate(part).lines);
+        }
+      }
+      create.push(
+        ...this.declareLocals(block, initial.join('\n'), '$$b'),
+        'let $$v;',
+        ...initial
+      );
+    } else {
+      create.push(`this.__htmsU${block.id}($$b, -1);`);
+    }
+    create.push('return $$b;');
     members.push(
       `  __htmsC${block.id}(${params}) {\n${create.map((line) => `    ${line}`).join('\n')}\n  }\n`
     );
@@ -2635,17 +2756,23 @@ function __htmsList(component, list, items, parentBlock, create, update, key, di
 function __htmsDispatch(component, event) {
   var capturing = event.eventPhase === 1;
   if (capturing && event.bubbles) return;
-  var key = '__htms_' + event.type;
+  var directKey = '__htms_' + event.type;
+  var key = directKey + '_';
   var root = component.__htmsRoot || component;
   var node = event.target;
   var current = null;
   var patched = false;
   try {
     while (node && node !== root) {
-      var handler = node[key];
-      if (handler !== undefined) {
-        var block = component.__htmsEventBlocks.get(node);
+      var indexed = node instanceof HTMLFormElement || node instanceof HTMLSelectElement || node[directKey] !== undefined;
+      var names = indexed ? [directKey] : Object.keys(node);
+      for (var i = 0; i < names.length; i++) {
+        var name = names[i];
+        if (!indexed && !name.startsWith(key)) continue;
+        var block = component.__htmsEventBlocks.get(indexed ? node : node[name]);
         if (block !== undefined && block.c === component) {
+          var handler = indexed ? node[name] : block[name.slice(key.length)];
+          if (handler === undefined) continue;
           // A handler that never reads the event takes only its block.
           if (handler.length === 1) {
             handler.call(component, block);
@@ -2663,6 +2790,7 @@ function __htmsDispatch(component, event) {
           if (event.cancelBubble) break;
         }
       }
+      if (event.cancelBubble) break;
       if (capturing) break;
       node = node.parentNode;
     }

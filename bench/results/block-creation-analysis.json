@@ -1,0 +1,763 @@
+{
+  "controls": {
+    "original": "8096bbec1db7e4bb7a39fb7947d759429591ab63",
+    "current": "af0aa09191ed42c1d719fa939b98a9a67d1014a8"
+  },
+  "method": "Interleaved paired rounds; mirrored confirmation averages two samples per revision per round. Student t 95% mean interval; 20000 bootstrap draws resample complete paired rounds for the median-difference interval. Seed 0x241026.",
+  "sources": {
+    "src/component/block-compiler.ts": "d10c83340ca517e865883e773463ddc8b3641fdc0a6dcebaa740edd461483e73",
+    "src/component/template-shape.ts": "ebd7b832148ff2a4725a43cd0e29add9c6263732e46fbd93802185749b66a720",
+    "src/component/compiler.ts": "185090986b3e25dd13b312df2d9d93655d4f7b0ac190591f69a1bd1b41bb8ed7"
+  },
+  "bundles": {
+    "htms-original": {
+      "sha256": "b500dae90d294e9e461fbd9931a4223ea407c289f61199d907a60aeca687eef8",
+      "label": "htms-original",
+      "minified": 13066,
+      "gzip": 4747,
+      "brotli": 4232
+    },
+    "htms-af0": {
+      "sha256": "c154bc86c8a57d7ff702af242ba305b96d082ffbb56f03c73a4b52a685500583",
+      "label": "htms-af0",
+      "minified": 13278,
+      "gzip": 4781,
+      "brotli": 4264
+    },
+    "htms": {
+      "sha256": "31d2fa14467560458f950caaa49a8ae876cbd9aa842719cc0e35d4ae9a0c0faf",
+      "label": "HTMS",
+      "minified": 13689,
+      "gzip": 5010,
+      "brotli": 4432
+    },
+    "htms-legacy": {
+      "sha256": "2a2e4fcb63932ff0a4a3831a5798e87661752d92010dd899f63385e00645acce",
+      "label": "HTMS (reconciler)",
+      "minified": 17089,
+      "gzip": 4913,
+      "brotli": 4339
+    }
+  },
+  "benchmark": {
+    "bench/run.mjs": "d67e303271f17b41492d730c322ba08ee0ffaa6a04364cbbcee49636ee152df5",
+    "bench/build.mjs": "dc0d5ed4354da4094ef5278f3927baaff05451797a3b6e7be6ec6e8ea4c79225",
+    "bench/apps/htms/app.html": "76db7a097b94657ae1dc589a0d0c59e353ec5069981bae122009f909e0c4ade0",
+    "bench/apps/htms/index.html": "3ed55c6b0bf14b29787dddf0cb78c92ff9f96d7a817e8809f8ec3f04df0ca471",
+    "bench/css/main.css": "d8d5b527c71c8a71fd273310650180318f8e8361334d96c9a27bdc85fa1b75e3"
+  },
+  "full": {
+    "file": "block-creation-full.json",
+    "environment": {
+      "browser": "Chromium 141.0.7390.37",
+      "os": "Darwin 25.3.0 arm64",
+      "cpu": "Apple M2 Max",
+      "cores": 12,
+      "node": "v25.2.1",
+      "timeZone": "Australia/Brisbane",
+      "htmsRevision": "af0aa09191ed42c1d719fa939b98a9a67d1014a8",
+      "runs": 15
+    },
+    "operationSamples": 405,
+    "comparisons": {
+      "htms-original": {
+        "operations": {
+          "run1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 43.134,
+            "afterMedian": 44.333,
+            "medianPercentChange": 2.779709741735048,
+            "beforeMean": 43.2878,
+            "afterMean": 45.00139999999999,
+            "pairedMeanDifference": 1.713600000000001,
+            "pairedMean95PercentTInterval": [
+              -0.2911097100502844,
+              3.718309710050286
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -0.3240000000000052,
+              2.8689999999999998
+            ]
+          },
+          "replace1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 47.627,
+            "afterMedian": 49.257,
+            "medianPercentChange": 3.42242845444809,
+            "beforeMean": 47.966800000000006,
+            "afterMean": 49.187,
+            "pairedMeanDifference": 1.2201999999999988,
+            "pairedMean95PercentTInterval": [
+              0.0010184851440488973,
+              2.439381514855949
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -0.5799999999999983,
+              2.841000000000001
+            ]
+          },
+          "update10th": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 25.289,
+            "afterMedian": 25.415,
+            "medianPercentChange": 0.49824034165051323,
+            "beforeMean": 25.553333333333335,
+            "afterMean": 25.927866666666667,
+            "pairedMeanDifference": 0.37453333333333255,
+            "pairedMean95PercentTInterval": [
+              -1.534634257952353,
+              2.2837009246190183
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -2.519000000000002,
+              2.3009999999999984
+            ]
+          },
+          "select": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 5.878,
+            "afterMedian": 5.937,
+            "medianPercentChange": 1.0037427696495405,
+            "beforeMean": 6.323533333333333,
+            "afterMean": 6.269666666666667,
+            "pairedMeanDifference": -0.053866666666666715,
+            "pairedMean95PercentTInterval": [
+              -0.9915000710672294,
+              0.8837667377338959
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -1.2359999999999998,
+              0.665
+            ]
+          },
+          "swap": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 29.855,
+            "afterMedian": 30.485,
+            "medianPercentChange": 2.1101992966002348,
+            "beforeMean": 31.116533333333336,
+            "afterMean": 31.43766666666667,
+            "pairedMeanDifference": 0.32113333333333455,
+            "pairedMean95PercentTInterval": [
+              -2.2736413502911055,
+              2.9159080169577742
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -3.3199999999999967,
+              2.321999999999999
+            ]
+          },
+          "remove": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 21.561,
+            "afterMedian": 21.533,
+            "medianPercentChange": -0.12986410648856417,
+            "beforeMean": 21.738066666666665,
+            "afterMean": 21.606333333333335,
+            "pairedMeanDifference": -0.1317333333333335,
+            "pairedMean95PercentTInterval": [
+              -0.9738059481311997,
+              0.7103392814645327
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -1.4460000000000015,
+              0.8979999999999997
+            ]
+          },
+          "run10k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 463.145,
+            "afterMedian": 453.781,
+            "medianPercentChange": -2.0218290168305786,
+            "beforeMean": 467.0188666666666,
+            "afterMean": 456.98139999999995,
+            "pairedMeanDifference": -10.037466666666676,
+            "pairedMean95PercentTInterval": [
+              -21.744904948749443,
+              1.6699716154160935
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -21.565999999999974,
+              2.15300000000002
+            ]
+          },
+          "append1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 107.613,
+            "afterMedian": 107.748,
+            "medianPercentChange": 0.1254495274734424,
+            "beforeMean": 109.44806666666665,
+            "afterMean": 107.96906666666665,
+            "pairedMeanDifference": -1.4789999999999983,
+            "pairedMean95PercentTInterval": [
+              -5.647774843937471,
+              2.6897748439374745
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -4.768000000000001,
+              2.3490000000000038
+            ]
+          },
+          "clear": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 21.153,
+            "afterMedian": 18.062,
+            "medianPercentChange": -14.612584503380122,
+            "beforeMean": 20.86866666666667,
+            "afterMean": 18.230866666666667,
+            "pairedMeanDifference": -2.637799999999999,
+            "pairedMean95PercentTInterval": [
+              -3.6472777248206296,
+              -1.6283222751793685
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -4.210000000000001,
+              -1.3029999999999973
+            ]
+          }
+        },
+        "medianGeometricRatio": 0.9909816419798629
+      },
+      "htms-af0": {
+        "operations": {
+          "run1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 44.325,
+            "afterMedian": 44.333,
+            "medianPercentChange": 0.018048505358136957,
+            "beforeMean": 44.007933333333334,
+            "afterMean": 45.00139999999999,
+            "pairedMeanDifference": 0.9934666666666663,
+            "pairedMean95PercentTInterval": [
+              -0.8100800966854005,
+              2.7970134300187333
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -0.48100000000000165,
+              1.7240000000000038
+            ]
+          },
+          "replace1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 49.21,
+            "afterMedian": 49.257,
+            "medianPercentChange": 0.09550904287745077,
+            "beforeMean": 50.19480000000001,
+            "afterMean": 49.187,
+            "pairedMeanDifference": -1.0078000000000018,
+            "pairedMean95PercentTInterval": [
+              -3.405218876691773,
+              1.3896188766917694
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -1.7049999999999983,
+              1.151999999999994
+            ]
+          },
+          "update10th": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 25.473,
+            "afterMedian": 25.415,
+            "medianPercentChange": -0.22769206610920856,
+            "beforeMean": 26.1678,
+            "afterMean": 25.927866666666667,
+            "pairedMeanDifference": -0.23993333333333358,
+            "pairedMean95PercentTInterval": [
+              -2.5536537974354516,
+              2.0737871307687845
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -4.379000000000001,
+              2.4179999999999993
+            ]
+          },
+          "select": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 6.563,
+            "afterMedian": 5.937,
+            "medianPercentChange": -9.53832088983696,
+            "beforeMean": 6.403733333333334,
+            "afterMean": 6.269666666666667,
+            "pairedMeanDifference": -0.13406666666666656,
+            "pairedMean95PercentTInterval": [
+              -1.0554497123050015,
+              0.7873163789716683
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -1.1820000000000004,
+              0.7380000000000004
+            ]
+          },
+          "swap": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 31.159,
+            "afterMedian": 30.485,
+            "medianPercentChange": -2.163098944125297,
+            "beforeMean": 31.260600000000004,
+            "afterMean": 31.43766666666667,
+            "pairedMeanDifference": 0.17706666666666707,
+            "pairedMean95PercentTInterval": [
+              -2.234749426293364,
+              2.5888827596266983
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -2.7270000000000003,
+              1.5790000000000006
+            ]
+          },
+          "remove": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 22.061,
+            "afterMedian": 21.533,
+            "medianPercentChange": -2.3933638547663283,
+            "beforeMean": 21.716333333333335,
+            "afterMean": 21.606333333333335,
+            "pairedMeanDifference": -0.11000000000000061,
+            "pairedMean95PercentTInterval": [
+              -1.0285123741938773,
+              0.8085123741938761
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -1.1170000000000009,
+              0.661999999999999
+            ]
+          },
+          "run10k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 479.296,
+            "afterMedian": 453.781,
+            "medianPercentChange": -5.323432701295228,
+            "beforeMean": 477.6796,
+            "afterMean": 456.98139999999995,
+            "pairedMeanDifference": -20.698200000000007,
+            "pairedMean95PercentTInterval": [
+              -31.416644502518885,
+              -9.979755497481129
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -34.860000000000014,
+              -13.557000000000016
+            ]
+          },
+          "append1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 107.766,
+            "afterMedian": 107.748,
+            "medianPercentChange": -0.01670285618841083,
+            "beforeMean": 107.69020000000002,
+            "afterMean": 107.96906666666665,
+            "pairedMeanDifference": 0.2788666666666662,
+            "pairedMean95PercentTInterval": [
+              -3.3986464898056097,
+              3.956379823138942
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -5.221000000000004,
+              5.045000000000002
+            ]
+          },
+          "clear": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 19.035,
+            "afterMedian": 18.062,
+            "medianPercentChange": -5.111636459154189,
+            "beforeMean": 19.035466666666665,
+            "afterMean": 18.230866666666667,
+            "pairedMeanDifference": -0.8045999999999996,
+            "pairedMean95PercentTInterval": [
+              -1.663548472703829,
+              0.05434847270382981
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -1.993000000000002,
+              0.4839999999999982
+            ]
+          }
+        },
+        "medianGeometricRatio": 0.972083608605615
+      }
+    },
+    "scriptMedians": {
+      "run1k": {
+        "htms-original": 2.741,
+        "htms-af0": 3.268,
+        "htms": 3.258
+      },
+      "replace1k": {
+        "htms-original": 6.442,
+        "htms-af0": 7.366,
+        "htms": 6.821
+      },
+      "update10th": {
+        "htms-original": 1.506,
+        "htms-af0": 1.53,
+        "htms": 1.316
+      },
+      "select": {
+        "htms-original": 0.421,
+        "htms-af0": 0.501,
+        "htms": 0.245
+      },
+      "swap": {
+        "htms-original": 0.474,
+        "htms-af0": 0.71,
+        "htms": 0.62
+      },
+      "remove": {
+        "htms-original": 0.492,
+        "htms-af0": 0.472,
+        "htms": 0.469
+      },
+      "run10k": {
+        "htms-original": 39.343,
+        "htms-af0": 47.595,
+        "htms": 41.256
+      },
+      "append1k": {
+        "htms-original": 6.178,
+        "htms-af0": 7.639,
+        "htms": 7.306
+      },
+      "clear": {
+        "htms-original": 16.961,
+        "htms-af0": 15.075,
+        "htms": 15.228
+      }
+    },
+    "startup": {
+      "htms-original": {
+        "script": {
+          "median": 10.691,
+          "mean": 10.767733333333334,
+          "stddev": 0.5393974769084838,
+          "min": 10.162,
+          "max": 12.428,
+          "samples": [
+            12.428,
+            10.386,
+            10.575,
+            10.706,
+            10.781,
+            11.16,
+            10.551,
+            10.742,
+            10.691,
+            11.05,
+            10.514,
+            10.436,
+            11.042,
+            10.162,
+            10.292
+          ]
+        },
+        "fcp": {
+          "median": 39.475,
+          "mean": 40.271800000000006,
+          "stddev": 3.8312693383338554,
+          "min": 35.188,
+          "max": 47.954,
+          "samples": [
+            41.343,
+            41.961,
+            36.162,
+            37.27,
+            39.051,
+            45.909,
+            38.92,
+            39.475,
+            37.322,
+            47.954,
+            40.627,
+            40.217,
+            46.024,
+            35.188,
+            36.654
+          ]
+        }
+      },
+      "htms-af0": {
+        "script": {
+          "median": 10.567,
+          "mean": 10.563266666666669,
+          "stddev": 0.20916721494900642,
+          "min": 10.284,
+          "max": 10.932,
+          "samples": [
+            10.781,
+            10.346,
+            10.932,
+            10.417,
+            10.392,
+            10.284,
+            10.63,
+            10.692,
+            10.424,
+            10.342,
+            10.743,
+            10.667,
+            10.856,
+            10.567,
+            10.376
+          ]
+        },
+        "fcp": {
+          "median": 38.217,
+          "mean": 37.297000000000004,
+          "stddev": 3.2039934010989657,
+          "min": 31.644,
+          "max": 43.423,
+          "samples": [
+            38.217,
+            38.424,
+            39.171,
+            36.429,
+            39.449,
+            32.436,
+            37.168,
+            34.031,
+            31.644,
+            37.624,
+            39.783,
+            38.258,
+            39.938,
+            43.423,
+            33.46
+          ]
+        }
+      },
+      "htms": {
+        "script": {
+          "median": 10.642,
+          "mean": 10.6594,
+          "stddev": 0.1830533879968979,
+          "min": 10.388,
+          "max": 11.072,
+          "samples": [
+            10.644,
+            10.479,
+            11.072,
+            10.388,
+            10.744,
+            10.635,
+            10.642,
+            10.682,
+            10.82,
+            10.597,
+            10.891,
+            10.597,
+            10.456,
+            10.46,
+            10.784
+          ]
+        },
+        "fcp": {
+          "median": 38.556,
+          "mean": 38.18246666666667,
+          "stddev": 2.864604407160579,
+          "min": 31.711,
+          "max": 43.464,
+          "samples": [
+            40.764,
+            37.456,
+            38.58,
+            36.476,
+            38.829,
+            40.1,
+            40.641,
+            38.506,
+            43.464,
+            36.117,
+            34.016,
+            39.802,
+            37.719,
+            31.711,
+            38.556
+          ]
+        }
+      }
+    },
+    "memory": {
+      "htms-original": {
+        "ready": 1.7162094116210938,
+        "run1k": 2.3279953002929688,
+        "clear": 1.9928627014160156
+      },
+      "htms-af0": {
+        "ready": 1.7167320251464844,
+        "run1k": 2.3590774536132812,
+        "clear": 2.2431793212890625
+      },
+      "htms": {
+        "ready": 1.7245368957519531,
+        "run1k": 2.398242950439453,
+        "clear": 2.1291542053222656
+      }
+    }
+  },
+  "confirmation": {
+    "file": "block-creation-confirmation.json",
+    "environment": {
+      "browser": "Chromium 141.0.7390.37",
+      "os": "Darwin 25.3.0 arm64",
+      "cpu": "Apple M2 Max",
+      "cores": 12,
+      "node": "v25.2.1",
+      "timeZone": "Australia/Brisbane",
+      "htmsRevision": "af0aa09191ed42c1d719fa939b98a9a67d1014a8",
+      "runs": 31
+    },
+    "operationSamples": 372,
+    "comparisons": {
+      "htms-original": {
+        "operations": {
+          "run10k": {
+            "rounds": 31,
+            "samplesPerRevision": 62,
+            "beforeMedian": 465.69899999999996,
+            "afterMedian": 460.4785,
+            "medianPercentChange": -1.1210030513271407,
+            "beforeMean": 473.53848387096775,
+            "afterMean": 462.77112903225805,
+            "pairedMeanDifference": -10.767354838709686,
+            "pairedMean95PercentTInterval": [
+              -19.197870740443506,
+              -2.336838936975864
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -13.83499999999998,
+              0.08699999999998909
+            ]
+          },
+          "clear": {
+            "rounds": 31,
+            "samplesPerRevision": 62,
+            "beforeMedian": 20.4095,
+            "afterMedian": 18.3915,
+            "medianPercentChange": -9.887552365320074,
+            "beforeMean": 20.650483870967744,
+            "afterMean": 18.495274193548386,
+            "pairedMeanDifference": -2.1552096774193545,
+            "pairedMean95PercentTInterval": [
+              -2.550017327569759,
+              -1.7604020272689502
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -2.6065000000000005,
+              -1.5670000000000002
+            ]
+          }
+        },
+        "medianGeometricRatio": 0.9439400634948683
+      },
+      "htms-af0": {
+        "operations": {
+          "run10k": {
+            "rounds": 31,
+            "samplesPerRevision": 62,
+            "beforeMedian": 478.207,
+            "afterMedian": 460.4785,
+            "medianPercentChange": -3.707285757004808,
+            "beforeMean": 481.3196612903226,
+            "afterMean": 462.77112903225805,
+            "pairedMeanDifference": -18.548532258064522,
+            "pairedMean95PercentTInterval": [
+              -25.138159739466712,
+              -11.958904776662333
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -27.096000000000004,
+              -12.184000000000026
+            ]
+          },
+          "clear": {
+            "rounds": 31,
+            "samplesPerRevision": 62,
+            "beforeMedian": 19.3995,
+            "afterMedian": 18.3915,
+            "medianPercentChange": -5.19601020644862,
+            "beforeMean": 19.36996774193548,
+            "afterMean": 18.495274193548386,
+            "pairedMeanDifference": -0.8746935483870967,
+            "pairedMean95PercentTInterval": [
+              -1.2719621726802401,
+              -0.47742492409395315
+            ],
+            "pairedBootstrapMedian95PercentInterval": [
+              -1.5769999999999982,
+              -0.4755000000000038
+            ]
+          }
+        },
+        "medianGeometricRatio": 0.9554545252541471
+      }
+    },
+    "scriptMedians": {
+      "run10k": {
+        "htms-original": 39.985,
+        "htms-af0": 46.442,
+        "htms": 40.909,
+        "htms-copy": 41.409,
+        "htms-af0-copy": 47.443,
+        "htms-original-copy": 40.354
+      },
+      "clear": {
+        "htms-original": 16.884,
+        "htms-af0": 15.553,
+        "htms": 15.771,
+        "htms-copy": 15.632,
+        "htms-af0-copy": 15.944,
+        "htms-original-copy": 16.652
+      }
+    },
+    "memory": {
+      "htms-original": {
+        "ready": 1.7275657653808594,
+        "run1k": 2.327167510986328,
+        "clear": 1.9929733276367188
+      },
+      "htms-af0": {
+        "ready": 1.7277870178222656,
+        "run1k": 2.3585853576660156,
+        "clear": 2.243072509765625
+      },
+      "htms": {
+        "ready": 1.7245368957519531,
+        "run1k": 2.397502899169922,
+        "clear": 2.129100799560547
+      },
+      "htms-copy": {
+        "ready": 1.7176589965820312,
+        "run1k": 2.3976402282714844,
+        "clear": 2.129138946533203
+      },
+      "htms-af0-copy": {
+        "ready": 1.716461181640625,
+        "run1k": 2.3582916259765625,
+        "clear": 2.243144989013672
+      },
+      "htms-original-copy": {
+        "ready": 1.715087890625,
+        "run1k": 2.3272361755371094,
+        "clear": 1.9929351806640625
+      }
+    }
+  }
+}

@@ -26,12 +26,15 @@ type ShapeElement = Extract<TemplateShapeNode, { kind: 'element' }>;
 
 const WHITESPACE_TAGS = new Set(['pre', 'textarea', 'listing']);
 
-// The HTML the block compiler builds its template from. Dynamic text is a
-// placeholder space and raw-text content is emitted verbatim.
+// The HTML the block compiler builds its template from. Dynamic text uses a
+// placeholder unless an initializer constructs it directly. Raw-text
+// content is emitted verbatim.
 export function templateNodeHtml(
   node: TemplateShapeNode,
-  parent: ShapeElement | null
+  parent: ShapeElement | null,
+  omit?: (node: TemplateShapeNode) => boolean
 ): string {
+  if (omit?.(node)) return '';
   if (node.kind === 'comment') {
     return `<!--${node.data}-->`;
   }
@@ -49,7 +52,7 @@ export function templateNodeHtml(
     return `<${node.tag}${attrs}>`;
   }
   let children = node.children
-    .map((child) => templateNodeHtml(child, node))
+    .map((child) => templateNodeHtml(child, node, omit))
     .join('');
   const first = node.children[0];
   if (

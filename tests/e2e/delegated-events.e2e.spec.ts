@@ -15,6 +15,7 @@ test('delegated row events retain their context after garbage collection', async
       <var name="seen" value="''" mutable="true"></var>
       <div><repeat variable="items" item="row" index="i" key="row.id">
         <button data-id="{row.id}" on:click="seen = row.label + ':' + i" on:keydown="seen = event.key + ':' + row.label">{row.label}</button>
+        <button class="second" data-row="{row.id}" on:click="seen = event.currentTarget.className + ':' + row.label + ':' + i">second</button>
       </repeat></div>
       <p>{seen}</p>
     </component>`,
@@ -52,4 +53,6 @@ test('delegated row events retain their context after garbage collection', async
     node.dispatchEvent(new KeyboardEvent('keydown', { key: 'X' }));
   });
   await expect(component.locator('p')).toHaveText('X:new');
+  await component.locator('button[data-row="1"]').click();
+  await expect(component.locator('p')).toHaveText('second:new:1');
 });

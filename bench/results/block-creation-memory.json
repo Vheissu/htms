@@ -1,0 +1,154 @@
+{
+  "note": "Separate GC/retention and deterministic DOM-equivalence diagnostics; these are not benchmark timings.",
+  "records": [
+    {
+      "app": "htms-original",
+      "cycles": 0,
+      "heapBytes": 722700,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 6,
+      "heapBytes": 1620052,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 30,
+      "heapBytes": 1635480,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 90,
+      "heapBytes": 1688600,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-af0",
+      "cycles": 0,
+      "heapBytes": 722964,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-af0",
+      "cycles": 6,
+      "heapBytes": 1747788,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-af0",
+      "cycles": 30,
+      "heapBytes": 1767068,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-af0",
+      "cycles": 90,
+      "heapBytes": 1951432,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 0,
+      "heapBytes": 723936,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 6,
+      "heapBytes": 1689856,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 30,
+      "heapBytes": 1705748,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 90,
+      "heapBytes": 1830416,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    }
+  ],
+  "domEquivalence": [
+    {
+      "app": "htms-original",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    },
+    {
+      "app": "htms-af0",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    },
+    {
+      "app": "htms",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    }
+  ]
+}

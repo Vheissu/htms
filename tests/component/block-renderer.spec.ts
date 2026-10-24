@@ -370,7 +370,166 @@ describe('block renderer', () => {
     observer.disconnect();
   });
 
+  it('initializes repeated text once and retains empty and object Text nodes', async () => {
+    const element = await mountComponent(`
+      <var name="items" value="[]" mutable="true"></var>
+      <div><repeat variable="items" item="row" key="row.id"><p>{row.label}</p></repeat></div>
+    `);
+    let value: string | null = null;
+    let reads = 0;
+    let strings = 0;
+    const label = {
+      text: 'first',
+      toString(): string {
+        strings++;
+        return this.text;
+      },
+    };
+    element.items = [
+      {
+        id: 1,
+        get label(): string | null {
+          reads++;
+          return value;
+        },
+      },
+      { id: 2, label },
+    ];
+    await element.updateComplete;
+    const paragraphs = element.shadowRoot.querySelectorAll('p');
+    const empty = paragraphs[0].firstChild;
+    const object = paragraphs[1].firstChild;
+    expect(empty?.nodeType).toBe(Node.TEXT_NODE);
+    expect(empty?.textContent).toBe('');
+    expect(object?.textContent).toBe('first');
+    expect(reads).toBe(1);
+    expect(strings).toBe(1);
+
+    value = 'next';
+    label.text = 'second';
+    await element.requestUpdate();
+    expect(paragraphs[0].firstChild).toBe(empty);
+    expect(paragraphs[1].firstChild).toBe(object);
+    expect(empty?.textContent).toBe('next');
+    expect(object?.textContent).toBe('second');
+    expect(reads).toBe(2);
+    expect(strings).toBe(2);
+  });
+
   describe('delegated events', () => {
+    it('routes form and select events alongside ordinary element handlers', async () => {
+      const element = await mountComponent(`
+        <var name="seen" value="''" mutable="true"></var>
+        <form on:change="seen += 'form'">
+          <input name="localName">
+          <select on:change="seen += 'select'" on:keydown="seen = event.key + ':' + event.currentTarget.localName">
+            <option>A</option><option>B</option>
+          </select>
+          <button type="button" on:click="seen = 'button'">choose</button>
+        </form>
+        <p>{seen}</p>
+      `);
+      const select = query<HTMLSelectElement>(element, 'select');
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('selectform');
+      select.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+      );
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('Enter:select');
+      await click(element, 'button');
+      expect(query(element, 'p').textContent).toBe('button');
+      element.seen = '';
+      await element.updateComplete;
+      select.dispatchEvent(new Event('change'));
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('select');
+    });
+
+    it('keeps only the last delegated handler for an element and event', async () => {
+      const element = await mountComponent(`
+        <var name="log" value="''" mutable="true"></var>
+        <button id="choose" on:click="log += 'attribute'">choose</button>
+        <event target="#choose" type="click"><set name="log" op="+=" expr="'directive'"></set></event>
+        <p>{log}</p>
+      `);
+      await click(element, '#choose');
+      expect(query(element, 'p').textContent).toBe('directive');
+    });
+
+    it('keeps separate handlers on a row in sync after replacement', async () => {
+      const element = await mountComponent(`
+        <var name="items" value='[{"id":1,"label":"old"}]' mutable="true"></var>
+        <var name="seen" value="''" mutable="true"></var>
+        <div><repeat variable="items" item="row" index="i" key="row.id">
+          <button class="first" on:click="seen = row.label + ':' + i">first</button>
+          <button class="second" on:click="seen = event.currentTarget.className + ':' + row.label">second</button>
+        </repeat></div>
+        <p>{seen}</p>
+      `);
+      const first = query(element, '.first');
+      const second = query(element, '.second');
+      element.items = [
+        { id: 2, label: 'other' },
+        { id: 1, label: 'new' },
+      ];
+      await element.updateComplete;
+      first.click();
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('new:1');
+      second.click();
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('second:new');
+    });
+
+    it('updates event-only ancestor variables through retained nested blocks', async () => {
+      const element = await mountComponent(`
+        <var name="groups" value="[]" mutable="true"></var>
+        <var name="seen" value="''" mutable="true"></var>
+        <div><repeat variable="groups" item="group" index="g" key="group.id">
+          <section if="group.visible">
+            <repeat variable="group.items" item="entry" index="e" key="entry.id">
+              <button on:click="seen = group.label + ':' + g + ':' + entry.label + ':' + e">choose</button>
+            </repeat>
+          </section>
+        </repeat></div>
+        <p>{seen}</p>
+      `);
+      const entries = [{ id: 1, label: 'child' }];
+      const first = { id: 1, label: 'old', visible: true, items: entries };
+      const other = { id: 2, label: 'other', visible: true, items: [] };
+      element.groups = [first, other];
+      await element.updateComplete;
+      const button = query(element, 'button');
+      element.groups = [other, first];
+      await element.updateComplete;
+      button.click();
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('old:1:child:0');
+      element.groups = [other, { ...first, label: 'new' }];
+      await element.updateComplete;
+      expect(query(element, 'button')).toBe(button);
+      button.click();
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('new:1:child:0');
+    });
+
+    it('keeps element-scoped event directives attached to their scope', async () => {
+      const element = await mountComponent(`
+        <var name="items" value='[{"id":1}]' mutable="true"></var>
+        <var name="seen" value="''" mutable="true"></var>
+        <div><repeat variable="items" item="row" key="row.id">
+          <section><button>choose</button><p>scope</p>
+            <event target="button" type="click"><set name="seen" expr="$('p').textContent + ':' + row.id"></set></event>
+          </section>
+        </repeat></div>
+        <output>{seen}</output>
+      `);
+      await click(element, 'button');
+      expect(query(element, 'output').textContent).toBe('scope:1');
+    });
+
     it('shares a node context across event types after keyed row updates', async () => {
       const element = await mountComponent(`
         <var name="items" value='[{"id":1,"label":"old"},{"id":2,"label":"other"}]' mutable="true"></var>
@@ -465,6 +624,22 @@ describe('block renderer', () => {
       await (element.querySelector(tag) as MountedComponent).updateComplete;
       expect(button.textContent).toBe('1');
       expect(element.querySelector('p')?.textContent).toBe('1');
+    });
+
+    it('distinguishes nested instances of the same light-DOM component', async () => {
+      const outer = await mountComponent(
+        `<var name="count" value="0" mutable="true"></var>
+         <div on:click="count++"><button>click</button></div><p>{count}</p>`,
+        'shadow="none"'
+      );
+      const inner = document.createElement(outer.localName) as MountedComponent;
+      outer.querySelector('div')?.appendChild(inner);
+      await inner.updateComplete;
+      inner.querySelector<HTMLButtonElement>('button')?.click();
+      await inner.updateComplete;
+      await outer.updateComplete;
+      expect(inner.count).toBe(1);
+      expect(outer.count).toBe(1);
     });
 
     it('stops listening when disconnected', async () => {
