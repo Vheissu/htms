@@ -1,0 +1,303 @@
+{
+  "date": "2026-10-24T07:30:55.508Z",
+  "environment": {
+    "browser": "Chromium 141.0.7390.37",
+    "os": "Darwin 25.3.0 arm64",
+    "cpu": "Apple M2 Max",
+    "cores": 12,
+    "node": "v25.2.1",
+    "timeZone": "Australia/Brisbane",
+    "htmsRevision": "39e2de6795e79edaae361a5e73815e0002f935c0",
+    "runs": 7
+  },
+  "operations": [
+    {
+      "id": "update10th",
+      "name": "partial update",
+      "description": "updating every 10th row of 1,000 (4x CPU slowdown)",
+      "throttle": 4
+    },
+    {
+      "id": "select",
+      "name": "select row",
+      "description": "highlighting a selected row (4x CPU slowdown)",
+      "throttle": 4
+    },
+    {
+      "id": "clear",
+      "name": "clear rows",
+      "description": "clearing 1,000 rows (4x CPU slowdown)",
+      "throttle": 4
+    }
+  ],
+  "apps": {
+    "htms-legacy": {
+      "label": "HTMS (reconciler)",
+      "size": {
+        "label": "HTMS (reconciler)",
+        "minified": 16923,
+        "gzip": 4853,
+        "brotli": 4263
+      },
+      "timings": {
+        "update10th": {
+          "median": 173.435,
+          "mean": 173.12214285714285,
+          "stddev": 6.352589089722173,
+          "min": 162.625,
+          "max": 180.673,
+          "samples": [
+            180.673,
+            171.939,
+            162.625,
+            177.876,
+            167.634,
+            177.673,
+            173.435
+          ],
+          "script": 158.33
+        },
+        "select": {
+          "median": 135.813,
+          "mean": 139.2942857142857,
+          "stddev": 8.870979421955722,
+          "min": 131.532,
+          "max": 156.51,
+          "samples": [
+            135.577,
+            131.532,
+            145.818,
+            156.51,
+            135.813,
+            132.843,
+            136.967
+          ],
+          "script": 127.78
+        },
+        "clear": {
+          "median": 25.623,
+          "mean": 25.834571428571426,
+          "stddev": 1.6113675203733897,
+          "min": 23.752,
+          "max": 28.465,
+          "samples": [
+            25.623,
+            25.185,
+            28.465,
+            23.752,
+            26.399,
+            24.385,
+            27.033
+          ],
+          "script": 23.374
+        }
+      },
+      "memory": {
+        "ready": 1.7349777221679688,
+        "run1k": 3.598186492919922,
+        "clear": 2.1008377075195312
+      }
+    },
+    "htms-legacy-empty": {
+      "label": "htms-legacy-empty",
+      "size": {
+        "label": "htms-legacy-empty",
+        "minified": 16982,
+        "gzip": 4877,
+        "brotli": 4295
+      },
+      "timings": {
+        "update10th": {
+          "median": 153.895,
+          "mean": 153.533,
+          "stddev": 5.936013617459673,
+          "min": 142.85,
+          "max": 160.706,
+          "samples": [
+            153.895,
+            157.102,
+            149.298,
+            160.706,
+            142.85,
+            157.41,
+            153.47
+          ],
+          "script": 139.874
+        },
+        "select": {
+          "median": 135.508,
+          "mean": 135.91057142857144,
+          "stddev": 2.662504263354516,
+          "min": 132.551,
+          "max": 139.703,
+          "samples": [
+            139.703,
+            138.107,
+            134.512,
+            133.308,
+            137.685,
+            132.551,
+            135.508
+          ],
+          "script": 126.218
+        },
+        "clear": {
+          "median": 20.641,
+          "mean": 20.885142857142856,
+          "stddev": 0.8072546951595531,
+          "min": 19.994,
+          "max": 22.076,
+          "samples": [
+            21.307,
+            19.994,
+            21.644,
+            20.641,
+            22.076,
+            20.022,
+            20.512
+          ],
+          "script": 18.572
+        }
+      },
+      "memory": {
+        "ready": 1.7504196166992188,
+        "run1k": 3.5988197326660156,
+        "clear": 2.081768035888672
+      }
+    },
+    "htms-legacy-lazy": {
+      "label": "htms-legacy-lazy",
+      "size": {
+        "label": "htms-legacy-lazy",
+        "minified": 17008,
+        "gzip": 4888,
+        "brotli": 4304
+      },
+      "timings": {
+        "update10th": {
+          "median": 157.521,
+          "mean": 157.93585714285715,
+          "stddev": 2.8835856977364918,
+          "min": 154.744,
+          "max": 161.826,
+          "samples": [
+            156.066,
+            154.744,
+            160.938,
+            161.826,
+            154.895,
+            157.521,
+            159.561
+          ],
+          "script": 143.043
+        },
+        "select": {
+          "median": 126.762,
+          "mean": 129.16328571428568,
+          "stddev": 5.986137561463307,
+          "min": 123.396,
+          "max": 138.689,
+          "samples": [
+            131.042,
+            135.296,
+            124.804,
+            123.396,
+            138.689,
+            126.762,
+            124.154
+          ],
+          "script": 117.849
+        },
+        "clear": {
+          "median": 20.586,
+          "mean": 20.381714285714285,
+          "stddev": 0.44778406785924396,
+          "min": 19.464,
+          "max": 20.827,
+          "samples": [
+            20.586,
+            19.464,
+            20.197,
+            20.589,
+            20.422,
+            20.827,
+            20.587
+          ],
+          "script": 18.448
+        }
+      },
+      "memory": {
+        "ready": 1.7503433227539062,
+        "run1k": 3.5985794067382812,
+        "clear": 2.082225799560547
+      }
+    },
+    "htms-legacy-attrs": {
+      "label": "htms-legacy-attrs",
+      "size": {
+        "label": "htms-legacy-attrs",
+        "minified": 17089,
+        "gzip": 4913,
+        "brotli": 4339
+      },
+      "timings": {
+        "update10th": {
+          "median": 140.99,
+          "mean": 140.46685714285715,
+          "stddev": 9.444136336524224,
+          "min": 130.779,
+          "max": 159.209,
+          "samples": [
+            136.869,
+            140.99,
+            159.209,
+            131.898,
+            141.635,
+            141.888,
+            130.779
+          ],
+          "script": 125.838
+        },
+        "select": {
+          "median": 115.644,
+          "mean": 118.61457142857144,
+          "stddev": 10.066699655417407,
+          "min": 109.943,
+          "max": 140.596,
+          "samples": [
+            116.668,
+            109.943,
+            140.596,
+            115.434,
+            118.591,
+            113.426,
+            115.644
+          ],
+          "script": 106.851
+        },
+        "clear": {
+          "median": 20.764,
+          "mean": 21.15,
+          "stddev": 1.118982722535666,
+          "min": 19.957,
+          "max": 22.798,
+          "samples": [
+            22.798,
+            20.764,
+            21.394,
+            20.19,
+            22.482,
+            19.957,
+            20.465
+          ],
+          "script": 18.416
+        }
+      },
+      "memory": {
+        "ready": 1.7490577697753906,
+        "run1k": 3.466033935546875,
+        "clear": 2.083362579345703
+      }
+    }
+  }
+}

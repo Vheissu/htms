@@ -1,0 +1,414 @@
+{
+  "beforeRevision": "39e2de6795e79edaae361a5e73815e0002f935c0",
+  "candidateSourceSHA256": "a4958cd2db13589f4e48e8d6f528ec8d7da083032d7f5f2bfc65005375632b46",
+  "bundles": {
+    "before": "3da57e7717447e627d7379f3cb8e8dca8bdfdcf21d868ea1f119fe0ec9c4edf6",
+    "after": "2a2e4fcb63932ff0a4a3831a5798e87661752d92010dd899f63385e00645acce",
+    "unchangedDefault": "b500dae90d294e9e461fbd9931a4223ea407c289f61199d907a60aeca687eef8"
+  },
+  "method": "Paired differences follow run order. Mirrored rounds average two samples per revision. Mean interval uses t(.975,n-1); median interval resamples complete paired rounds, preserving copies. 20000 bootstrap draws per operation; LCG seed 0x172431, operations processed in file order.",
+  "confirmation": {
+    "file": "reconciler-confirmation.json",
+    "environment": {
+      "browser": "Chromium 141.0.7390.37",
+      "os": "Darwin 25.3.0 arm64",
+      "cpu": "Apple M2 Max",
+      "cores": 12,
+      "node": "v25.2.1",
+      "timeZone": "Australia/Brisbane",
+      "htmsRevision": "39e2de6795e79edaae361a5e73815e0002f935c0",
+      "runs": 31
+    },
+    "operationSamples": 372,
+    "operations": {
+      "update10th": {
+        "rounds": 31,
+        "samplesPerRevision": 62,
+        "beforeMedian": 229.69650000000001,
+        "afterMedian": 194.07600000000002,
+        "beforeMean": 228.89317741935483,
+        "afterMean": 195.80330645161283,
+        "pairedMeanDifference": -33.08987096774193,
+        "pairedMean95PercentTInterval": [
+          -37.672401148946555,
+          -28.507340786537306
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -40.43099999999998,
+          -29.258999999999986
+        ],
+        "scriptMedians": {
+          "htms-legacy": 170.583,
+          "htms-legacy-base": 205.284,
+          "htms-legacy-base-copy": 208.581,
+          "htms-legacy-copy": 173.008
+        },
+        "medianPercentChange": -15.507637251764827
+      },
+      "select": {
+        "rounds": 31,
+        "samplesPerRevision": 62,
+        "beforeMedian": 188.3685,
+        "afterMedian": 158.5455,
+        "beforeMean": 185.83553225806452,
+        "afterMean": 155.67037096774192,
+        "pairedMeanDifference": -30.165161290322583,
+        "pairedMean95PercentTInterval": [
+          -34.55796248451199,
+          -25.772360096133173
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -35.42050000000003,
+          -25.372000000000014
+        ],
+        "scriptMedians": {
+          "htms-legacy": 146.957,
+          "htms-legacy-base": 177.577,
+          "htms-legacy-base-copy": 176.658,
+          "htms-legacy-copy": 145.921
+        },
+        "medianPercentChange": -15.832264948757357
+      },
+      "clear": {
+        "rounds": 31,
+        "samplesPerRevision": 62,
+        "beforeMedian": 26.4255,
+        "afterMedian": 20.6585,
+        "beforeMean": 26.349112903225805,
+        "afterMean": 20.597822580645158,
+        "pairedMeanDifference": -5.751290322580646,
+        "pairedMean95PercentTInterval": [
+          -6.322276780512307,
+          -5.180303864648985
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -6.0045,
+          -5.014499999999998
+        ],
+        "scriptMedians": {
+          "htms-legacy": 18.424,
+          "htms-legacy-base": 23.727,
+          "htms-legacy-base-copy": 24.411,
+          "htms-legacy-copy": 18.563
+        },
+        "medianPercentChange": -21.823617339312406
+      }
+    }
+  },
+  "full": {
+    "file": "reconciler-results.json",
+    "environment": {
+      "browser": "Chromium 141.0.7390.37",
+      "os": "Darwin 25.3.0 arm64",
+      "cpu": "Apple M2 Max",
+      "cores": 12,
+      "node": "v25.2.1",
+      "timeZone": "Australia/Brisbane",
+      "htmsRevision": "8378a32938f41d603afb32e46c4494234227147e",
+      "runs": 15
+    },
+    "operationSamples": 270,
+    "operations": {
+      "run1k": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 50.045,
+        "afterMedian": 48.217,
+        "beforeMean": 49.95913333333333,
+        "afterMean": 48.297066666666666,
+        "pairedMeanDifference": -1.662066666666666,
+        "pairedMean95PercentTInterval": [
+          -2.615078717913114,
+          -0.7090546154202181
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -3.0450000000000017,
+          -0.036000000000001364
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 43.817,
+          "htms-legacy": 42.04
+        },
+        "medianPercentChange": -3.65271255869718
+      },
+      "replace1k": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 59.011,
+        "afterMedian": 59.813,
+        "beforeMean": 59.34239999999999,
+        "afterMean": 60.34146666666667,
+        "pairedMeanDifference": 0.9990666666666674,
+        "pairedMean95PercentTInterval": [
+          -0.2476133748760021,
+          2.245746708209337
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -0.5720000000000027,
+          2.853999999999999
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 51.695,
+          "htms-legacy": 52.187
+        },
+        "medianPercentChange": 1.3590686482181313
+      },
+      "update10th": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 168.19,
+        "afterMedian": 142.085,
+        "beforeMean": 169.326,
+        "afterMean": 143.85446666666667,
+        "pairedMeanDifference": -25.471533333333337,
+        "pairedMean95PercentTInterval": [
+          -29.71818062366296,
+          -21.224886043003714
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -31.905,
+          -18.326999999999998
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 152.637,
+          "htms-legacy": 126.439
+        },
+        "medianPercentChange": -15.521136809560609
+      },
+      "select": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 137.635,
+        "afterMedian": 113.507,
+        "beforeMean": 137.16233333333332,
+        "afterMean": 114.34740000000001,
+        "pairedMeanDifference": -22.81493333333333,
+        "pairedMean95PercentTInterval": [
+          -28.149673712142285,
+          -17.480192954524373
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -27.605000000000004,
+          -16.865999999999985
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 128.883,
+          "htms-legacy": 104.914
+        },
+        "medianPercentChange": -17.530424673956468
+      },
+      "swap": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 358.13,
+        "afterMedian": 319.052,
+        "beforeMean": 359.1439333333334,
+        "afterMean": 324.3418,
+        "pairedMeanDifference": -34.80213333333333,
+        "pairedMean95PercentTInterval": [
+          -45.24554870898122,
+          -24.358717957685446
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -47.63199999999995,
+          -24.091999999999985
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 308.869,
+          "htms-legacy": 274.371
+        },
+        "medianPercentChange": -10.911680116158928
+      },
+      "remove": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 160.885,
+        "afterMedian": 153.59,
+        "beforeMean": 158.50006666666667,
+        "afterMean": 152.8774,
+        "pairedMeanDifference": -5.622666666666665,
+        "pairedMean95PercentTInterval": [
+          -9.157631426264146,
+          -2.0877019070691833
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -10.607,
+          -3.076999999999998
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 75.761,
+          "htms-legacy": 64.931
+        },
+        "medianPercentChange": -4.53429468253721
+      },
+      "run10k": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 515.774,
+        "afterMedian": 483.728,
+        "beforeMean": 517.7144666666666,
+        "afterMean": 486.54493333333335,
+        "pairedMeanDifference": -31.169533333333327,
+        "pairedMean95PercentTInterval": [
+          -42.39846398160222,
+          -19.940602685064437
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -41.988,
+          -20.819000000000017
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 419.803,
+          "htms-legacy": 403.418
+        },
+        "medianPercentChange": -6.213186395591864
+      },
+      "append1k": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 198.465,
+        "afterMedian": 174.759,
+        "beforeMean": 195.59533333333331,
+        "afterMean": 175.1319333333333,
+        "pairedMeanDifference": -20.4634,
+        "pairedMean95PercentTInterval": [
+          -25.73703104390733,
+          -15.189768956092673
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -28.331000000000017,
+          -16.19399999999999
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 171.408,
+          "htms-legacy": 148.008
+        },
+        "medianPercentChange": -11.944675383568903
+      },
+      "clear": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 25.968,
+        "afterMedian": 20.078,
+        "beforeMean": 25.77106666666667,
+        "afterMean": 20.5942,
+        "pairedMeanDifference": -5.176866666666666,
+        "pairedMean95PercentTInterval": [
+          -6.390758131242763,
+          -3.9629752020905693
+        ],
+        "pairedGroupBootstrapMedian95PercentInterval": [
+          -7.203999999999997,
+          -3.8640000000000008
+        ],
+        "scriptMedians": {
+          "htms-legacy-base": 23.448,
+          "htms-legacy": 18.181
+        },
+        "medianPercentChange": -22.681762168823173
+      }
+    },
+    "startup": {
+      "htms-legacy-base": {
+        "script": {
+          "median": 8.414,
+          "mean": 8.426533333333335,
+          "stddev": 0.2012130593129959,
+          "min": 8.107,
+          "max": 8.969,
+          "samples": [
+            8.969,
+            8.294,
+            8.473,
+            8.499,
+            8.3,
+            8.107,
+            8.414,
+            8.546,
+            8.323,
+            8.459,
+            8.172,
+            8.566,
+            8.334,
+            8.414,
+            8.528
+          ]
+        },
+        "fcp": {
+          "median": 35.533,
+          "mean": 36.8018,
+          "stddev": 5.098136749272789,
+          "min": 27.896,
+          "max": 43.301,
+          "samples": [
+            34.608,
+            42.583,
+            36.417,
+            42.698,
+            34.681,
+            35.387,
+            42.746,
+            43.121,
+            28.259,
+            36.105,
+            34.714,
+            33.978,
+            27.896,
+            35.533,
+            43.301
+          ]
+        }
+      },
+      "htms-legacy": {
+        "script": {
+          "median": 8.623,
+          "mean": 8.5678,
+          "stddev": 0.20991467654399823,
+          "min": 8.153,
+          "max": 8.863,
+          "samples": [
+            8.457,
+            8.558,
+            8.449,
+            8.153,
+            8.25,
+            8.75,
+            8.648,
+            8.693,
+            8.623,
+            8.863,
+            8.73,
+            8.632,
+            8.318,
+            8.848,
+            8.545
+          ]
+        },
+        "fcp": {
+          "median": 35.019,
+          "mean": 36.287400000000005,
+          "stddev": 3.5769265897654963,
+          "min": 33.402,
+          "max": 44.144,
+          "samples": [
+            35.019,
+            42.817,
+            34.706,
+            33.402,
+            35.206,
+            34.979,
+            35.276,
+            36.776,
+            35.153,
+            34.493,
+            33.501,
+            33.531,
+            44.144,
+            33.496,
+            41.812
+          ]
+        }
+      }
+    }
+  }
+}

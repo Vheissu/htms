@@ -50,6 +50,9 @@ compares the selection optimization with a retained build of the preceding
 revision, measured alongside the frameworks in the same run.
 The [swap follow-up](results/swaps-2026-10-24.md) profiles DOM moves and
 compares native moves with the previous renderer.
+The [reconciler investigation](results/reconciler-2026-10-24.md) measures
+allocation reductions in the fallback renderer. The default block-renderer
+bundle is unchanged in that comparison.
 
 ## Compiler and effect registration
 

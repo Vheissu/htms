@@ -1,0 +1,94 @@
+{
+  "browser": "141.0.7390.37",
+  "note": "Separate instrumented diagnostics count calls/allocations; these are not benchmark timings.",
+  "bundles": {
+    "before": "3da57e7717447e627d7379f3cb8e8dca8bdfdcf21d868ea1f119fe0ec9c4edf6",
+    "after": "2a2e4fcb63932ff0a4a3831a5798e87661752d92010dd899f63385e00645acce"
+  },
+  "records": [
+    {
+      "app": "htms-legacy-base",
+      "op": "select",
+      "counts": {
+        "maps": 16046,
+        "arrayFromCalls": 24069,
+        "attributeSnapshots": 8022,
+        "allocatedAttributeSnapshots": 8022,
+        "reconcileCalls": 8023,
+        "emptySourceLists": 2001,
+        "removeChildCalls": 0,
+        "textContentWrites": 0
+      }
+    },
+    {
+      "app": "htms-legacy-base",
+      "op": "update10th",
+      "counts": {
+        "maps": 16046,
+        "arrayFromCalls": 24069,
+        "attributeSnapshots": 8022,
+        "allocatedAttributeSnapshots": 8022,
+        "reconcileCalls": 8023,
+        "emptySourceLists": 2001,
+        "removeChildCalls": 0,
+        "textContentWrites": 0
+      }
+    },
+    {
+      "app": "htms-legacy-base",
+      "op": "clear",
+      "counts": {
+        "maps": 46,
+        "arrayFromCalls": 69,
+        "attributeSnapshots": 22,
+        "allocatedAttributeSnapshots": 22,
+        "reconcileCalls": 23,
+        "emptySourceLists": 2,
+        "removeChildCalls": 1000,
+        "textContentWrites": 0
+      }
+    },
+    {
+      "app": "htms-legacy",
+      "op": "select",
+      "counts": {
+        "maps": 7,
+        "arrayFromCalls": 12045,
+        "attributeSnapshots": 8022,
+        "allocatedAttributeSnapshots": 6020,
+        "reconcileCalls": 8023,
+        "emptySourceLists": 2001,
+        "removeChildCalls": 0,
+        "textContentWrites": 0
+      }
+    },
+    {
+      "app": "htms-legacy",
+      "op": "update10th",
+      "counts": {
+        "maps": 7,
+        "arrayFromCalls": 12045,
+        "attributeSnapshots": 8022,
+        "allocatedAttributeSnapshots": 6020,
+        "reconcileCalls": 8023,
+        "emptySourceLists": 2001,
+        "removeChildCalls": 0,
+        "textContentWrites": 0
+      }
+    },
+    {
+      "app": "htms-legacy",
+      "op": "clear",
+      "counts": {
+        "maps": 6,
+        "arrayFromCalls": 43,
+        "attributeSnapshots": 22,
+        "allocatedAttributeSnapshots": 20,
+        "reconcileCalls": 23,
+        "emptySourceLists": 2,
+        "removeChildCalls": 0,
+        "textContentWrites": 1
+      }
+    }
+  ]
+}
