@@ -1506,7 +1506,8 @@ function buildComponentClass(
   }
 
   __htmsApplyProperties(target, source) {
-    const properties = source.__htmsProperties || [];
+    const properties = source.__htmsProperties;
+    if (!properties) return;
     for (const property of properties) {
       let receiver = target;
       for (const segment of property.path.slice(0, -1)) {
@@ -1543,13 +1544,13 @@ function buildComponentClass(
       const key = source.getAttribute('data-key');
       const id = source.id;
       if (key !== null) {
-        const candidate = keyedTargets.get(key);
+        const candidate = keyedTargets && keyedTargets.get(key);
         if (this.__htmsNodesMatch(candidate, source)) {
           keyedTargets.delete(key);
           return candidate;
         }
       } else if (id) {
-        const candidate = idTargets.get(id);
+        const candidate = idTargets && idTargets.get(id);
         if (this.__htmsNodesMatch(candidate, source)) {
           idTargets.delete(id);
           return candidate;
@@ -1560,8 +1561,12 @@ function buildComponentClass(
   }
 
   __htmsAttributeSnapshot(node) {
+    const attrs = node.attributes;
+    // null is a recorded empty snapshot; undefined means not adopted yet.
+    if (attrs.length === 0) return null;
     const snapshot = Object.create(null);
-    for (const attr of Array.from(node.attributes)) {
+    for (let i = 0; i < attrs.length; i++) {
+      const attr = attrs[i];
       snapshot[attr.name] = attr.value;
     }
     return snapshot;
@@ -1580,11 +1585,11 @@ function buildComponentClass(
   __htmsSyncAttributes(target, source) {
     const next = this.__htmsAttributeSnapshot(source);
     const previous = target.__htmsAttrs;
-    if (!previous) {
+    if (previous === undefined) {
       // First sync of an adopted node (server-rendered markup): match the
       // rendered output exactly.
       Array.from(target.attributes).forEach(attr => {
-        if (!(attr.name in next)) {
+        if (!next || !(attr.name in next)) {
           target.removeAttribute(attr.name);
         }
       });
@@ -1598,12 +1603,12 @@ function buildComponentClass(
       // browser or other code changed (an opened <details>, a class added by
       // a library) survive unrelated re-renders.
       for (const name in previous) {
-        if (!(name in next)) {
+        if (!next || !(name in next)) {
           target.removeAttribute(name);
         }
       }
       for (const name in next) {
-        if (previous[name] !== next[name]) {
+        if (!previous || previous[name] !== next[name]) {
           target.setAttribute(name, next[name]);
         }
       }
@@ -1656,16 +1661,23 @@ ${
   }
 
   __htmsReconcileChildren(targetParent, sourceParent) {
+    if (!sourceParent.firstChild) {
+      if (targetParent.firstChild) targetParent.textContent = '';
+      return;
+    }
     const sourceChildren = Array.from(sourceParent.childNodes);
-    const keyedTargets = new Map();
-    const idTargets = new Map();
+    // Most child lists have no identities to look up.
+    let keyedTargets = null;
+    let idTargets = null;
     Array.from(targetParent.children || []).forEach(child => {
       const key = child.getAttribute('data-key');
-      if (key !== null && !keyedTargets.has(key)) {
-        keyedTargets.set(key, child);
+      if (key !== null) {
+        if (!keyedTargets) keyedTargets = new Map();
+        if (!keyedTargets.has(key)) keyedTargets.set(key, child);
       }
-      if (child.id && !idTargets.has(child.id)) {
-        idTargets.set(child.id, child);
+      if (child.id) {
+        if (!idTargets) idTargets = new Map();
+        if (!idTargets.has(child.id)) idTargets.set(child.id, child);
       }
     });
     let reference = targetParent.firstChild;
