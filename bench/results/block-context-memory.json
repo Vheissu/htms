@@ -1,0 +1,93 @@
+{
+  "note": "Separate GC/retention diagnostics; these are not benchmark timings.",
+  "records": [
+    {
+      "app": "htms-block-before",
+      "cycles": 0,
+      "heapBytes": 722700,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-block-before",
+      "cycles": 6,
+      "heapBytes": 1616004,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-block-before",
+      "cycles": 30,
+      "heapBytes": 1635308,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-block-before",
+      "cycles": 90,
+      "heapBytes": 1688520,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 0,
+      "heapBytes": 722964,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 6,
+      "heapBytes": 1747524,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 30,
+      "heapBytes": 1767964,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 90,
+      "heapBytes": 1820392,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    }
+  ]
+}

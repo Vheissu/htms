@@ -53,6 +53,9 @@ compares native moves with the previous renderer.
 The [reconciler investigation](results/reconciler-2026-10-24.md) measures
 allocation reductions in the fallback renderer. The default block-renderer
 bundle is unchanged in that comparison.
+The [block event-context comparison](results/block-contexts-2026-10-24.md)
+records faster clearing in the default renderer, along with its creation
+and memory costs.
 
 ## Compiler and effect registration
 

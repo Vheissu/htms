@@ -1819,7 +1819,7 @@ class BlockCompiler {
           );
           if (!tagged.has(action.node)) {
             tagged.add(action.node);
-            create.push(`${local}.__htmsB = $$b;`);
+            create.push(`this.__htmsEventBlocks.set(${local}, $$b);`);
           }
         } else {
           const listener = action.usesEvent
@@ -2644,7 +2644,7 @@ function __htmsDispatch(component, event) {
     while (node && node !== root) {
       var handler = node[key];
       if (handler !== undefined) {
-        var block = node.__htmsB;
+        var block = component.__htmsEventBlocks.get(node);
         if (block !== undefined && block.c === component) {
           // A handler that never reads the event takes only its block.
           if (handler.length === 1) {

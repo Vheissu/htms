@@ -371,6 +371,49 @@ describe('block renderer', () => {
   });
 
   describe('delegated events', () => {
+    it('shares a node context across event types after keyed row updates', async () => {
+      const element = await mountComponent(`
+        <var name="items" value='[{"id":1,"label":"old"},{"id":2,"label":"other"}]' mutable="true"></var>
+        <var name="seen" value="''" mutable="true"></var>
+        <div><repeat variable="items" item="row" index="i" key="row.id">
+          <button on:click="seen = row.label + ':' + i" on:keydown="seen = event.key + ':' + row.label">{row.label}</button>
+        </repeat></div>
+        <p>{seen}</p>
+      `);
+      const button = query(element, 'button');
+      element.items = [
+        { id: 2, label: 'other' },
+        { id: 1, label: 'new' },
+      ];
+      await element.updateComplete;
+      expect(element.shadowRoot.querySelectorAll('button')[1]).toBe(button);
+      button.click();
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('new:1');
+      button.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+      );
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('Enter:new');
+    });
+
+    it('handles non-bubbling events only on their target', async () => {
+      const element = await mountComponent(`
+        <var name="log" value="''" mutable="true"></var>
+        <div on:click="log += 'outer'">
+          <button on:click="log += 'inner'">click</button>
+        </div>
+        <p>{log}</p>
+      `);
+      const button = query(element, 'button');
+      button.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('inner');
+      button.click();
+      await element.updateComplete;
+      expect(query(element, 'p').textContent).toBe('innerinnerouter');
+    });
+
     it('stops at a handler that calls stopPropagation', async () => {
       const element = await mountComponent(`
         <var name="log" value="''" mutable="true"></var>

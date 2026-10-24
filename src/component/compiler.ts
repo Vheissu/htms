@@ -2264,7 +2264,7 @@ ${sections.join('')}${hasListeners ? input.sharedEventHelpers : ''}${mount}  con
     this.__htmsLastError = null;
     this.__htmsDirty = -1;
     this.__htmsBlock = null;
-${usesGlobals ? `    this.__htmsRenderCleanups = [];\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsTimers = new Map();\n` : ''}${delegated.length > 0 ? `    this.__htmsD = (event) => __htmsDispatch(this, event);\n` : ''}${input.shadowInit ? `${input.shadowInit}\n` : ''}${input.statePropertyInitialization ? `${input.statePropertyInitialization}\n` : ''}${input.inputInitialization ? `${input.inputInitialization}\n` : ''}  }
+${usesGlobals ? `    this.__htmsRenderCleanups = [];\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsTimers = new Map();\n` : ''}${delegated.length > 0 ? `    this.__htmsEventBlocks = new WeakMap();\n    this.__htmsD = (event) => __htmsDispatch(this, event);\n` : ''}${input.shadowInit ? `${input.shadowInit}\n` : ''}${input.statePropertyInitialization ? `${input.statePropertyInitialization}\n` : ''}${input.inputInitialization ? `${input.inputInitialization}\n` : ''}  }
 
   connectedCallback() {
 ${metadata.shadowMode === 'none' ? '' : `    this.__htmsEnsureRenderRoot();\n`}    this.__htmsConnected = true;

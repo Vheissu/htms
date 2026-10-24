@@ -1,0 +1,394 @@
+{
+  "beforeRevision": "8096bbec1db7e4bb7a39fb7947d759429591ab63",
+  "method": "Interleaved paired rounds; mirrored confirmation averages the two samples for each revision within a round. Student t 95% mean interval; 20000 bootstrap draws resample whole paired rounds for the median interval. Seed 0x241024.",
+  "sources": {
+    "src/component/block-compiler.ts": "4d7bc82aa9360433f3d7380bdd93145d1f3fa58b7d20db05febc78959ebef46c",
+    "src/component/compiler.ts": "185090986b3e25dd13b312df2d9d93655d4f7b0ac190591f69a1bd1b41bb8ed7"
+  },
+  "bundles": {
+    "htms-block-before": "b500dae90d294e9e461fbd9931a4223ea407c289f61199d907a60aeca687eef8",
+    "htms": "c154bc86c8a57d7ff702af242ba305b96d082ffbb56f03c73a4b52a685500583"
+  },
+  "full": {
+    "file": "block-context-full.json",
+    "environment": {
+      "browser": "Chromium 141.0.7390.37",
+      "os": "Darwin 25.3.0 arm64",
+      "cpu": "Apple M2 Max",
+      "cores": 12,
+      "node": "v25.2.1",
+      "timeZone": "Australia/Brisbane",
+      "htmsRevision": "8096bbec1db7e4bb7a39fb7947d759429591ab63",
+      "runs": 15
+    },
+    "operationSamples": 270,
+    "operations": {
+      "run1k": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 38.075,
+        "afterMedian": 37.823,
+        "medianPercentChange": -0.6618516086671078,
+        "beforeMean": 38.34866666666667,
+        "afterMean": 40.964666666666666,
+        "pairedMeanDifference": 2.6160000000000005,
+        "pairedMean95PercentTInterval": [
+          -1.8130064356397808,
+          7.045006435639782
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -1.4220000000000041,
+          2.3029999999999973
+        ],
+        "scriptMedians": {
+          "htms-block-before": 2.191,
+          "htms": 2.639
+        }
+      },
+      "replace1k": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 42.193,
+        "afterMedian": 43.817,
+        "medianPercentChange": 3.848979688573939,
+        "beforeMean": 42.50813333333333,
+        "afterMean": 43.629400000000004,
+        "pairedMeanDifference": 1.1212666666666664,
+        "pairedMean95PercentTInterval": [
+          -0.3543669188782126,
+          2.5969002522115456
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -0.7199999999999989,
+          2.277000000000001
+        ],
+        "scriptMedians": {
+          "htms-block-before": 5.574,
+          "htms": 6.186
+        }
+      },
+      "update10th": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 36.067,
+        "afterMedian": 34.462,
+        "medianPercentChange": -4.450051293426116,
+        "beforeMean": 35.88239999999999,
+        "afterMean": 33.87886666666667,
+        "pairedMeanDifference": -2.0035333333333334,
+        "pairedMean95PercentTInterval": [
+          -4.667211149139915,
+          0.6601444824732483
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -4.755000000000003,
+          1.7250000000000014
+        ],
+        "scriptMedians": {
+          "htms-block-before": 1.283,
+          "htms": 1.313
+        }
+      },
+      "select": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 11.286,
+        "afterMedian": 11.456,
+        "medianPercentChange": 1.506290979975189,
+        "beforeMean": 10.789933333333334,
+        "afterMean": 10.356933333333334,
+        "pairedMeanDifference": -0.43299999999999983,
+        "pairedMean95PercentTInterval": [
+          -1.9700482918833155,
+          1.1040482918833159
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -2.3859999999999992,
+          1.7119999999999997
+        ],
+        "scriptMedians": {
+          "htms-block-before": 0.763,
+          "htms": 0.275
+        }
+      },
+      "swap": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 41.948,
+        "afterMedian": 39.965,
+        "medianPercentChange": -4.727281396014105,
+        "beforeMean": 42.52793333333334,
+        "afterMean": 40.82586666666667,
+        "pairedMeanDifference": -1.7020666666666646,
+        "pairedMean95PercentTInterval": [
+          -3.8609905074280233,
+          0.45685717409469384
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -5.177999999999997,
+          1.3160000000000025
+        ],
+        "scriptMedians": {
+          "htms-block-before": 0.926,
+          "htms": 0.756
+        }
+      },
+      "remove": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 24.189,
+        "afterMedian": 23.792,
+        "medianPercentChange": -1.6412418868080425,
+        "beforeMean": 24.373066666666666,
+        "afterMean": 23.976333333333336,
+        "pairedMeanDifference": -0.3967333333333334,
+        "pairedMean95PercentTInterval": [
+          -2.2524419340436914,
+          1.4589752673770247
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -2.4490000000000016,
+          2.0790000000000006
+        ],
+        "scriptMedians": {
+          "htms-block-before": 0.518,
+          "htms": 0.476
+        }
+      },
+      "run10k": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 446.221,
+        "afterMedian": 440.917,
+        "medianPercentChange": -1.1886486740875113,
+        "beforeMean": 450.4152666666666,
+        "afterMean": 476.0923333333333,
+        "pairedMeanDifference": 25.677066666666654,
+        "pairedMean95PercentTInterval": [
+          -43.71658876097215,
+          95.07072209430547
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -48.80500000000001,
+          79.65000000000003
+        ],
+        "scriptMedians": {
+          "htms-block-before": 34.226,
+          "htms": 41.366
+        }
+      },
+      "append1k": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 106.227,
+        "afterMedian": 101.752,
+        "medianPercentChange": -4.212676626469736,
+        "beforeMean": 107.66460000000002,
+        "afterMean": 104.0178,
+        "pairedMeanDifference": -3.6468000000000016,
+        "pairedMean95PercentTInterval": [
+          -8.778756066294825,
+          1.485156066294822
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -10.715999999999994,
+          1.2620000000000005
+        ],
+        "scriptMedians": {
+          "htms-block-before": 5.194,
+          "htms": 6.191
+        }
+      },
+      "clear": {
+        "rounds": 15,
+        "samplesPerRevision": 15,
+        "beforeMedian": 21.644,
+        "afterMedian": 20.252,
+        "medianPercentChange": -6.431343559416003,
+        "beforeMean": 21.954733333333333,
+        "afterMean": 19.9532,
+        "pairedMeanDifference": -2.0015333333333336,
+        "pairedMean95PercentTInterval": [
+          -3.183079445474676,
+          -0.8199872211919912
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -3.556000000000001,
+          0.006000000000000227
+        ],
+        "scriptMedians": {
+          "htms-block-before": 17.477,
+          "htms": 15.708
+        }
+      }
+    },
+    "startup": {
+      "htms-block-before": {
+        "script": {
+          "median": 8.788,
+          "mean": 9.4294,
+          "stddev": 2.6410312866649,
+          "min": 8.187,
+          "max": 18.898,
+          "samples": [
+            18.898,
+            8.788,
+            8.723,
+            8.84,
+            8.789,
+            8.754,
+            8.558,
+            9.537,
+            9.041,
+            9.077,
+            8.891,
+            8.239,
+            8.187,
+            8.736,
+            8.383
+          ]
+        },
+        "fcp": {
+          "median": 41.66,
+          "mean": 42.147466666666666,
+          "stddev": 8.594614508654878,
+          "min": 28.024,
+          "max": 57.719,
+          "samples": [
+            57.719,
+            56.51,
+            31.993,
+            41.66,
+            39.367,
+            44.642,
+            38.415,
+            47.447,
+            46.257,
+            39.527,
+            49.664,
+            43.563,
+            32.706,
+            28.024,
+            34.718
+          ]
+        }
+      },
+      "htms": {
+        "script": {
+          "median": 8.648,
+          "mean": 8.662866666666668,
+          "stddev": 0.4573212166935787,
+          "min": 7.793,
+          "max": 9.805,
+          "samples": [
+            8.385,
+            8.489,
+            8.715,
+            9.028,
+            8.991,
+            8.727,
+            8.298,
+            8.679,
+            9.112,
+            9.805,
+            8.447,
+            8.462,
+            7.793,
+            8.648,
+            8.364
+          ]
+        },
+        "fcp": {
+          "median": 36.986,
+          "mean": 38.580466666666666,
+          "stddev": 7.830235755132305,
+          "min": 28.007,
+          "max": 56.971,
+          "samples": [
+            41.075,
+            43.911,
+            28.807,
+            56.971,
+            28.007,
+            38.768,
+            43.027,
+            36.709,
+            48.26,
+            42.701,
+            32.742,
+            36.986,
+            29.051,
+            36.803,
+            34.889
+          ]
+        }
+      }
+    },
+    "medianGeometricRatio": 0.9795572917641643
+  },
+  "confirmation": {
+    "file": "block-context-confirmation.json",
+    "environment": {
+      "browser": "Chromium 141.0.7390.37",
+      "os": "Darwin 25.3.0 arm64",
+      "cpu": "Apple M2 Max",
+      "cores": 12,
+      "node": "v25.2.1",
+      "timeZone": "Australia/Brisbane",
+      "htmsRevision": "8096bbec1db7e4bb7a39fb7947d759429591ab63",
+      "runs": 31
+    },
+    "operationSamples": 248,
+    "operations": {
+      "run10k": {
+        "rounds": 31,
+        "samplesPerRevision": 62,
+        "beforeMedian": 366.988,
+        "afterMedian": 371.54200000000003,
+        "medianPercentChange": 1.24091250940086,
+        "beforeMean": 374.07879032258074,
+        "afterMean": 375.4290806451613,
+        "pairedMeanDifference": 1.3502903225806508,
+        "pairedMean95PercentTInterval": [
+          -4.755640952970708,
+          7.456221598132009
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          2.264499999999998,
+          7.678999999999974
+        ],
+        "scriptMedians": {
+          "htms-block-before": 30.994,
+          "htms": 37.025,
+          "htms-block-copy": 36.577,
+          "htms-block-before-copy": 30.791
+        }
+      },
+      "clear": {
+        "rounds": 31,
+        "samplesPerRevision": 62,
+        "beforeMedian": 17.924500000000002,
+        "afterMedian": 16.2805,
+        "medianPercentChange": -9.171803955479941,
+        "beforeMean": 18.153403225806453,
+        "afterMean": 16.37520967741935,
+        "pairedMeanDifference": -1.7781935483870963,
+        "pairedMean95PercentTInterval": [
+          -2.110481862961577,
+          -1.445905233812616
+        ],
+        "pairedBootstrapMedian95PercentInterval": [
+          -2.0855000000000032,
+          -1.2650000000000006
+        ],
+        "scriptMedians": {
+          "htms-block-before": 14.286,
+          "htms": 12.853,
+          "htms-block-copy": 12.821,
+          "htms-block-before-copy": 14.531
+        }
+      }
+    },
+    "medianGeometricRatio": 0.9589332327711854
+  }
+}
