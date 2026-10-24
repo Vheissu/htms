@@ -1903,7 +1903,7 @@ class BlockCompiler {
           if (!registered) {
             registered = true;
             create.push(
-              'const $$k = {};',
+              'const $$k = { __proto__: null };',
               'this.__htmsEventBlocks.set($$k, $$b);'
             );
           }

@@ -1,0 +1,154 @@
+{
+  "note": "Separate GC/retention and deterministic DOM-equivalence diagnostics; these are not benchmark timings.",
+  "records": [
+    {
+      "app": "htms-control",
+      "cycles": 0,
+      "heapBytes": 723936,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-control",
+      "cycles": 6,
+      "heapBytes": 1690500,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-control",
+      "cycles": 30,
+      "heapBytes": 1706532,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-control",
+      "cycles": 90,
+      "heapBytes": 1764996,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 0,
+      "heapBytes": 722700,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 6,
+      "heapBytes": 1616140,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 30,
+      "heapBytes": 1635564,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 90,
+      "heapBytes": 1688596,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 0,
+      "heapBytes": 724008,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 6,
+      "heapBytes": 1690268,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 30,
+      "heapBytes": 1698628,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 90,
+      "heapBytes": 1764200,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    }
+  ],
+  "domEquivalence": [
+    {
+      "app": "htms-control",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    },
+    {
+      "app": "htms-original",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    },
+    {
+      "app": "htms",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    }
+  ]
+}

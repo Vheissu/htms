@@ -1,0 +1,872 @@
+{
+  "controls": {
+    "current": "dbc7bb640d743b24a97e585681515b8b397cef29",
+    "original": "8096bbec1db7e4bb7a39fb7947d759429591ab63"
+  },
+  "method": "Paired interleaved rounds. Mirrored cohorts average two samples per revision per round for mean differences. Student t 95% intervals. Bootstrap median intervals resample whole paired rounds and subtract pooled medians, 20000 draws, seed 0x251026; cohort and app order in this script determines the random sequence.",
+  "sources": {
+    "src/component/block-compiler.ts": "563016cf1bf015300615c0ae0aacb234b97fb9a2f6aded33507e9fe3b64ed897",
+    "src/component/template-shape.ts": "ebd7b832148ff2a4725a43cd0e29add9c6263732e46fbd93802185749b66a720",
+    "src/component/compiler.ts": "185090986b3e25dd13b312df2d9d93655d4f7b0ac190591f69a1bd1b41bb8ed7"
+  },
+  "bundles": {
+    "htms-control": {
+      "sha256": "31d2fa14467560458f950caaa49a8ae876cbd9aa842719cc0e35d4ae9a0c0faf",
+      "label": "htms-control",
+      "minified": 13689,
+      "gzip": 5010,
+      "brotli": 4432
+    },
+    "htms": {
+      "sha256": "2049a840ce35fae5746571a6919419a1bb23b050781485e4eb96445aac539bb9",
+      "label": "HTMS",
+      "minified": 13717,
+      "gzip": 5020,
+      "brotli": 4442
+    },
+    "htms-original": {
+      "sha256": "b500dae90d294e9e461fbd9931a4223ea407c289f61199d907a60aeca687eef8",
+      "label": "htms-original",
+      "minified": 13066,
+      "gzip": 4747,
+      "brotli": 4232
+    },
+    "htms-legacy": {
+      "sha256": "2a2e4fcb63932ff0a4a3831a5798e87661752d92010dd899f63385e00645acce",
+      "label": "HTMS (reconciler)",
+      "minified": 17089,
+      "gzip": 4913,
+      "brotli": 4339
+    }
+  },
+  "benchmarkInputs": {
+    "bench/apps/htms/app.html": "76db7a097b94657ae1dc589a0d0c59e353ec5069981bae122009f909e0c4ade0",
+    "bench/apps/htms/index.html": "3ed55c6b0bf14b29787dddf0cb78c92ff9f96d7a817e8809f8ec3f04df0ca471",
+    "bench/apps/htms/main.js": "79bad8d26c5a7c2cdc94c71a3cbcbe69f6e47388ba257d3cd98fc792524c055b",
+    "bench/apps/react/index.html": "93dc3c4751274d1d072832ff93cb0c0da2e80eb8cf2846358d0a595ae578cd66",
+    "bench/apps/react/main.jsx": "cb9e96021a22cb2114933778864b3f17b2810b44fceb2dcfe6dd38436585488b",
+    "bench/apps/solid/index.html": "d9ba30c333d98d1483042f93caa3ef8ca8e8906a2e583743a99ffa237191c8ec",
+    "bench/apps/solid/main.jsx": "6b6a3c2843e37a222202a5d3c567069f033c1b2464aac68f65cee107e18f75e2",
+    "bench/apps/svelte/Main.svelte": "2f7699f132f12bb9934ec2dead99d10afafd7a2000ba05838f7413654246ae15",
+    "bench/apps/svelte/index.html": "e50f893da9c89b5551c0c792acdae11ee896f75f726f05de77828c58a14a2da1",
+    "bench/apps/svelte/main.js": "9d41e9f525c2005693cc9d8ae2cecd8d036edb6be0235d4f0877f33a4cd98c75",
+    "bench/apps/vanilla/Main.js": "08a5cb7d5cec199396561ed28b3c2db77577f066480f33c19f22ce6b0b0c980f",
+    "bench/apps/vanilla/index.html": "93e2dc8914a8c580b3ce0de95c1cf54a903504de6a69c4f712efdfaa2700e228",
+    "bench/apps/vue/App.vue": "54cce082a9472c54b72e799e5dc4391141ca0789e6b3dc0ec8200422ef041acd",
+    "bench/apps/vue/data.js": "9fb1b13b3dab8b6ce55fc2c88127b260df0b60a15fccd9eb176e43e6ff055f17",
+    "bench/apps/vue/index.html": "ea085aeab30195602238bccbfdd08b881bbddcba306df870f3cef5d48e16f6d8",
+    "bench/apps/vue/main.js": "50cb9f18b1c7115799ae456f0d0038840278b49ea520b5549d468ec76c248fb9",
+    "bench/build.mjs": "dc0d5ed4354da4094ef5278f3927baaff05451797a3b6e7be6ec6e8ea4c79225",
+    "bench/css/main.css": "d8d5b527c71c8a71fd273310650180318f8e8361334d96c9a27bdc85fa1b75e3",
+    "bench/package-lock.json": "e4c9dad81bddbfae21cc160bce63c7e74b7f38f2a9b8a7918e4377e11786bdbb",
+    "bench/package.json": "4a217916ed983e14a92db9d74c35156e1539310cc29645cde57d40a48a3dad0d",
+    "bench/run.mjs": "d67e303271f17b41492d730c322ba08ee0ffaa6a04364cbbcee49636ee152df5"
+  },
+  "cohorts": {
+    "screenConfirmation": {
+      "file": "block-keys-screen-confirmation.json",
+      "environment": {
+        "browser": "Chromium 141.0.7390.37",
+        "os": "Darwin 25.3.0 arm64",
+        "cpu": "Apple M2 Max",
+        "cores": 12,
+        "node": "v25.2.1",
+        "timeZone": "Australia/Brisbane",
+        "htmsRevision": "dbc7bb640d743b24a97e585681515b8b397cef29",
+        "runs": 31
+      },
+      "mirrored": true,
+      "comparisons": {
+        "htms-loop-control": {
+          "run10k": {
+            "rounds": 31,
+            "samplesPerRevision": 62,
+            "beforeMedian": 329.8325,
+            "afterMedian": 325.544,
+            "medianPercentChange": -1.300205407290067,
+            "pairedMeanDifference": -4.694758064516124,
+            "pairedMean95CI": [
+              -7.418345502822525,
+              -1.9711706262097235
+            ],
+            "pairedBootstrapMedian95CI": [
+              -9.784500000000037,
+              0.21350000000001046
+            ],
+            "pairedRoundMedianDifference": -3.5304999999999893,
+            "pairedRoundMedian95CI": [
+              -7.871499999999941,
+              -1.0005000000000166
+            ]
+          },
+          "clear": {
+            "rounds": 31,
+            "samplesPerRevision": 62,
+            "beforeMedian": 13.644,
+            "afterMedian": 13.841999999999999,
+            "medianPercentChange": 1.4511873350923299,
+            "pairedMeanDifference": -0.03559677419354854,
+            "pairedMean95CI": [
+              -0.32649736418452735,
+              0.2553038157974302
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.2505000000000006,
+              0.5069999999999997
+            ],
+            "pairedRoundMedianDifference": -0.08399999999999963,
+            "pairedRoundMedian95CI": [
+              -0.4370000000000003,
+              0.2555000000000005
+            ]
+          }
+        }
+      },
+      "scriptMedians": {
+        "htms-loop-control": {
+          "run10k": 31.605,
+          "clear": 10.892
+        },
+        "htms-null-key": {
+          "run10k": 29.451,
+          "clear": 11.32
+        },
+        "htms-null-key-copy": {
+          "run10k": 28.479,
+          "clear": 11.2
+        },
+        "htms-loop-control-copy": {
+          "run10k": 31.617,
+          "clear": 11.282
+        }
+      },
+      "memory": {
+        "htms-loop-control": {
+          "ready": 1.7245674133300781,
+          "run1k": 2.397785186767578,
+          "clear": 2.1291580200195312
+        },
+        "htms-null-key": {
+          "ready": 1.7146263122558594,
+          "run1k": 2.4595069885253906,
+          "clear": 2.1296958923339844
+        },
+        "htms-null-key-copy": {
+          "ready": 1.7177276611328125,
+          "run1k": 2.459056854248047,
+          "clear": 2.1296920776367188
+        },
+        "htms-loop-control-copy": {
+          "ready": 1.7249107360839844,
+          "run1k": 2.3983993530273438,
+          "clear": 2.1290969848632812
+        }
+      },
+      "timedClicks": 248
+    },
+    "full": {
+      "file": "block-keys-full.json",
+      "environment": {
+        "browser": "Chromium 141.0.7390.37",
+        "os": "Darwin 25.3.0 arm64",
+        "cpu": "Apple M2 Max",
+        "cores": 12,
+        "node": "v25.2.1",
+        "timeZone": "Australia/Brisbane",
+        "htmsRevision": "dbc7bb640d743b24a97e585681515b8b397cef29",
+        "runs": 15
+      },
+      "mirrored": false,
+      "comparisons": {
+        "htms-control": {
+          "run1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 31.551,
+            "afterMedian": 31.3,
+            "medianPercentChange": -0.795537383918099,
+            "pairedMeanDifference": 0.027799999999999395,
+            "pairedMean95CI": [
+              -0.5545475767657913,
+              0.61014757676579
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.6020000000000003,
+              0.8210000000000015
+            ],
+            "pairedRoundMedianDifference": -0.30900000000000105,
+            "pairedRoundMedian95CI": [
+              -0.8319999999999972,
+              1.1149999999999984
+            ]
+          },
+          "replace1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 35.894,
+            "afterMedian": 35.581,
+            "medianPercentChange": -0.8720120354376637,
+            "pairedMeanDifference": -0.06066666666666644,
+            "pairedMean95CI": [
+              -0.6746289857424513,
+              0.5532956524091185
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.6550000000000011,
+              0.759999999999998
+            ],
+            "pairedRoundMedianDifference": -0.06900000000000261,
+            "pairedRoundMedian95CI": [
+              -0.5910000000000011,
+              0.45299999999999585
+            ]
+          },
+          "update10th": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 16.533,
+            "afterMedian": 16.65,
+            "medianPercentChange": 0.7076755579749516,
+            "pairedMeanDifference": -0.03893333333333367,
+            "pairedMean95CI": [
+              -1.224692224640349,
+              1.1468255579736817
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.2029999999999994,
+              1.0459999999999994
+            ],
+            "pairedRoundMedianDifference": -0.4350000000000005,
+            "pairedRoundMedian95CI": [
+              -1.2799999999999994,
+              1.2459999999999987
+            ]
+          },
+          "select": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 3.778,
+            "afterMedian": 3.909,
+            "medianPercentChange": 3.4674430915828447,
+            "pairedMeanDifference": 0.12320000000000002,
+            "pairedMean95CI": [
+              -0.24392089777764608,
+              0.49032089777764615
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.29400000000000004,
+              0.5390000000000001
+            ],
+            "pairedRoundMedianDifference": 0.039000000000000146,
+            "pairedRoundMedian95CI": [
+              -0.242,
+              0.5680000000000001
+            ]
+          },
+          "swap": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 20.903,
+            "afterMedian": 20.056,
+            "medianPercentChange": -4.05204994498396,
+            "pairedMeanDifference": -0.47233333333333294,
+            "pairedMean95CI": [
+              -1.621275394939103,
+              0.6766087282724372
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.847999999999999,
+              0.9469999999999992
+            ],
+            "pairedRoundMedianDifference": 0.021000000000000796,
+            "pairedRoundMedian95CI": [
+              -1.282,
+              0.972999999999999
+            ]
+          },
+          "remove": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 15.017,
+            "afterMedian": 14.923,
+            "medianPercentChange": -0.6259572484517473,
+            "pairedMeanDifference": -0.030933333333333125,
+            "pairedMean95CI": [
+              -0.3133703321284003,
+              0.251503665461734
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.484,
+              0.30799999999999983
+            ],
+            "pairedRoundMedianDifference": -0.08699999999999974,
+            "pairedRoundMedian95CI": [
+              -0.31099999999999994,
+              0.30799999999999983
+            ]
+          },
+          "run10k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 334.394,
+            "afterMedian": 327.32,
+            "medianPercentChange": -2.115468578981683,
+            "pairedMeanDifference": -5.015133333333339,
+            "pairedMean95CI": [
+              -9.469532430171412,
+              -0.5607342364952652
+            ],
+            "pairedBootstrapMedian95CI": [
+              -11.02800000000002,
+              0.17300000000000182
+            ],
+            "pairedRoundMedianDifference": -5.567000000000007,
+            "pairedRoundMedian95CI": [
+              -12.391999999999996,
+              1.9499999999999886
+            ]
+          },
+          "append1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 78.869,
+            "afterMedian": 78.514,
+            "medianPercentChange": -0.4501134793138073,
+            "pairedMeanDifference": -1.1189999999999998,
+            "pairedMean95CI": [
+              -2.787470513608067,
+              0.5494705136080673
+            ],
+            "pairedBootstrapMedian95CI": [
+              -2.4780000000000086,
+              0.8370000000000033
+            ],
+            "pairedRoundMedianDifference": -1.2430000000000092,
+            "pairedRoundMedian95CI": [
+              -1.6940000000000026,
+              0.21300000000000807
+            ]
+          },
+          "clear": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 13.736,
+            "afterMedian": 13.83,
+            "medianPercentChange": 0.6843331391962693,
+            "pairedMeanDifference": 0.19106666666666663,
+            "pairedMean95CI": [
+              -0.4352713948619841,
+              0.8174047281953173
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.3569999999999993,
+              1.040000000000001
+            ],
+            "pairedRoundMedianDifference": 0.12100000000000044,
+            "pairedRoundMedian95CI": [
+              -0.581999999999999,
+              0.8019999999999996
+            ]
+          }
+        },
+        "htms-original": {
+          "run1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 30.872,
+            "afterMedian": 31.3,
+            "medianPercentChange": 1.3863695257838815,
+            "pairedMeanDifference": 0.5623333333333326,
+            "pairedMean95CI": [
+              0.1013063077674306,
+              1.0233603588992346
+            ],
+            "pairedBootstrapMedian95CI": [
+              0.15900000000000247,
+              0.9230000000000018
+            ],
+            "pairedRoundMedianDifference": 0.38700000000000045,
+            "pairedRoundMedian95CI": [
+              0.259999999999998,
+              1.004999999999999
+            ]
+          },
+          "replace1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 34.022,
+            "afterMedian": 35.581,
+            "medianPercentChange": 4.582329081182768,
+            "pairedMeanDifference": 1.5828666666666664,
+            "pairedMean95CI": [
+              1.20827853104931,
+              1.9574548022840228
+            ],
+            "pairedBootstrapMedian95CI": [
+              1.1230000000000047,
+              2.118000000000002
+            ],
+            "pairedRoundMedianDifference": 1.669000000000004,
+            "pairedRoundMedian95CI": [
+              0.9359999999999999,
+              1.9549999999999983
+            ]
+          },
+          "update10th": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 16.388,
+            "afterMedian": 16.65,
+            "medianPercentChange": 1.5987307786184735,
+            "pairedMeanDifference": 0.026466666666666208,
+            "pairedMean95CI": [
+              -0.7911042273097917,
+              0.8440375606431241
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.8850000000000016,
+              0.8829999999999991
+            ],
+            "pairedRoundMedianDifference": -0.1490000000000009,
+            "pairedRoundMedian95CI": [
+              -0.8019999999999996,
+              0.3739999999999988
+            ]
+          },
+          "select": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 3.571,
+            "afterMedian": 3.909,
+            "medianPercentChange": 9.465135816297954,
+            "pairedMeanDifference": 0.30933333333333324,
+            "pairedMean95CI": [
+              -0.03136312616115866,
+              0.6500297928278251
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.19599999999999973,
+              0.794
+            ],
+            "pairedRoundMedianDifference": 0.4359999999999995,
+            "pairedRoundMedian95CI": [
+              -0.04599999999999982,
+              0.7529999999999992
+            ]
+          },
+          "swap": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 19.782,
+            "afterMedian": 20.056,
+            "medianPercentChange": 1.3850975634415175,
+            "pairedMeanDifference": 0.5684666666666668,
+            "pairedMean95CI": [
+              -0.322151475095767,
+              1.4590848084291006
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.7929999999999993,
+              2.1819999999999986
+            ],
+            "pairedRoundMedianDifference": 0.48799999999999955,
+            "pairedRoundMedian95CI": [
+              -0.8009999999999984,
+              2.012999999999998
+            ]
+          },
+          "remove": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 15.083,
+            "afterMedian": 14.923,
+            "medianPercentChange": -1.0607969236889225,
+            "pairedMeanDifference": -0.03433333333333325,
+            "pairedMean95CI": [
+              -0.3771479211728499,
+              0.30848125450618336
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.6799999999999997,
+              0.49799999999999933
+            ],
+            "pairedRoundMedianDifference": 0.05900000000000105,
+            "pairedRoundMedian95CI": [
+              -0.5220000000000002,
+              0.5419999999999998
+            ]
+          },
+          "run10k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 335.193,
+            "afterMedian": 327.32,
+            "medianPercentChange": -2.3487960667436303,
+            "pairedMeanDifference": -7.001533333333339,
+            "pairedMean95CI": [
+              -10.885789548804972,
+              -3.1172771178617062
+            ],
+            "pairedBootstrapMedian95CI": [
+              -12.449000000000012,
+              -3.400000000000034
+            ],
+            "pairedRoundMedianDifference": -5.706000000000017,
+            "pairedRoundMedian95CI": [
+              -11.854000000000042,
+              -1.7699999999999818
+            ]
+          },
+          "append1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 79.359,
+            "afterMedian": 78.514,
+            "medianPercentChange": -1.0647815622676693,
+            "pairedMeanDifference": -1.3324666666666654,
+            "pairedMean95CI": [
+              -2.2480373172925874,
+              -0.4168960160407432
+            ],
+            "pairedBootstrapMedian95CI": [
+              -2.6539999999999964,
+              -0.06400000000000716
+            ],
+            "pairedRoundMedianDifference": -1.0250000000000057,
+            "pairedRoundMedian95CI": [
+              -3.0250000000000057,
+              -0.07799999999998875
+            ]
+          },
+          "clear": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 14.508,
+            "afterMedian": 13.83,
+            "medianPercentChange": -4.673283705541764,
+            "pairedMeanDifference": -0.6822666666666666,
+            "pairedMean95CI": [
+              -1.1864914382944507,
+              -0.17804189503888246
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.4160000000000004,
+              -0.0070000000000014495
+            ],
+            "pairedRoundMedianDifference": -0.5789999999999988,
+            "pairedRoundMedian95CI": [
+              -1.7330000000000005,
+              0.22900000000000098
+            ]
+          }
+        }
+      },
+      "scriptMedians": {
+        "htms-control": {
+          "run1k": 2.309,
+          "replace1k": 5.021,
+          "update10th": 1.006,
+          "select": 0.116,
+          "swap": 0.445,
+          "remove": 0.323,
+          "run10k": 31.597,
+          "append1k": 5.598,
+          "clear": 10.999
+        },
+        "htms": {
+          "run1k": 2.45,
+          "replace1k": 4.971,
+          "update10th": 1.03,
+          "select": 0.102,
+          "swap": 0.649,
+          "remove": 0.313,
+          "run10k": 29.716,
+          "append1k": 5.55,
+          "clear": 11.261
+        },
+        "htms-original": {
+          "run1k": 2.106,
+          "replace1k": 4.594,
+          "update10th": 0.888,
+          "select": 0.083,
+          "swap": 0.271,
+          "remove": 0.459,
+          "run10k": 29.663,
+          "append1k": 4.608,
+          "clear": 11.866
+        }
+      },
+      "memory": {
+        "htms-control": {
+          "ready": 1.7176589965820312,
+          "run1k": 2.3989181518554688,
+          "clear": 2.129138946533203
+        },
+        "htms": {
+          "ready": 1.7246360778808594,
+          "run1k": 2.459980010986328,
+          "clear": 2.129638671875
+        },
+        "htms-original": {
+          "ready": 1.7164802551269531,
+          "run1k": 2.3275108337402344,
+          "clear": 1.992828369140625
+        }
+      },
+      "timedClicks": 405,
+      "startup": {
+        "htms-control": {
+          "script": {
+            "median": 7.898,
+            "mean": 7.968466666666667,
+            "stddev": 0.33170573591376923,
+            "min": 7.509,
+            "max": 8.92,
+            "samples": [
+              8.92,
+              7.739,
+              7.855,
+              7.937,
+              7.898,
+              7.509,
+              7.751,
+              8.001,
+              8.115,
+              8.151,
+              7.727,
+              7.792,
+              7.744,
+              8.256,
+              8.132
+            ]
+          },
+          "fcp": {
+            "median": 31.79,
+            "mean": 32.98393333333333,
+            "stddev": 3.3821869819618753,
+            "min": 28.44,
+            "max": 39.662,
+            "samples": [
+              38.909,
+              33.904,
+              31.714,
+              31.129,
+              30.812,
+              31.79,
+              34.366,
+              31.669,
+              29.485,
+              28.44,
+              34.39,
+              36.871,
+              32.441,
+              39.662,
+              29.177
+            ]
+          }
+        },
+        "htms": {
+          "script": {
+            "median": 7.78,
+            "mean": 7.810933333333334,
+            "stddev": 0.16763585819382712,
+            "min": 7.525,
+            "max": 8.196,
+            "samples": [
+              7.632,
+              7.684,
+              7.853,
+              7.525,
+              8.196,
+              7.82,
+              7.732,
+              7.88,
+              8.1,
+              7.891,
+              7.725,
+              7.78,
+              7.758,
+              7.775,
+              7.813
+            ]
+          },
+          "fcp": {
+            "median": 32.49,
+            "mean": 32.160599999999995,
+            "stddev": 3.0173123044950354,
+            "min": 27.243,
+            "max": 36.646,
+            "samples": [
+              35.162,
+              32.49,
+              32.311,
+              28.231,
+              35.05,
+              27.977,
+              31.783,
+              28.35,
+              33.851,
+              27.243,
+              33.611,
+              34.372,
+              30.704,
+              34.628,
+              36.646
+            ]
+          }
+        },
+        "htms-original": {
+          "script": {
+            "median": 7.856,
+            "mean": 7.842933333333334,
+            "stddev": 0.15833259147695897,
+            "min": 7.473,
+            "max": 8.124,
+            "samples": [
+              7.925,
+              7.998,
+              7.782,
+              7.856,
+              7.648,
+              7.847,
+              7.777,
+              8.124,
+              8.06,
+              7.768,
+              7.473,
+              7.863,
+              7.785,
+              7.88,
+              7.858
+            ]
+          },
+          "fcp": {
+            "median": 32.774,
+            "mean": 33.05573333333333,
+            "stddev": 2.694694588225078,
+            "min": 28.165,
+            "max": 37.994,
+            "samples": [
+              32.447,
+              29.513,
+              37.601,
+              28.165,
+              35.153,
+              31.041,
+              35.347,
+              31.76,
+              37.994,
+              32.847,
+              34.204,
+              32.774,
+              31.887,
+              33.283,
+              31.82
+            ]
+          }
+        }
+      }
+    },
+    "confirmation": {
+      "file": "block-keys-confirmation.json",
+      "environment": {
+        "browser": "Chromium 141.0.7390.37",
+        "os": "Darwin 25.3.0 arm64",
+        "cpu": "Apple M2 Max",
+        "cores": 12,
+        "node": "v25.2.1",
+        "timeZone": "Australia/Brisbane",
+        "htmsRevision": "dbc7bb640d743b24a97e585681515b8b397cef29",
+        "runs": 31
+      },
+      "mirrored": true,
+      "comparisons": {
+        "htms-control": {
+          "run10k": {
+            "rounds": 31,
+            "samplesPerRevision": 62,
+            "beforeMedian": 331.8195,
+            "afterMedian": 327.2835,
+            "medianPercentChange": -1.3670082680493412,
+            "pairedMeanDifference": -3.665209677419354,
+            "pairedMean95CI": [
+              -5.67048660064591,
+              -1.659932754192798
+            ],
+            "pairedBootstrapMedian95CI": [
+              -9.413000000000011,
+              -1.5850000000000364
+            ],
+            "pairedRoundMedianDifference": -3.052500000000009,
+            "pairedRoundMedian95CI": [
+              -5.8019999999999925,
+              -0.9399999999999693
+            ]
+          },
+          "clear": {
+            "rounds": 31,
+            "samplesPerRevision": 62,
+            "beforeMedian": 13.739,
+            "afterMedian": 13.945,
+            "medianPercentChange": 1.4993813232404118,
+            "pairedMeanDifference": 0.19311290322580665,
+            "pairedMean95CI": [
+              -0.19361688809073946,
+              0.5798426945423527
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.48099999999999987,
+              0.7119999999999997
+            ],
+            "pairedRoundMedianDifference": 0.19100000000000072,
+            "pairedRoundMedian95CI": [
+              -0.14199999999999857,
+              0.6250000000000009
+            ]
+          }
+        }
+      },
+      "scriptMedians": {
+        "htms": {
+          "run10k": 29.31,
+          "clear": 11.271
+        },
+        "htms-control": {
+          "run10k": 32.305,
+          "clear": 11.088
+        },
+        "htms-control-copy": {
+          "run10k": 31.226,
+          "clear": 11.335
+        },
+        "htms-copy": {
+          "run10k": 28.568,
+          "clear": 11.027
+        }
+      },
+      "memory": {
+        "htms": {
+          "ready": 1.7297821044921875,
+          "run1k": 2.45953369140625,
+          "clear": 2.129619598388672
+        },
+        "htms-control": {
+          "ready": 1.7115478515625,
+          "run1k": 2.3986282348632812,
+          "clear": 2.129100799560547
+        },
+        "htms-control-copy": {
+          "ready": 1.7162361145019531,
+          "run1k": 2.3980331420898438,
+          "clear": 2.1290130615234375
+        },
+        "htms-copy": {
+          "ready": 1.7163352966308594,
+          "run1k": 2.458995819091797,
+          "clear": 2.129596710205078
+        }
+      },
+      "timedClicks": 248
+    }
+  }
+}
