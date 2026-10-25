@@ -8,6 +8,8 @@ export function ensureRuntime(): string {
         pendingEffects: [],
         flushingEffects: false,
         effectMutationDepth: 0,
+        // Keep the single disposed record as a compaction hint; true means
+        // multiple disposals require scanning from the beginning.
         effectsNeedCompaction: false,
         // Effects are registered from every component render. Looking up an
         // existing record by scanning the whole effects array makes a page
@@ -53,7 +55,11 @@ export function ensureRuntime(): string {
           if (!this.effectsNeedCompaction) {
             return;
           }
-          let write = 0;
+          // A single disposal can locate its first hole with a native
+          // reference search instead of inspecting every live prefix record.
+          let write = this.effectsNeedCompaction === true
+            ? 0 : effects.indexOf(this.effectsNeedCompaction);
+          if (write < 0) write = 0;
           while (write < effects.length && !effects[write].disposed) {
             write++;
           }
@@ -240,7 +246,8 @@ export function ensureRuntime(): string {
                   return;
                 }
                 record.disposed = true;
-                runtime.effectsNeedCompaction = true;
+                runtime.effectsNeedCompaction = runtime.effectsNeedCompaction
+                  ? true : record;
                 record.runVersion++;
                 runtime.removeEffectIndex(record);
                 runtime.effectMutationDepth++;

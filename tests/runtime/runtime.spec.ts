@@ -456,6 +456,72 @@ describe('HTMS runtime', () => {
     expect(callsC).toBe(2);
   });
 
+  it('compacts earlier records disposed by a later effect cleanup', async () => {
+    const runtime = getRuntime();
+    const owners = Array.from({ length: 3 }, (): HTMLElement => {
+      const owner = document.createElement('div');
+      document.body.append(owner);
+      return owner;
+    });
+    const cleanupOrder: number[] = [];
+    let dependency = 0;
+    const survivor = jest.fn();
+    for (let i = 0; i < owners.length; i++) {
+      runtime.registerEffect({
+        owner: owners.at(i),
+        id: 'nested-backward',
+        deps: [(): number => dependency],
+        run: (): (() => void) => {
+          if (i === 1) survivor();
+          return (): void => {
+            cleanupOrder.push(i);
+            if (i === 2) runtime.disposeEffectsFor(owners[0]);
+          };
+        },
+      });
+    }
+    await flushMicrotasks();
+    const records = runtime.effects;
+    runtime.disposeEffectsFor(owners[2]);
+    expect(cleanupOrder).toEqual([2, 0]);
+    expect(runtime.effects).toBe(records);
+    expect(runtime.effects.map((effect) => effect.owner)).toEqual([owners[1]]);
+    dependency++;
+    runtime.notify();
+    await flushMicrotasks();
+    expect(survivor).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps active effects when only a pending record was disposed', async () => {
+    const runtime = getRuntime();
+    const childRun = jest.fn();
+    const parentRun = jest.fn((): void => {
+      const child = runtime.registerEffect({
+        owner: null,
+        id: 'pending-disposed',
+        deps: [],
+        run: childRun,
+      });
+      child.dispose();
+    });
+    runtime.registerEffect({
+      owner: null,
+      id: 'retained-parent',
+      deps: [(): number => 0],
+      run: parentRun,
+    });
+    await flushMicrotasks();
+    expect(parentRun).toHaveBeenCalledTimes(1);
+    expect(childRun).not.toHaveBeenCalled();
+    expect(runtime.effects).toHaveLength(1);
+    expect(runtime.effects[0].disposed).toBe(false);
+    expect(runtime.pendingEffects).toHaveLength(0);
+    runtime.notify();
+    await flushMicrotasks();
+    expect(parentRun).toHaveBeenCalledTimes(1);
+    expect(runtime.effects).toHaveLength(1);
+  });
+
   it('does not scan live effects when an unrelated component disconnects', async () => {
     const runtime = getRuntime();
     const owner = document.createElement('div');
