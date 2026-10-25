@@ -132,7 +132,9 @@ export function ensureRuntime(): string {
                 effect.dispose();
                 continue;
               }
-              const values = [];
+              const previousValues = effect.lastValues;
+              let values = null;
+              let valueCount = 0;
               let shouldRun = effect.dirty || effect.depsFns.length === 0;
               for (let i = 0; i < effect.depsFns.length; i++) {
                 let value;
@@ -142,12 +144,20 @@ export function ensureRuntime(): string {
                   console.error('HTMS effect dependency failed:', error);
                   value = undefined;
                 }
-                values.push(value);
-                if (!shouldRun && (i >= effect.lastValues.length || effect.lastValues[i] !== value)) {
+                if (i >= previousValues.length || previousValues[i] !== value) {
                   shouldRun = true;
+                  if (values === null) {
+                    values = previousValues.slice(0, i);
+                  }
                 }
+                if (values !== null) {
+                  values.push(value);
+                }
+                valueCount++;
               }
-              effect.lastValues = values;
+              effect.lastValues = values !== null ? values
+                : valueCount === previousValues.length ? previousValues
+                : previousValues.slice(0, valueCount);
               if (effect.skipInitial && !effect.initialized) {
                 effect.skipInitial = false;
                 effect.dirty = false;

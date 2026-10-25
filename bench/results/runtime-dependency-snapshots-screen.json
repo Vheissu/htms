@@ -1,0 +1,145 @@
+{
+  "date": "2026-10-25T05:38:01.645Z",
+  "environment": {
+    "browser": "141.0.7390.37",
+    "os": "Darwin 25.3.0 arm64",
+    "node": "v25.2.1",
+    "cpu": "Apple M2 Max"
+  },
+  "runs": 15,
+  "count": 1000,
+  "effects": 10000,
+  "warmups": 5,
+  "throttle": 4,
+  "profiled": false,
+  "order": [
+    "baseline",
+    "candidate"
+  ],
+  "samples": {
+    "baseline": [
+      {
+        "total": 14.31,
+        "script": 11.435
+      },
+      {
+        "total": 4.522,
+        "script": 3.263
+      },
+      {
+        "total": 13.838,
+        "script": 10.809
+      },
+      {
+        "total": 13.149,
+        "script": 10.57
+      },
+      {
+        "total": 13.054,
+        "script": 10.194
+      },
+      {
+        "total": 13.111,
+        "script": 9.519
+      },
+      {
+        "total": 13.633,
+        "script": 10.574
+      },
+      {
+        "total": 13.335,
+        "script": 10.493
+      },
+      {
+        "total": 14.068,
+        "script": 10.979
+      },
+      {
+        "total": 14.141,
+        "script": 10.959
+      },
+      {
+        "total": 12.35,
+        "script": 9.633
+      },
+      {
+        "total": 13.082,
+        "script": 10.567
+      },
+      {
+        "total": 13.672,
+        "script": 10.804
+      },
+      {
+        "total": 13.114,
+        "script": 10.042
+      },
+      {
+        "total": 13.673,
+        "script": 10.722
+      }
+    ],
+    "candidate": [
+      {
+        "total": 14.595,
+        "script": 11.379
+      },
+      {
+        "total": 11.008,
+        "script": 8.283
+      },
+      {
+        "total": 10.841,
+        "script": 8.305
+      },
+      {
+        "total": 11.634,
+        "script": 9.062
+      },
+      {
+        "total": 11.686,
+        "script": 8.805
+      },
+      {
+        "total": 10.536,
+        "script": 7.949
+      },
+      {
+        "total": 11.214,
+        "script": 8.496
+      },
+      {
+        "total": 11.064,
+        "script": 8.074
+      },
+      {
+        "total": 10.872,
+        "script": 8.306
+      },
+      {
+        "total": 15.873,
+        "script": 12.935
+      },
+      {
+        "total": 10.849,
+        "script": 8.374
+      },
+      {
+        "total": 10.958,
+        "script": 8.218
+      },
+      {
+        "total": 12.064,
+        "script": 8.888
+      },
+      {
+        "total": 4.209,
+        "script": 2.51
+      },
+      {
+        "total": 10.47,
+        "script": 8.015
+      }
+    ]
+  }
+}

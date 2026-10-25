@@ -14,7 +14,7 @@ interface EffectHandle {
 }
 
 interface HtmsRuntime {
-  effects: Array<{ owner: unknown; disposed: boolean }>;
+  effects: Array<{ owner: unknown; disposed: boolean; lastValues: unknown[] }>;
   pendingEffects: Array<{ owner: unknown; disposed: boolean }>;
   bind: (selector: string, property: string, getter: () => unknown) => void;
   notify: () => void;
@@ -622,5 +622,104 @@ describe('HTMS runtime', () => {
     expect(runtime.effects).toHaveLength(1);
     await flushMicrotasks();
     expect(order).toEqual(['first', 'second', 'third', 'replacement']);
+  });
+
+  it('reuses stable snapshots without mutating snapshots from earlier runs', async () => {
+    const runtime = getRuntime();
+    let value = 1;
+    const run = jest.fn();
+    runtime.registerEffect({
+      owner: null,
+      id: 'snapshot',
+      deps: [(): number => 0, (): number => value],
+      run,
+    });
+    await flushMicrotasks();
+    const initial = runtime.effects[0].lastValues;
+    runtime.notify();
+    await flushMicrotasks();
+    expect(runtime.effects[0].lastValues).toBe(initial);
+    expect(run).toHaveBeenCalledTimes(1);
+    value = 2;
+    runtime.notify();
+    await flushMicrotasks();
+    expect(runtime.effects[0].lastValues).toEqual([0, 2]);
+    expect(initial).toEqual([0, 1]);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('treats NaN dependencies as changed on every flush', async () => {
+    const runtime = getRuntime();
+    const run = jest.fn();
+    runtime.registerEffect({
+      owner: null,
+      id: 'nan',
+      deps: [(): number => NaN],
+      run,
+    });
+    await flushMicrotasks();
+    runtime.notify();
+    await flushMicrotasks();
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('tracks dependencies added and removed by a dependency callback', async () => {
+    const runtime = getRuntime();
+    const run = jest.fn();
+    let grow = true;
+    let shrink = false;
+    const second = (): number => {
+      if (shrink) register([first]);
+      return 2;
+    };
+    const first = (): number => {
+      if (grow) {
+        grow = false;
+        register([first, second]);
+      }
+      return 1;
+    };
+    const register = (deps: Array<() => number>): void => {
+      runtime.registerEffect({ owner: null, id: 'dynamic-deps', deps, run });
+    };
+    register([first]);
+    await flushMicrotasks();
+    expect(runtime.effects[0].lastValues).toEqual([1, 2]);
+    expect(run).toHaveBeenCalledTimes(1);
+    // Re-registration schedules another flush. Capture the first flush before
+    // that microtask trims the snapshot to the newly shortened list.
+    shrink = true;
+    runtime.notify();
+    await Promise.resolve();
+    expect(runtime.effects[0].lastValues).toEqual([1, 2]);
+    await flushMicrotasks();
+    expect(runtime.effects[0].lastValues).toEqual([1]);
+    expect(run).toHaveBeenCalledTimes(1);
+    register([first, (): number => 3]);
+    await flushMicrotasks();
+    expect(runtime.effects[0].lastValues).toEqual([1, 3]);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('records skipped initial dependencies and runs only after they change', async () => {
+    const runtime = getRuntime();
+    let value = 1;
+    const run = jest.fn();
+    runtime.registerEffect({
+      owner: null,
+      id: 'skip-initial',
+      immediate: false,
+      deps: [(): number => value],
+      run,
+    });
+    await flushMicrotasks();
+    runtime.notify();
+    await flushMicrotasks();
+    expect(runtime.effects[0].lastValues).toEqual([1]);
+    expect(run).not.toHaveBeenCalled();
+    value = 2;
+    runtime.notify();
+    await flushMicrotasks();
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });
