@@ -59,6 +59,11 @@ export function ensureRuntime(): string {
           // reference search instead of inspecting every live prefix record.
           let write = this.effectsNeedCompaction === true
             ? 0 : effects.indexOf(this.effectsNeedCompaction);
+          if (write >= 0 && this.effectsNeedCompaction !== true) {
+            effects.splice(write, 1);
+            this.effectsNeedCompaction = false;
+            return;
+          }
           if (write < 0) write = 0;
           while (write < effects.length && !effects[write].disposed) {
             write++;
