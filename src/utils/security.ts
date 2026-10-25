@@ -104,19 +104,8 @@ const EVENT_HANDLER_ATTRIBUTES = new Set([
   'onwheel',
 ]);
 
-// HTML entity escaping and decimal-number check, matching validator.js's
-// `escape` and `isNumeric` so the package itself need not be loaded.
-const HTML_ESCAPE_PATTERN = /[&"'<>/\\`]/g;
-const HTML_ESCAPES = new Map([
-  ['&', '&amp;'],
-  ['"', '&quot;'],
-  ["'", '&#x27;'],
-  ['<', '&lt;'],
-  ['>', '&gt;'],
-  ['/', '&#x2F;'],
-  ['\\', '&#x5C;'],
-  ['`', '&#96;'],
-]);
+// Decimal-number check matching validator.js's `isNumeric`, so the package
+// itself need not be loaded.
 const NUMERIC_VALUE = /^[+-]?(?:[0-9]+|[0-9]*\.[0-9]+)$/;
 
 const VALID_JS_IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
@@ -280,17 +269,6 @@ export class SecurityValidator {
     }
 
     return errors;
-  }
-
-  static sanitizeString(input: string): string {
-    if (typeof input !== 'string') {
-      throw new Error('Input must be a string');
-    }
-
-    return input.replace(
-      HTML_ESCAPE_PATTERN,
-      (char) => HTML_ESCAPES.get(char) as string
-    );
   }
 
   // Embed a runtime string into generated JavaScript source. This is the

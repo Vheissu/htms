@@ -132,11 +132,6 @@ export async function hydrate(
   const hydrationManifest = manifest
     ? validateManifest(manifest)
     : readManifest(root);
-  if (hydrationManifest.version !== 1) {
-    throw new Error(
-      `Unsupported HTMS hydration manifest version: ${String(hydrationManifest.version)}`
-    );
-  }
 
   const hydrated: HTMLElement[] = [];
   const errors: string[] = [];

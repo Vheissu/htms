@@ -129,6 +129,11 @@ export abstract class SourceNode {
   }
 }
 
+interface DescendantFrame {
+  nodes: SourceNode[];
+  index: number;
+}
+
 export abstract class SourceParentNode extends SourceNode {
   readonly childNodes: SourceNode[] = [];
   private indexed = true;
@@ -192,22 +197,18 @@ export abstract class SourceParentNode extends SourceNode {
   // Every node under this one, in document order. Template contents are
   // separate trees and are not visited, as in the DOM.
   *descendants(): IterableIterator<SourceNode> {
-    const stack: SourceNode[][] = [this.childNodes];
-    const cursors: number[] = [0];
+    // One frame per open child list: the list and the next index to visit.
+    const stack: DescendantFrame[] = [{ nodes: this.childNodes, index: 0 }];
     while (stack.length > 0) {
-      const nodes = stack.at(-1) as SourceNode[];
-      const cursor = cursors.at(-1) as number;
-      if (cursor >= nodes.length) {
+      const frame = stack.at(-1) as DescendantFrame;
+      if (frame.index >= frame.nodes.length) {
         stack.pop();
-        cursors.pop();
         continue;
       }
-      cursors.splice(-1, 1, cursor + 1);
-      const node = nodes.at(cursor) as SourceNode;
+      const node = frame.nodes.at(frame.index++) as SourceNode;
       yield node;
       if (node instanceof SourceParentNode && node.childNodes.length > 0) {
-        stack.push(node.childNodes);
-        cursors.push(0);
+        stack.push({ nodes: node.childNodes, index: 0 });
       }
     }
   }

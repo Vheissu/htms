@@ -12,6 +12,7 @@ import {
   resolveOutputPath,
   validateFile,
   CliCompileOptions,
+  CompileOutcome,
   OutputFormat,
   PreviewDiagnostic,
 } from './cli-helpers';
@@ -111,36 +112,14 @@ export function createProgram(): Command {
       console.log(`   Next: htms dev ${JSON.stringify(outputPath)}`);
     });
 
-  program
+  const compile = program
     .command('compile')
     .description('Compile HTML files to JavaScript')
-    .argument('<inputs...>', 'Input HTML file paths')
-    .option('-o, --output <path>', 'Output file path')
-    .option('--format <format>', 'Output format (esm|cjs|iife)', 'esm')
-    .option('--strict', 'Enable strict mode', false)
-    .option('--no-declarations', 'Do not write a TypeScript declaration file')
-    .option(
-      '--max-size <size>',
-      'Maximum file size in bytes',
-      String(DEFAULT_MAX_SIZE)
-    )
-    .option(
-      '--mode <mode>',
-      'Compilation mode (only component supported)',
-      'component'
-    )
-    .option(
-      '--renderer <renderer>',
-      'Renderer: auto (fine-grained blocks) or legacy (reconciling)',
-      'auto'
-    )
-    .action(async (inputs: string[], options: CompileCommandOptions) => {
-      const normalized = normalizeCompileOptions(options);
-      if (!normalized.value) {
-        printOptionErrors(normalized.errors);
-        process.exit(1);
-      }
-      if (inputs.length > 1 && normalized.value.outputPath) {
+    .argument('<inputs...>', 'Input HTML file paths');
+  addModeOptions(addOutputOptions(compile)).action(
+    async (inputs: string[], options: CompileCommandOptions) => {
+      const compileOptions = compileOptionsOrExit(options);
+      if (inputs.length > 1 && compileOptions.outputPath) {
         printOptionErrors([
           '--output can only be used with a single input file; each file is written next to its source',
         ]);
@@ -151,7 +130,7 @@ export function createProgram(): Command {
       for (const input of inputs) {
         const result = await compileAndReport(
           input,
-          normalized.value,
+          compileOptions,
           '✅ Successfully compiled to'
         );
         if (!result.success) {
@@ -164,78 +143,34 @@ export function createProgram(): Command {
         }
         process.exit(1);
       }
-    });
+    }
+  );
 
-  program
+  const watch = program
     .command('watch')
     .description('Watch HTML file and recompile on changes')
-    .argument('<input>', 'Input HTML file path')
-    .option('-o, --output <path>', 'Output file path')
-    .option('--format <format>', 'Output format (esm|cjs|iife)', 'esm')
-    .option('--strict', 'Enable strict mode', false)
-    .option('--no-declarations', 'Do not write a TypeScript declaration file')
-    .option(
-      '--max-size <size>',
-      'Maximum file size in bytes',
-      String(DEFAULT_MAX_SIZE)
-    )
-    .option(
-      '--mode <mode>',
-      'Compilation mode (only component supported)',
-      'component'
-    )
-    .option(
-      '--renderer <renderer>',
-      'Renderer: auto (fine-grained blocks) or legacy (reconciling)',
-      'auto'
-    )
-    .action(async (input: string, options: CompileCommandOptions) => {
-      const normalized = normalizeCompileOptions(options);
-      if (!normalized.value) {
-        printOptionErrors(normalized.errors);
-        process.exit(1);
-      }
+    .argument('<input>', 'Input HTML file path');
+  addModeOptions(addOutputOptions(watch)).action(
+    async (input: string, options: CompileCommandOptions) => {
+      await runWatch(input, compileOptionsOrExit(options));
+    }
+  );
 
-      await runWatch(input, normalized.value);
-    });
-
-  program
+  const dev = program
     .command('dev')
     .description('Compile, serve, and live-reload a component in the browser')
-    .argument('<input>', 'Input HTML file path')
-    .option('-o, --output <path>', 'Output file path')
-    .option('--format <format>', 'Output format (esm only for dev)', 'esm')
-    .option('--strict', 'Enable strict mode', false)
-    .option('--no-declarations', 'Do not write a TypeScript declaration file')
-    .option(
-      '--max-size <size>',
-      'Maximum file size in bytes',
-      String(DEFAULT_MAX_SIZE)
-    )
+    .argument('<input>', 'Input HTML file path');
+  addOutputOptions(dev, 'Output format (esm only for dev)')
     .option('-p, --port <port>', 'Dev server port', String(DEFAULT_PORT))
     .option('--host <host>', 'Dev server host', '127.0.0.1')
     .option(
       '--tag <tag>',
       'Preview component tag name (override auto-detection)'
-    )
-    .option(
-      '--mode <mode>',
-      'Compilation mode (only component supported)',
-      'component'
-    )
-    .option(
-      '--renderer <renderer>',
-      'Renderer: auto (fine-grained blocks) or legacy (reconciling)',
-      'auto'
-    )
-    .action(async (input: string, options: DevCommandOptions) => {
-      const normalized = normalizeCompileOptions(options);
-      if (!normalized.value) {
-        printOptionErrors(normalized.errors);
-        process.exit(1);
-      }
-
-      if (normalized.value.format !== 'esm') {
+    );
+  addModeOptions(dev).action(
+    async (input: string, options: DevCommandOptions) => {
+      const compileOptions = compileOptionsOrExit(options);
+      if (compileOptions.format !== 'esm') {
         console.error(
           'Error: dev server requires --format esm for browser modules.'
         );
@@ -249,12 +184,13 @@ export function createProgram(): Command {
       }
 
       const host = options.host?.trim() || '127.0.0.1';
-      await runDevServer(input, normalized.value, {
+      await runDevServer(input, compileOptions, {
         port,
         host,
         tag: options.tag,
       });
-    });
+    }
+  );
 
   program
     .command('render')
@@ -320,6 +256,49 @@ export function createProgram(): Command {
     });
 
   return program;
+}
+
+// Output options compile, watch and dev share. dev declares its server
+// options between these and the mode options.
+function addOutputOptions(
+  command: Command,
+  formatHelp = 'Output format (esm|cjs|iife)'
+): Command {
+  return command
+    .option('-o, --output <path>', 'Output file path')
+    .option('--format <format>', formatHelp, 'esm')
+    .option('--strict', 'Enable strict mode', false)
+    .option('--no-declarations', 'Do not write a TypeScript declaration file')
+    .option(
+      '--max-size <size>',
+      'Maximum file size in bytes',
+      String(DEFAULT_MAX_SIZE)
+    );
+}
+
+function addModeOptions(command: Command): Command {
+  return command
+    .option(
+      '--mode <mode>',
+      'Compilation mode (only component supported)',
+      'component'
+    )
+    .option(
+      '--renderer <renderer>',
+      'Renderer: auto (fine-grained blocks) or legacy (reconciling)',
+      'auto'
+    );
+}
+
+function compileOptionsOrExit(
+  options: CompileCommandOptions
+): CliCompileOptions {
+  const normalized = normalizeCompileOptions(options);
+  if (!normalized.value) {
+    printOptionErrors(normalized.errors);
+    process.exit(1);
+  }
+  return normalized.value;
 }
 
 function normalizeCompileOptions(options: CompileCommandOptions): {
@@ -626,14 +605,28 @@ async function compileAndReport(
   successLabel: string
 ): Promise<{ success: boolean; outputPath?: string }> {
   const result = await compileFile(input, options);
-  const context = { filePath: input, source: result.source };
-  if (result.success && result.outputPath) {
-    console.log(`${successLabel} ${result.outputPath}`);
+  reportCompile(
+    result,
+    input,
+    result.outputPath && `${successLabel} ${result.outputPath}`
+  );
+  return { success: result.success, outputPath: result.outputPath };
+}
+
+// Prints `successLine` for a successful compile, its errors otherwise, then
+// its warnings.
+function reportCompile(
+  result: CompileOutcome,
+  filePath: string,
+  successLine: string | undefined
+): void {
+  const context = { filePath, source: result.source };
+  if (result.success && successLine) {
+    console.log(successLine);
   } else {
     printCompilationErrors(result.errors, context);
   }
   printWarnings(result.warnings, context);
-  return { success: result.success, outputPath: result.outputPath };
 }
 
 function debounce(fn: () => void, delay: number): () => void {
@@ -749,12 +742,10 @@ async function runDevServer(
   }
 
   const scriptPath = toUrlPath(rootDir, outputPath);
-  let previewTag = dev.tag?.trim().toLowerCase() || '';
+  let previewTag =
+    dev.tag?.trim().toLowerCase() || (await inferTagName(resolvedInput));
   let warnedMultiple = false;
   let lastDiagnostics: PreviewDiagnostic[] = [];
-
-  const initialTag = await inferTagName(resolvedInput);
-  previewTag = previewTag || initialTag;
 
   const clients = new Set<http.ServerResponse>();
 
@@ -784,7 +775,7 @@ async function runDevServer(
 
     if (urlPath === '/' || urlPath === '/index.html') {
       const html = buildPreviewHtml({
-        tagName: previewTag || 'htms-preview',
+        tagName: previewTag,
         scriptPath,
         enableReload: true,
         reloadEndpoint: RELOAD_ENDPOINT,
@@ -840,43 +831,31 @@ async function runDevServer(
       outputPath,
     });
 
-    if (!result.success) {
-      const context = {
-        filePath: resolvedInput,
-        source: result.source,
-      };
-      printCompilationErrors(result.errors, context);
-      printWarnings(result.warnings, context);
-      lastDiagnostics = toPreviewDiagnostics(result.errors, result.warnings);
-      const payload = JSON.stringify(lastDiagnostics);
-      clients.forEach((client) => sendDevEvent(client, 'diagnostics', payload));
-      return;
-    }
-
-    lastDiagnostics = toPreviewDiagnostics([], result.warnings);
-    if (result.components && result.components.length > 0) {
-      if (!dev.tag) {
-        if (result.components.length > 1 && !warnedMultiple) {
-          const names = result.components.map((c) => c.tagName).join(', ');
-          console.log(`ℹ️  Multiple components found: ${names}`);
-          console.log(
-            `   Previewing "${result.components[0].tagName}". Use --tag to pick.`
-          );
-          warnedMultiple = true;
-        }
-        previewTag = result.components[0].tagName;
+    const components = result.components ?? [];
+    if (result.success && components.length > 0 && !dev.tag) {
+      if (components.length > 1 && !warnedMultiple) {
+        const names = components.map((c) => c.tagName).join(', ');
+        console.log(`ℹ️  Multiple components found: ${names}`);
+        console.log(
+          `   Previewing "${components[0].tagName}". Use --tag to pick.`
+        );
+        warnedMultiple = true;
       }
+      previewTag = components[0].tagName;
     }
+    reportCompile(result, resolvedInput, `${label} ${outputPath}`);
 
-    console.log(`${label} ${outputPath}`);
-    printWarnings(result.warnings, {
-      filePath: resolvedInput,
-      source: result.source,
-    });
-
-    clients.forEach((client) => {
-      sendDevEvent(client, 'compiled', 'reload');
-    });
+    // A successful compile has no errors.
+    lastDiagnostics = toPreviewDiagnostics(result.errors, result.warnings);
+    const message = result.success
+      ? ({ event: 'compiled', data: 'reload' } as const)
+      : ({
+          event: 'diagnostics',
+          data: JSON.stringify(lastDiagnostics),
+        } as const);
+    clients.forEach((client) =>
+      sendDevEvent(client, message.event, message.data)
+    );
   };
 
   await compileAndReload('✅ Successfully compiled to');
@@ -884,7 +863,7 @@ async function runDevServer(
   server.listen(dev.port, dev.host, () => {
     const base = `http://${dev.host}:${dev.port}`;
     console.log(`🚀 HTMS dev server running at ${base}/`);
-    console.log(`   Previewing <${previewTag || 'htms-preview'}>`);
+    console.log(`   Previewing <${previewTag}>`);
     console.log(`   Serving ${rootDir}`);
   });
 

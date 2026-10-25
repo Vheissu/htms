@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import { generateComponentDeclarations } from './component/declarations';
+import { escapeHtml } from './component/template-serializer';
 import { parseHTML } from './parser';
 import { CompilerLogger } from './utils/logger';
 import { SecurityValidator } from './utils/security';
@@ -173,34 +174,13 @@ export async function compileFile(
   options: CliCompileOptions
 ): Promise<CompileOutcome> {
   const startTime = Date.now();
-  const warnings: CompilerWarning[] = [];
-  const errors: CompilerError[] = [];
-  const mode = options.mode ?? 'component';
-
-  if (mode !== 'component') {
-    errors.push({
-      type: 'validation',
-      message: 'Only component mode is supported.',
-    });
-    return { success: false, errors, warnings };
-  }
-
   const input = await readSourceFile(inputPath, options.maxSize);
   if (input.source === undefined) {
-    return { success: false, errors: input.errors, warnings };
-  }
-  if (input.errors.length > 0) {
-    return {
-      success: false,
-      source: input.source,
-      errors: input.errors,
-      warnings,
-    };
+    return { success: false, errors: input.errors, warnings: [] };
   }
   const htmlContent = input.source;
 
   const parseOptions: ParseOptions = {
-    maxFileSize: options.maxSize,
     strictMode: options.strict,
     outputFormat: options.format,
     renderer: options.renderer,
@@ -213,8 +193,7 @@ export async function compileFile(
   });
 
   const result = parseHTML(htmlContent, parseOptions);
-  errors.push(...result.errors);
-  warnings.push(...result.warnings);
+  const warnings = result.warnings;
 
   if (!result.success || !result.code) {
     CompilerLogger.logCompilerError('Compilation failed', {
@@ -224,7 +203,7 @@ export async function compileFile(
     return {
       success: false,
       source: htmlContent,
-      errors,
+      errors: result.errors,
       warnings,
       components: result.components,
     };
@@ -242,27 +221,26 @@ export async function compileFile(
     return { success: false, errors: outputValidationErrors, warnings };
   }
 
-  const shouldWriteDeclarations = options.declarations ?? true;
-  const declarationPath = shouldWriteDeclarations
-    ? resolveDeclarationPath(outputPath)
-    : undefined;
-  const declarations = declarationPath
-    ? generateComponentDeclarations(result.components ?? [])
-    : undefined;
-  const declarationValidationErrors = declarationPath
-    ? SecurityValidator.validateFilePath(path.resolve(declarationPath))
-    : [];
-  if (declarationValidationErrors.length > 0) {
-    CompilerLogger.logValidationError('Invalid declaration output path', {
-      declarationPath,
-      errors: declarationValidationErrors,
-    });
-    return { success: false, errors: declarationValidationErrors, warnings };
+  let declarationPath: string | undefined;
+  let declarations: string | undefined;
+  if (options.declarations ?? true) {
+    declarationPath = resolveDeclarationPath(outputPath);
+    const declarationErrors = SecurityValidator.validateFilePath(
+      path.resolve(declarationPath)
+    );
+    if (declarationErrors.length > 0) {
+      CompilerLogger.logValidationError('Invalid declaration output path', {
+        declarationPath,
+        errors: declarationErrors,
+      });
+      return { success: false, errors: declarationErrors, warnings };
+    }
+    declarations = generateComponentDeclarations(result.components ?? []);
   }
 
   try {
     const writes: Promise<void>[] = [fs.writeFile(outputPath, result.code)];
-    if (declarationPath && declarations !== undefined) {
+    if (declarationPath !== undefined && declarations !== undefined) {
       writes.push(fs.writeFile(declarationPath, declarations));
     }
     await Promise.all(writes);
@@ -303,17 +281,11 @@ export async function validateFile(
   maxSize: number
 ): Promise<ValidationOutcome> {
   const input = await readSourceFile(inputPath, maxSize);
-  if (input.source === undefined || input.errors.length > 0) {
-    return {
-      success: false,
-      source: input.source,
-      errors: input.errors,
-      warnings: [],
-    };
+  if (input.source === undefined) {
+    return { success: false, errors: input.errors, warnings: [] };
   }
 
   const result = parseHTML(input.source, {
-    maxFileSize: maxSize,
     strictMode: true,
     outputFormat: 'esm',
     mode: 'component',
@@ -495,15 +467,6 @@ export function titleFromTagName(tagName: string | null | undefined): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export interface PreviewOptions {
