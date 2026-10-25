@@ -7,7 +7,7 @@ import {
   TemplateBinding,
   TemplateNode,
 } from './ir';
-import { parseProgram } from '../utils/js-parser';
+import { parseReadOnlyProgram } from '../utils/js-parser';
 import { ALL_DIRTY, DEEP_BIT, DependencyAnalyzer } from './dependencies';
 import { scopeExpression, scopeStatements } from './scope';
 import {
@@ -327,7 +327,7 @@ function rawTextValue(expression: string): string | null {
   if (!expression.startsWith('__htmsS(') || !expression.endsWith(')'))
     return null;
   try {
-    const program = parseProgram(expression, 'script');
+    const program = parseReadOnlyProgram(expression, 'script');
     const statement = program.body[0];
     if (
       program.body.length === 1 &&

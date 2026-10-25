@@ -45,6 +45,56 @@ export function parseProgram(
     : parseScript(source, options);
 }
 
+interface ReadOnlyParseCache {
+  script: Map<string, ESTree.Program>;
+  module: Map<string, ESTree.Program>;
+  count: number;
+  sourceLength: number;
+}
+
+let readOnlyCache: ReadOnlyParseCache | null = null;
+
+// Analysis passes read the same snippets repeatedly. Share their ASTs for
+// one compilation, then release them, including after errors or a nested
+// compile. Mutable parses (formatting and comment attachment) stay separate.
+export function withReadOnlyParseCache<T>(compile: () => T): T {
+  const previous = readOnlyCache;
+  readOnlyCache = {
+    script: new Map(),
+    module: new Map(),
+    count: 0,
+    sourceLength: 0,
+  };
+  try {
+    return compile();
+  } finally {
+    readOnlyCache = previous;
+  }
+}
+
+// The returned tree must only be read. Bound both entries and source length
+// so a large file cannot retain every parsed snippet until compilation ends.
+export function parseReadOnlyProgram(
+  source: string,
+  sourceType: 'module' | 'script'
+): ESTree.Program {
+  const cache = readOnlyCache;
+  const entries = sourceType === 'module' ? cache?.module : cache?.script;
+  const cached = entries?.get(source);
+  if (cached) return cached;
+  const ast = parseProgram(source, sourceType);
+  if (
+    cache &&
+    cache.count < 256 &&
+    cache.sourceLength + source.length <= 65536
+  ) {
+    entries?.set(source, ast);
+    cache.count++;
+    cache.sourceLength += source.length;
+  }
+  return ast;
+}
+
 export interface ExpressionPrefix {
   expression: ESTree.Expression;
   // Where the expression stops within the code it was read from.
@@ -59,7 +109,7 @@ export interface ExpressionPrefix {
 export function parseExpressionPrefix(code: string): ExpressionPrefix | null {
   let program: ESTree.Program;
   try {
-    program = parseScript(`(${code}\n)`, WITH_RANGES);
+    program = parseReadOnlyProgram(`(${code}\n)`, 'script');
   } catch {
     return null;
   }

@@ -1,0 +1,14 @@
+{
+  "baseline": {
+    "parseCallsPerCompile": [
+      326,
+      326
+    ]
+  },
+  "candidate": {
+    "parseCallsPerCompile": [
+      162,
+      162
+    ]
+  }
+}

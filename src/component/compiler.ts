@@ -58,6 +58,7 @@ import { CompilerLogger } from '../utils/logger';
 import { ensureRuntime } from '../utils/runtime';
 import { addNodeLocation, addNodeLocations } from '../diagnostics';
 import { SourceDocument, SourceElement } from '../source-dom';
+import { withReadOnlyParseCache } from '../utils/js-parser';
 
 interface ComponentMetadata {
   tagName: string;
@@ -244,6 +245,15 @@ function collectLifecycleStateDirectives(ir: ComponentIR): {
 export function compileComponents(
   htmlContent: string,
   options: ParseOptions = {}
+): ComponentCompileResult {
+  return withReadOnlyParseCache(() =>
+    compileComponentSource(htmlContent, options)
+  );
+}
+
+function compileComponentSource(
+  htmlContent: string,
+  options: ParseOptions
 ): ComponentCompileResult {
   const document = parseComponentSource(htmlContent);
   const bodyChildren = document.body ? [...document.body.children] : [];

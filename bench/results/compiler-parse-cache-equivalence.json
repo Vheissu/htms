@@ -1,0 +1,674 @@
+[
+  {
+    "file": "/Users/dwayne/Code/htms/demos/bind-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "da69aceac75a3810c19abdeb0d7185248aa7b226d36cd063d6f0fa4a6f51488e"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/bind-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "bf1f869411065b2eb54af0b1ed76f7144d07568230e46fb18734b87aaf13a3ce"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/bind-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "5f269e58df3a0e86f6cb43b9b9406456229b336673670e8cd834e82a4cd8cfef"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/bind-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "36607433427b766f8e7e26e50625859be95100c65d30107594cc5cad16c77e1c"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/bind-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "f03f6b4f0f825a3483f04ccaa469dccc01c1e468693d0d1af7c4b3c448026fe8"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/bind-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "3b66b2dcea37ddecd991dcb058d0c1f5194682fafe1c78c8b734b61891596c3c"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/composition-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "18ab217e7014531ecfd9592825faa0274d21c857f394482771d49e395eaec0ab"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/composition-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "4ae366fdd82649653f49681097348aa826a1f9e5790f320ff00719181fab8187"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/composition-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "8dc9223179f6456dcb2beefde59e6e3dfe75455f9f0cd42463996e28fe14a2cc"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/composition-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "3149623c1b65a14b943c6b37daebc6551fecaf2577f4169aec29cb37b49ce249"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/composition-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "aae359a6f41d7d8f179b249e10d885187ba3ec9b01291e35287589739fa4269f"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/composition-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "7dcc8cfc04720c320a4f63f395b94fa24da9dc74636632194223ed0b37c9b526"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/counter-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "5b93c5476da0f5cb32063305a8d3f1f45d0324b868ca51d19fe3b247380c5e19"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/counter-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "0a424601689597295d12ae668715f0c13b02c948d5da963d66ecf526fb179101"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/counter-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "d2d8e28c2eea2e381834593ee994d96a70e7c7ba91f2144d9962966e0e9eaccc"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/counter-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "11bba68d914938d709111300fb97c908ca8e60666a7fb1fd5483abb8a75f44a2"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/counter-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "8c525ae69ef718ec88733ad4659e0836421db4a680dbb2fc50425da4ff3dd793"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/counter-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "cd2351dba6bdb827fd4d6c1b859a2875f31a3ee1e0fc9d7995ec5402eabbb28f"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/derived-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "87b8cbc698246131f6352c329b3414b9abb1d1c7a7f7b47a034fa204d09366f8"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/derived-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "ae426945be46cecd7bf4385747232dff8ab594897f8a1e38d773c0a4500da207"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/derived-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "1a0d94c9debb6686bccc23f18e8ab9f12a39fdde3aece1ce657734eec3dc9321"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/derived-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "0e5481c7b3bbc112defffa36b0e37846a1f2f4c560c844194aa0d3ef7d913ae4"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/derived-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "65182d1b77c87b1c5d2193eb8aeae34aa83868ae15cf418eddd72d8dca05cfd0"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/derived-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "f81d64148519555dd96bf056606c85e98034599022fdac2b7300851f22224958"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-auto-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "d4bed123300311d1d38a7034ef4caed255afe63201bff0c2243092d5dac95729"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-auto-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "43fc21680b0e519473783da9880c5de9d6dc54d9f42f822c822c578b618f0520"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-auto-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "8f3e3071b563f12167dc580e1b0cf367342935db8334c13c95aa5d14134651eb"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-auto-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "01b6a1823ae01b34dd6ce41d46da7edecc54c85dda156dfde074a0e33ca84a70"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-auto-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "b0988299a326ba4621585c2ef666141dbbec577f423bccc23fc0a03596dec597"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-auto-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "04ca1a9b497008e983acb85ef22b05f4d0c6afabbc1ab6b47f799a1ec3dc0587"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "fc31dcfe6166628aed5b74a90effd791a3e818d4c257226668eb9d6f865b35b9"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "cc062d019aed7b8aa77bd6e69b68f8d6d9c92dcc6d2b3f51ced26f96918a7099"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "1b2711198b13eac34be97103c0c4dca121812a65cc82c2acbe2b8cc5bb04be39"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "d326407863475dd906d8522dc5f8ecd49bf82793802615d33327187689b0653f"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "1f142a841ede75530a135e1103a4a5debe53325149a9ca1b39a3f9570bc04a05"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "a1e6f2c1e7c9a7964a7fafa49b20952bdb4f781eb85a8d9fe6b74f1724eec6ff"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-error-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "4c7aa5d9ac1927ad18d1555d86a65177b85b6f1e72199b9165039b6dea9df595"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-error-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "1a933c22da97a00968052c62db33301b0880ebb296dca376404749fe31d7362e"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-error-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "b3009283414f9db7284ced5be1ab7076a351b84d7617460b94302b00a73e43e4"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-error-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "387c58b2b539ce1bc8310aaad6c0d6d440535b328323b58f732f638fb4c0d0a6"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-error-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "643b1e1e932bacc88f73633d0612bcb8e2326b58ae50619e74c67f43be66a63e"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/effect-fetch-error-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "56e34a15ef986ceaf823bf2c83a4a617f44bebf43330c5a44c6575096d478da9"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/emit-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "3d5fdcac26a009934f317df9623f9b91f5229ec6033c48e07da0e19da4b956a9"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/emit-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "ce9c9d20c80b3153be4093ead10e4bda05971afca4399ce7a701cd3dbf893e78"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/emit-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "65ec71ef73caf07257349507dea0a46644fdbd26ea58decec0f343a31b2c0f00"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/emit-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "f39faeef752783ffed7297a3ff1c439b1fc0223fba87cb77175465e5c0127592"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/emit-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "499ce063a1fdef678ceff67b898b8d8d3d99db0a7017a2770592438af3974d81"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/emit-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "f7438219b7e1a62a0a8626f8e213d377a8e539f8ac80cc2d4e97df7d10079412"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/event-toggle-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "8f8426f5dfc5c12f09734fd58ff638a43c94bbb4fe95f66c860d5aaa8b4e8497"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/event-toggle-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "85e9b7a84f7a8f145fbf41fe38f659aba0e3ababc5c602065a90ccfda2e99464"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/event-toggle-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "4e338ebf88df801c00fafe1cbf03e99b192772a007b909ffd5f5d4cc147a1882"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/event-toggle-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "013838f13da3fe4b894217cbb05ce152f4340b2f6c746ba7f43fcbe8d09dd085"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/event-toggle-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "e8a19988b8d8520e143b3855cd9ebb6fc9359158651cfaf4a64042b908c92416"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/event-toggle-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "69c572320a4febe51ad053f6ce83334555a15ad56232e27e70090f51b844a558"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/form-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "89cf34a4e80eee738ceffe8561515f281f69cceff5e92ba8be5651e2efd9e8ad"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/form-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "d9c5608d450d1ca47bd9197190f1de43c2615fc18329a9e91bb841d514c93441"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/form-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "828f814eddbf2d3120c54564685f947ca5b13d14209fd0c4cc57aa2bd06cc3b7"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/form-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "bde129b3a44b66d5bd63fbd6300b8caf41a33de3508675de524ac85bf5fe603f"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/form-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "6a9290ac8d552f181c0979f2e88fb1e96a8cd07c6774b1b0a43195313f4a5605"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/form-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "47765005945f1d29af6ba5a312088302a74f4bdd09b917e62184802b97fbfc92"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/hello-world-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "5be78ecf25c11769a08805e4a7738ba8d176e8ca4a2a9c59cda269b58952f38b"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/hello-world-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "8b55dc238b7b8077accdecbfa35eac3ce990c1b81e1beae7bd7b11d91345ff0c"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/hello-world-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "ca941bb343a542e3e6f3194dd1107966321f18f900646e3bb9e196fc21140eae"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/hello-world-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "2245c3bfde61c3d9e6f5b2e7d83dbe5f7327e20cfc5c105f423525f42e4b8ea3"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/hello-world-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "ee4a446c542b171466ba93124904ffef04fa769c1c926d11ce979c9125aa501c"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/hello-world-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "7328b1ad560eda9c9e4004cc30063eb35b102d6c2cfabda7c73454f29261be0d"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/list-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "4c14c4a2a110c60a3d09e2e9104f58b70ae02f5d5b0b1a6f7721037b062c328c"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/list-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "a86cb8f8e9105b48c7bab0a86afa13735a95579096597b3b879dd6bd64e3002b"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/list-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "a4f17cd8cde70e96f852d043fc96de43851112fdff47c1bdce7c62ce0e0c40b4"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/list-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "6a1e95952fbe8a4d16d239dbb674bc96443ddf6d2f92a84857daab1fdd908e3b"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/list-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "7c336346e8be0c4632bb5e7fa4d44f290a2d378577d6170f09c1677a9d29c085"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/list-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "9e44a5035a1295b9131beadda0ad795a1b3538513a512da7378c168050680eae"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/ssr-card-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "878b4ca6d07d4d83bd2f36093c084368c04ef5f7206e51556f38e1b44cd69812"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/ssr-card-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "0b4378d0b44c523ed091cee1cb31cc2b7bfceb7bd396459540b1706ab7cfcc9f"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/ssr-card-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "e5973b1e55b7f992199f9491afcb777eeb716dc64e5698d57e35eadd117b6805"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/ssr-card-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "ccea5440c7d0a5f41e6d2302db0d5002fea6acd3f56ffd0452f36a60ca3daa97"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/ssr-card-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "0ee5b8d2a163482dc5d001960e2fffc0318d3c8e3701b19528939c85d2112fa1"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/ssr-card-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "af2b9748b263507d5971c59b21891dd712c487aaf50e88072404dabc0a4bbbbe"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/todo-component.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "78d9b1c604355dde166084a9fb2047b281a010a3083697235ee65d55eb46e172"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/todo-component.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "47a0d6f4a122c6ee7c75e71675ec0d83ec71c37d7ccfc769c20d4a5f0109ae7b"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/todo-component.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "f09b878f5ae110bb5a399838bd698e31b41366c1ceb5c53277696c98c0f4fbb8"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/todo-component.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "d140dd9e862f0e40f1bd122c81efbbbc01148eeece827fdde2798c15c9507a82"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/todo-component.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "2ea3a92c64d7bc5dbd4c4259e16683b88ae71a0919d674a15ef6d9078de29ade"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/demos/todo-component.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "684d7edc2ac6ff79628261d0e80e927b2f58aaef1cc654f27b3b0b4a14155a14"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/bench/apps/htms/app.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "70e3206310d71e1ea3940310dfb2547d58e2cae61887b36450afbe635867629c"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/bench/apps/htms/app.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "500040e348e0a4b89338466ffaff0c8810b12aad8220ff09015996818e8327fa"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/bench/apps/htms/app.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "4e70a08b35853e9097f66ce7a9e19ec1db4f366e2bd9b00bb401b248bb880d4b"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/bench/apps/htms/app.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "b415cf59f9f8d60eef8e9ae83e73a6b75e2b09d08b5eca1207306c44aad80923"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/bench/apps/htms/app.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "f6ae36fcc86184341e3acc9ce824915c10686a2f94d0dcb0c63c68bd1523e4f3"
+  },
+  {
+    "file": "/Users/dwayne/Code/htms/bench/apps/htms/app.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "9fe634ebefd751c84ac79a3348bec15e7d3b3695fe77ef7810fdd994f69b529b"
+  },
+  {
+    "file": "/tmp/htms-broad-fixture.html",
+    "renderer": "auto",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "acad147586c0f738bc5458ac062730f0665ccf3868b4fde01758ba15c67be55c"
+  },
+  {
+    "file": "/tmp/htms-broad-fixture.html",
+    "renderer": "auto",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "5f861b590c9d5146f3948fa7fadefb6065bb84b0ef8a70220ee02e578d9e6398"
+  },
+  {
+    "file": "/tmp/htms-broad-fixture.html",
+    "renderer": "auto",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "d387cf74cef7f97795216693b536847bac06cce4018396fa2a922767041a5b9b"
+  },
+  {
+    "file": "/tmp/htms-broad-fixture.html",
+    "renderer": "legacy",
+    "outputFormat": "esm",
+    "success": true,
+    "codeSha256": "7f383a9fed33abc0416f7908e884b7881132aed35667e0a078dfc6e4b89f35f1"
+  },
+  {
+    "file": "/tmp/htms-broad-fixture.html",
+    "renderer": "legacy",
+    "outputFormat": "cjs",
+    "success": true,
+    "codeSha256": "7b63b7e25fae5a45585dafcae7d1ef0cba24fbcb7fe8fedf1d961c90bc38e77b"
+  },
+  {
+    "file": "/tmp/htms-broad-fixture.html",
+    "renderer": "legacy",
+    "outputFormat": "iife",
+    "success": true,
+    "codeSha256": "1eaafd1c9412ba143ae87e59a29c7f4cd61afa7b0a108d00e31ea1d4b5bb5091"
+  }
+]

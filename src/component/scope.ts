@@ -1,5 +1,5 @@
 import { TagHandlerOptions } from '../types';
-import { ESTree, parseProgram } from '../utils/js-parser';
+import { ESTree, parseReadOnlyProgram } from '../utils/js-parser';
 
 // Component expressions are written against the component's fields:
 // `count + 1`, `todos.length`, `format(price)`. The generated code runs as
@@ -250,7 +250,7 @@ export function parseSnippet(
     : `${STATEMENTS_PREFIX}${code}\n})`;
   let program: ESTree.Program;
   try {
-    program = parseProgram(wrapped, 'script');
+    program = parseReadOnlyProgram(wrapped, 'script');
   } catch {
     return null;
   }
