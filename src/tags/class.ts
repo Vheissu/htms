@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { ClassDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -22,8 +23,7 @@ export const handleClassTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, report, empty } = handlerDiagnostics('CLASS');
 
   try {
     const selector = element.getAttribute('selector');
@@ -33,52 +33,27 @@ export const handleClassTag: TagHandler = (
       element.getAttribute('when') || element.getAttribute('condition');
 
     if (!selector || !nameAttr.trim()) {
-      errors.push({
-        type: 'validation',
-        message: 'CLASS requires selector and name attributes',
-        tag: 'CLASS',
-      });
-      return { code: '', errors, warnings };
+      return fail('CLASS requires selector and name attributes');
     }
 
     if (!SecurityValidator.isAllowedSelector(selector)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector',
-        tag: 'CLASS',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector');
     }
 
     const classNames = parseClassNames(nameAttr);
     if (classNames.length === 0) {
-      errors.push({
-        type: 'validation',
-        message: 'CLASS name is empty',
-        tag: 'CLASS',
-      });
-      return { code: '', errors, warnings };
+      return fail('CLASS name is empty');
     }
 
     for (const className of classNames) {
       if (!isValidClassName(className)) {
-        errors.push({
-          type: 'validation',
-          message: `Invalid class name: ${className}`,
-          tag: 'CLASS',
-        });
-        return { code: '', errors, warnings };
+        return fail(`Invalid class name: ${className}`);
       }
     }
 
     let action = actionAttr || '';
     if (action && !ACTIONS.has(action)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid action for CLASS: ${action}`,
-        tag: 'CLASS',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid action for CLASS: ${action}`);
     }
 
     if (!action) {
@@ -89,11 +64,9 @@ export const handleClassTag: TagHandler = (
     if (whenAttr) {
       const conditionErrors = SecurityValidator.validateContent(whenAttr);
       if (conditionErrors.length > 0) {
-        errors.push(
-          ...conditionErrors.map((error) => ({ ...error, tag: 'CLASS' }))
-        );
+        report(conditionErrors);
         if (options.strictMode) {
-          return { code: '', errors, warnings };
+          return empty();
         }
       }
       condition = handlerScope(options).expression(whenAttr.trim());

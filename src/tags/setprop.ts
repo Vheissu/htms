@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { AttributeDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -16,8 +17,7 @@ export const handleSetPropTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith } = handlerDiagnostics('SETPROP');
 
   try {
     const selector = element.getAttribute('selector');
@@ -25,61 +25,33 @@ export const handleSetPropTag: TagHandler = (
     const value = element.getAttribute('value') || '';
     const exprAttr = element.getAttribute('expr');
     if (!selector || !prop) {
-      errors.push({
-        type: 'validation',
-        message: 'SETPROP requires selector and prop',
-        tag: 'SETPROP',
-      });
-      return { code: '', errors, warnings };
+      return fail('SETPROP requires selector and prop');
     }
     if (!SecurityValidator.isAllowedSelector(selector)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector',
-        tag: 'SETPROP',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector');
     }
     if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(prop)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid property path',
-        tag: 'SETPROP',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid property path');
     }
     const rootProperty = prop.split('.')[0].toLowerCase();
     if (
       rootProperty.startsWith('on') ||
       BLOCKED_PROPERTY_SINKS.has(rootProperty)
     ) {
-      errors.push({
-        type: 'security',
-        message: `Dangerous property sink not allowed: ${prop}`,
-        tag: 'SETPROP',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Dangerous property sink not allowed: ${prop}`, 'security');
     }
 
     const rawExpression = exprAttr?.trim() || value;
     const expressionErrors = SecurityValidator.validateContent(rawExpression);
     if (expressionErrors.length > 0) {
-      errors.push(
-        ...expressionErrors.map((error) => ({ ...error, tag: 'SETPROP' }))
-      );
-      return { code: '', errors, warnings };
+      return failWith(expressionErrors);
     }
     const valExpr =
       exprAttr && exprAttr.trim()
         ? handlerScope(options).expression(exprAttr.trim())
         : buildValueExpr(value);
     if (valExpr == null) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid value',
-        tag: 'SETPROP',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid value');
     }
 
     const sel = SecurityValidator.jsStringLiteral(selector);

@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
@@ -37,20 +38,15 @@ export const handleCallTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, report, empty } =
+    handlerDiagnostics('CALL');
 
   try {
     const functionName = element.getAttribute('function');
     const args = element.getAttribute('args') || '';
 
     if (!functionName) {
-      errors.push({
-        type: 'validation',
-        message: 'CALL tag requires a function attribute',
-        tag: 'CALL',
-      });
-      return { code: '', errors, warnings };
+      return fail('CALL tag requires a function attribute');
     }
 
     // Validate function name
@@ -58,10 +54,7 @@ export const handleCallTag: TagHandler = (
       functionName.split('.')[0]
     );
     if (functionErrors.length > 0 && !functionName.includes('.')) {
-      errors.push(
-        ...functionErrors.map((error) => ({ ...error, tag: 'CALL' }))
-      );
-      return { code: '', errors, warnings };
+      return failWith(functionErrors);
     }
 
     // Security check - only allow whitelisted functions in strict mode
@@ -70,31 +63,24 @@ export const handleCallTag: TagHandler = (
       !ALLOWED_FUNCTIONS.has(functionName) &&
       !options.componentFields?.has(functionName.split('.')[0])
     ) {
-      errors.push({
-        type: 'security',
-        message: `Function not in whitelist: ${functionName}. Allowed functions: ${Array.from(ALLOWED_FUNCTIONS).join(', ')}`,
-        tag: 'CALL',
-      });
-      return { code: '', errors, warnings };
+      return fail(
+        `Function not in whitelist: ${functionName}. Allowed functions: ${Array.from(ALLOWED_FUNCTIONS).join(', ')}`,
+        'security'
+      );
     }
 
     // Validate function name format
     if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(functionName)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid function name format: ${functionName}`,
-        tag: 'CALL',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid function name format: ${functionName}`);
     }
 
     // Security validation of arguments
     if (args) {
       const argErrors = SecurityValidator.validateContent(args);
       if (argErrors.length > 0) {
-        errors.push(...argErrors.map((error) => ({ ...error, tag: 'CALL' })));
+        report(argErrors);
         if (options.strictMode) {
-          return { code: '', errors, warnings };
+          return empty();
         }
       }
 
@@ -102,12 +88,7 @@ export const handleCallTag: TagHandler = (
       if (
         /eval\s*\(|Function\s*\(|setTimeout\s*\(|setInterval\s*\(/i.test(args)
       ) {
-        errors.push({
-          type: 'security',
-          message: 'Dangerous functions not allowed in arguments',
-          tag: 'CALL',
-        });
-        return { code: '', errors, warnings };
+        return fail('Dangerous functions not allowed in arguments', 'security');
       }
     }
 
@@ -134,10 +115,7 @@ export const handleCallTag: TagHandler = (
           else if (SecurityValidator.isNumericLiteral(arg)) {
             const numErrors = SecurityValidator.validateNumericValue(arg);
             if (numErrors.length > 0) {
-              errors.push(
-                ...numErrors.map((error) => ({ ...error, tag: 'CALL' }))
-              );
-              return { code: '', errors, warnings };
+              return failWith(numErrors);
             }
             validatedArgList.push(arg);
           }
@@ -152,31 +130,18 @@ export const handleCallTag: TagHandler = (
               const varErrors =
                 SecurityValidator.validateJavaScriptIdentifier(part);
               if (varErrors.length > 0) {
-                errors.push(
-                  ...varErrors.map((error) => ({ ...error, tag: 'CALL' }))
-                );
-                return { code: '', errors, warnings };
+                return failWith(varErrors);
               }
             }
             validatedArgList.push(arg);
           } else {
-            errors.push({
-              type: 'validation',
-              message: `Invalid argument format: ${arg}`,
-              tag: 'CALL',
-            });
-            return { code: '', errors, warnings };
+            return fail(`Invalid argument format: ${arg}`);
           }
         }
 
         validatedArgs = validatedArgList.join(', ');
       } catch {
-        errors.push({
-          type: 'validation',
-          message: `Failed to parse arguments: ${args}`,
-          tag: 'CALL',
-        });
-        return { code: '', errors, warnings };
+        return fail(`Failed to parse arguments: ${args}`);
       }
     }
 

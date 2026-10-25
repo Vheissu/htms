@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { BindDirective, EventDirective, StateDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
@@ -28,8 +29,7 @@ export const handleModelTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, report, empty } = handlerDiagnostics('MODEL');
 
   try {
     const selector = element.getAttribute('selector');
@@ -40,49 +40,24 @@ export const handleModelTag: TagHandler = (
     const trimAttr = element.getAttribute('trim');
 
     if (!selector || !pathAttr) {
-      errors.push({
-        type: 'validation',
-        message: 'MODEL requires selector and path attributes',
-        tag: 'MODEL',
-      });
-      return { code: '', errors, warnings };
+      return fail('MODEL requires selector and path attributes');
     }
 
     if (!SecurityValidator.isAllowedSelector(selector)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector',
-        tag: 'MODEL',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector');
     }
 
     if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(prop)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid property path',
-        tag: 'MODEL',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid property path');
     }
 
     if (!ALLOWED_EVENTS.has(eventAttr)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid MODEL event: ${eventAttr}`,
-        tag: 'MODEL',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid MODEL event: ${eventAttr}`);
     }
 
     const pathInfo = normalizePath(pathAttr);
     if (!pathInfo) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid model path: ${pathAttr}`,
-        tag: 'MODEL',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid model path: ${pathAttr}`);
     }
 
     const trim = trimAttr ? trimAttr.toLowerCase() === 'true' : false;
@@ -101,9 +76,9 @@ export const handleModelTag: TagHandler = (
 
     const exprErrors = SecurityValidator.validateContent(pathInfo.expr);
     if (exprErrors.length > 0) {
-      errors.push(...exprErrors.map((error) => ({ ...error, tag: 'MODEL' })));
+      report(exprErrors);
       if (options.strictMode) {
-        return { code: '', errors, warnings };
+        return empty();
       }
     }
 

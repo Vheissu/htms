@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import {
   DirectiveNode,
   KeyedListDirective,
@@ -40,8 +41,8 @@ export const handleKeyedListTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, empty } =
+    handlerDiagnostics('KEYEDLIST');
 
   try {
     const target = element.getAttribute('target');
@@ -51,29 +52,18 @@ export const handleKeyedListTag: TagHandler = (
     const keyExpr = element.getAttribute('key') || itemVar;
 
     if (!target || !ofExpr) {
-      errors.push({
-        type: 'validation',
-        message: 'KEYEDLIST requires target and of',
-        tag: 'KEYEDLIST',
-      });
-      return { code: '', errors, warnings };
+      return fail('KEYEDLIST requires target and of');
     }
 
     if (!SecurityValidator.isAllowedSelector(target)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector for target',
-        tag: 'KEYEDLIST',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector for target');
     }
 
     // Validate identifiers
     for (const v of [itemVar, indexVar]) {
       const idErr = SecurityValidator.validateJavaScriptIdentifier(v);
       if (idErr.length > 0) {
-        errors.push(...idErr.map((e) => ({ ...e, tag: 'KEYEDLIST' })));
-        return { code: '', errors, warnings };
+        return failWith(idErr);
       }
     }
 
@@ -86,7 +76,7 @@ export const handleKeyedListTag: TagHandler = (
           message: `Invalid list expression: ${ofExpr}`,
         }))
       );
-      return { code: '', errors, warnings };
+      return empty();
     }
 
     const keyErrors = SecurityValidator.validateContent(keyExpr);
@@ -98,30 +88,21 @@ export const handleKeyedListTag: TagHandler = (
           message: `Invalid key expression: ${keyExpr}`,
         }))
       );
-      return { code: '', errors, warnings };
+      return empty();
     }
 
     // Validate child template: require exactly one top-level element child
     const children = Array.from(element.children);
     if (children.length !== 1) {
-      errors.push({
-        type: 'validation',
-        message: 'KEYEDLIST requires exactly one template element child',
-        tag: 'KEYEDLIST',
-      });
-      return { code: '', errors, warnings };
+      return fail('KEYEDLIST requires exactly one template element child');
     }
 
     const templateEl = children[0];
     if (options.componentContext) {
       if (!isLowerCaseTag(templateEl)) {
-        errors.push({
-          type: 'validation',
-          message:
-            'KEYEDLIST component template must be a standard HTML element',
-          tag: 'KEYEDLIST',
-        });
-        return { code: '', errors, warnings };
+        return fail(
+          'KEYEDLIST component template must be a standard HTML element'
+        );
       }
 
       const findings = partitionTemplateErrors(
@@ -171,7 +152,7 @@ export const handleKeyedListTag: TagHandler = (
       const directives: DirectiveNode[] = [];
 
       if (errors.length > 0 && options.strictMode) {
-        return { code: '', errors, warnings };
+        return empty();
       }
 
       const componentDirective: KeyedListDirective = {
@@ -213,28 +194,18 @@ export const handleKeyedListTag: TagHandler = (
       errors.push(
         ...tpl.errors.map((error) => ({ ...error, tag: 'KEYEDLIST' }))
       );
-      if (options.strictMode) return { code: '', errors, warnings };
+      if (options.strictMode) return empty();
     }
     if (tpl.warnings.length > 0) warnings.push(...tpl.warnings);
 
     if (!tpl.code) {
-      errors.push({
-        type: 'validation',
-        message: 'Empty KEYEDLIST template',
-        tag: 'KEYEDLIST',
-      });
-      return { code: '', errors, warnings };
+      return fail('Empty KEYEDLIST template');
     }
 
     // Extract top element variable name
     const m = tpl.code.match(/const (\w+) = document\.createElement/);
     if (!m) {
-      errors.push({
-        type: 'validation',
-        message: 'Template must create a top-level element',
-        tag: 'KEYEDLIST',
-      });
-      return { code: '', errors, warnings };
+      return fail('Template must create a top-level element');
     }
     const topVar = m[1];
 

@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import {
   elementToTemplateNode,
   isLowerCaseTag,
@@ -17,8 +18,8 @@ export const handleRepeatTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, report, empty } =
+    handlerDiagnostics('REPEAT');
 
   try {
     const variable = element.getAttribute('variable');
@@ -29,23 +30,14 @@ export const handleRepeatTag: TagHandler = (
 
     // Validate that we have either variable or count
     if (!variable && !count) {
-      errors.push({
-        type: 'validation',
-        message:
-          'REPEAT tag requires either variable (for array iteration) or count (for numeric loop)',
-        tag: 'REPEAT',
-      });
-      return { code: '', errors, warnings };
+      return fail(
+        'REPEAT tag requires either variable (for array iteration) or count (for numeric loop)'
+      );
     }
 
     // Both variable and count cannot be specified together
     if (variable && count) {
-      errors.push({
-        type: 'validation',
-        message: 'REPEAT tag cannot have both variable and count attributes',
-        tag: 'REPEAT',
-      });
-      return { code: '', errors, warnings };
+      return fail('REPEAT tag cannot have both variable and count attributes');
     }
 
     let loopCode = '';
@@ -61,7 +53,7 @@ export const handleRepeatTag: TagHandler = (
             message: `Invalid item variable: ${itemAttr}`,
           }))
         );
-        return { code: '', errors, warnings };
+        return empty();
       }
     }
     let loopVariable = itemAttr || 'item';
@@ -88,7 +80,7 @@ export const handleRepeatTag: TagHandler = (
               message: `Invalid variable expression: ${variable}`,
             }))
           );
-          return { code: '', errors, warnings };
+          return empty();
         }
       } else {
         const varErrors =
@@ -101,7 +93,7 @@ export const handleRepeatTag: TagHandler = (
               message: `Invalid variable name: ${variable}`,
             }))
           );
-          return { code: '', errors, warnings };
+          return empty();
         }
       }
 
@@ -116,7 +108,7 @@ export const handleRepeatTag: TagHandler = (
               message: `Invalid index variable: ${indexVar}`,
             }))
           );
-          return { code: '', errors, warnings };
+          return empty();
         }
         // for-index pattern exposes both index and item
         loopCode = `for (let ${indexVar} = 0; ${indexVar} < ${variable}.length; ${indexVar}++) {\n  const ${loopVariable} = ${variable}[${indexVar}];`;
@@ -131,19 +123,13 @@ export const handleRepeatTag: TagHandler = (
       // count="rating" — evaluated on each render and clamped to 0..10000.
       const exprErrors = SecurityValidator.validateContent(count);
       if (exprErrors.length > 0) {
-        errors.push(
-          ...exprErrors.map((error) => ({ ...error, tag: 'REPEAT' }))
-        );
-        return { code: '', errors, warnings };
+        return failWith(exprErrors);
       }
       if (indexVar) {
         const idxErrors =
           SecurityValidator.validateJavaScriptIdentifier(indexVar);
         if (idxErrors.length > 0) {
-          errors.push(
-            ...idxErrors.map((error) => ({ ...error, tag: 'REPEAT' }))
-          );
-          return { code: '', errors, warnings };
+          return failWith(idxErrors);
         }
       }
       loopVariable = indexVar || 'i';
@@ -152,20 +138,12 @@ export const handleRepeatTag: TagHandler = (
       // Numeric iteration mode
       const countErrors = SecurityValidator.validateNumericValue(count);
       if (countErrors.length > 0) {
-        errors.push(
-          ...countErrors.map((error) => ({ ...error, tag: 'REPEAT' }))
-        );
-        return { code: '', errors, warnings };
+        return failWith(countErrors);
       }
 
       countNum = parseInt(count, 10);
       if (countNum < 0 || countNum > 10000) {
-        errors.push({
-          type: 'validation',
-          message: `Count must be between 0 and 10000, got: ${countNum}`,
-          tag: 'REPEAT',
-        });
-        return { code: '', errors, warnings };
+        return fail(`Count must be between 0 and 10000, got: ${countNum}`);
       }
 
       if (countNum > 1000) {
@@ -183,11 +161,9 @@ export const handleRepeatTag: TagHandler = (
     if (body) {
       const bodyErrors = SecurityValidator.validateContent(body);
       if (bodyErrors.length > 0) {
-        errors.push(
-          ...bodyErrors.map((error) => ({ ...error, tag: 'REPEAT' }))
-        );
+        report(bodyErrors);
         if (options.strictMode) {
-          return { code: '', errors, warnings };
+          return empty();
         }
       }
     }
@@ -303,12 +279,7 @@ export const handleRepeatTag: TagHandler = (
     let componentKey: string | undefined;
     if (keyAttr) {
       if (!variable) {
-        errors.push({
-          type: 'validation',
-          message: 'REPEAT key is only supported with variable (array) loops',
-          tag: 'REPEAT',
-        });
-        return { code: '', errors, warnings };
+        return fail('REPEAT key is only supported with variable (array) loops');
       }
       const keyErrors = SecurityValidator.validateContent(keyAttr);
       if (keyErrors.length > 0) {
@@ -319,7 +290,7 @@ export const handleRepeatTag: TagHandler = (
             message: `Invalid key expression: ${keyAttr}`,
           }))
         );
-        return { code: '', errors, warnings };
+        return empty();
       }
       componentKey = handlerScope(
         withLocals(options, loopVariable, indexVar || undefined)

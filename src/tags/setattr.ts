@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { AttributeDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -9,37 +10,23 @@ export const handleSetAttrTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith } = handlerDiagnostics('SETATTR');
   try {
     const selector = element.getAttribute('selector');
     const name = element.getAttribute('name');
     const value = element.getAttribute('value') || '';
     if (!selector || !name) {
-      errors.push({
-        type: 'validation',
-        message: 'SETATTR requires selector and name',
-        tag: 'SETATTR',
-      });
-      return { code: '', errors, warnings };
+      return fail('SETATTR requires selector and name');
     }
     if (!SecurityValidator.isAllowedSelector(selector)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector',
-        tag: 'SETATTR',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector');
     }
     const attributeErrors = SecurityValidator.validateHtmlAttribute(
       name,
       value
     );
     if (attributeErrors.length > 0) {
-      errors.push(
-        ...attributeErrors.map((error) => ({ ...error, tag: 'SETATTR' }))
-      );
-      return { code: '', errors, warnings };
+      return failWith(attributeErrors);
     }
     const sel = SecurityValidator.jsStringLiteral(selector);
     const isComponentContext = options.parentContext === 'component';
@@ -62,10 +49,7 @@ export const handleSetAttrTag: TagHandler = (
     if (exprAttr) {
       const exprErrors = SecurityValidator.validateContent(exprAttr);
       if (exprErrors.length > 0) {
-        errors.push(
-          ...exprErrors.map((error) => ({ ...error, tag: 'SETATTR' }))
-        );
-        return { code: '', errors, warnings };
+        return failWith(exprErrors);
       }
     }
     const directive: AttributeDirective = {

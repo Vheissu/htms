@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { SourceElement } from '../source-dom';
@@ -7,26 +8,20 @@ export const handleArrayTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, report } =
+    handlerDiagnostics('ARRAY');
 
   try {
     const name = element.getAttribute('name');
 
     if (!name) {
-      errors.push({
-        type: 'validation',
-        message: 'ARRAY tag requires a name attribute',
-        tag: 'ARRAY',
-      });
-      return { code: '', errors, warnings };
+      return fail('ARRAY tag requires a name attribute');
     }
 
     // Validate array name
     const nameErrors = SecurityValidator.validateJavaScriptIdentifier(name);
     if (nameErrors.length > 0) {
-      errors.push(...nameErrors.map((error) => ({ ...error, tag: 'ARRAY' })));
-      return { code: '', errors, warnings };
+      return failWith(nameErrors);
     }
 
     // Collect array values from child elements
@@ -47,9 +42,7 @@ export const handleArrayTag: TagHandler = (
         // Security validation of value content
         const contentErrors = SecurityValidator.validateContent(valueContent);
         if (contentErrors.length > 0) {
-          errors.push(
-            ...contentErrors.map((error) => ({ ...error, tag: 'ARRAY' }))
-          );
+          report(contentErrors);
           if (options.strictMode) {
             continue;
           }
@@ -63,9 +56,7 @@ export const handleArrayTag: TagHandler = (
           const numErrors =
             SecurityValidator.validateNumericValue(valueContent);
           if (numErrors.length > 0) {
-            errors.push(
-              ...numErrors.map((error) => ({ ...error, tag: 'ARRAY' }))
-            );
+            report(numErrors);
             continue;
           }
           processedValue = valueContent;

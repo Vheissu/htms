@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { VisibilityDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -9,34 +10,22 @@ export const handleShowTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith } = handlerDiagnostics('SHOW');
 
   const target = element.getAttribute('target');
   const when =
     element.getAttribute('when') || element.getAttribute('condition');
   if (!target || !when) {
-    errors.push({
-      type: 'validation',
-      message: 'SHOW requires target and when attributes',
-      tag: 'SHOW',
-    });
-    return { code: '', errors, warnings };
+    return fail('SHOW requires target and when attributes');
   }
 
   if (!SecurityValidator.isAllowedSelector(target)) {
-    errors.push({
-      type: 'validation',
-      message: 'Invalid CSS selector format for target',
-      tag: 'SHOW',
-    });
-    return { code: '', errors, warnings };
+    return fail('Invalid CSS selector format for target');
   }
 
   const condErrors = SecurityValidator.validateContent(when);
   if (condErrors.length > 0) {
-    errors.push(...condErrors.map((e) => ({ ...e, tag: 'SHOW' })));
-    return { code: '', errors, warnings };
+    return failWith(condErrors);
   }
 
   const sel = SecurityValidator.jsStringLiteral(target);

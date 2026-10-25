@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { parseExpressionPrefix } from '../utils/js-parser';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -119,8 +120,7 @@ export const handleFetchTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, empty } = handlerDiagnostics('FETCH');
 
   try {
     const urlExpr = element.getAttribute('url');
@@ -138,39 +138,23 @@ export const handleFetchTag: TagHandler = (
     const onceAttr = element.getAttribute('once');
 
     if (!urlExpr) {
-      errors.push({
-        type: 'validation',
-        message: 'FETCH requires url attribute',
-        tag: 'FETCH',
-      });
-      return { code: '', errors, warnings };
+      return fail('FETCH requires url attribute');
     }
 
     if (!ALLOWED_METHODS.has(methodAttr)) {
-      errors.push({
-        type: 'validation',
-        message: `Unsupported HTTP method: ${methodAttr}. Allowed: ${Array.from(ALLOWED_METHODS).join(', ')}`,
-        tag: 'FETCH',
-      });
-      return { code: '', errors, warnings };
+      return fail(
+        `Unsupported HTTP method: ${methodAttr}. Allowed: ${Array.from(ALLOWED_METHODS).join(', ')}`
+      );
     }
 
     if (!ALLOWED_PARSERS.has(parseAttr)) {
-      errors.push({
-        type: 'validation',
-        message: `Unsupported parser: ${parseAttr}. Allowed: ${Array.from(ALLOWED_PARSERS).join(', ')}`,
-        tag: 'FETCH',
-      });
-      return { code: '', errors, warnings };
+      return fail(
+        `Unsupported parser: ${parseAttr}. Allowed: ${Array.from(ALLOWED_PARSERS).join(', ')}`
+      );
     }
 
     if (credentialsAttr && !ALLOWED_CREDENTIALS.has(credentialsAttr)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid credentials value: ${credentialsAttr}`,
-        tag: 'FETCH',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid credentials value: ${credentialsAttr}`);
     }
 
     const urlErrors = SecurityValidator.validateContent(urlExpr);
@@ -182,7 +166,7 @@ export const handleFetchTag: TagHandler = (
           message: `Invalid url expression: ${urlExpr}`,
         }))
       );
-      return { code: '', errors, warnings };
+      return empty();
     }
 
     if (bodyAttr) {
@@ -195,7 +179,7 @@ export const handleFetchTag: TagHandler = (
             message: `Invalid body expression: ${bodyAttr}`,
           }))
         );
-        return { code: '', errors, warnings };
+        return empty();
       }
       if (methodAttr === 'GET') {
         warnings.push({
@@ -216,7 +200,7 @@ export const handleFetchTag: TagHandler = (
             message: `Invalid headers expression: ${headersAttr}`,
           }))
         );
-        return { code: '', errors, warnings };
+        return empty();
       }
     }
 
@@ -230,38 +214,23 @@ export const handleFetchTag: TagHandler = (
             message: `Invalid condition: ${whenAttr}`,
           }))
         );
-        return { code: '', errors, warnings };
+        return empty();
       }
     }
 
     const intoPath = validateStatePath(intoAttr ?? '');
     if (intoAttr && !intoPath) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid into path: ${intoAttr}`,
-        tag: 'FETCH',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid into path: ${intoAttr}`);
     }
 
     const errorPath = validateStatePath(errorAttr ?? '');
     if (errorAttr && !errorPath) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid error path: ${errorAttr}`,
-        tag: 'FETCH',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid error path: ${errorAttr}`);
     }
 
     const loadingPath = validateStatePath(loadingAttr ?? '');
     if (loadingAttr && !loadingPath) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid loading path: ${loadingAttr}`,
-        tag: 'FETCH',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid loading path: ${loadingAttr}`);
     }
 
     const scope = handlerScope(options);
@@ -295,7 +264,7 @@ export const handleFetchTag: TagHandler = (
               message: `Invalid dependency: ${dep}`,
             }))
           );
-          return { code: '', errors, warnings };
+          return empty();
         }
         dependencySet.add(scope.expression(dep, ['owner']));
       }

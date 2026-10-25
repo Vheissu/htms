@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { SourceElement } from '../source-dom';
@@ -7,8 +8,7 @@ export const handleCommentTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, failWith } = handlerDiagnostics('COMMENT');
 
   try {
     const content = element.textContent?.trim() || '';
@@ -25,10 +25,7 @@ export const handleCommentTag: TagHandler = (
     const contentErrors = SecurityValidator.validateContent(content);
     if (contentErrors.length > 0) {
       if (options.strictMode) {
-        errors.push(
-          ...contentErrors.map((error) => ({ ...error, tag: 'COMMENT' }))
-        );
-        return { code: '', errors, warnings };
+        return failWith(contentErrors);
       } else {
         warnings.push(
           ...contentErrors.map((error) => ({

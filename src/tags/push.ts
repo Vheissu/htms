@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handlerScope } from '../component/scope';
@@ -19,34 +20,22 @@ export const handlePushTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith } = handlerDiagnostics('PUSH');
 
   try {
     const array = element.getAttribute('array');
     const value = element.getAttribute('value') || '';
     const exprAttr = element.getAttribute('expr');
     if (!array) {
-      errors.push({
-        type: 'validation',
-        message: 'PUSH requires array attribute',
-        tag: 'PUSH',
-      });
-      return { code: '', errors, warnings };
+      return fail('PUSH requires array attribute');
     }
     if (!SecurityValidator.isJavaScriptPath(array)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid array path',
-        tag: 'PUSH',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid array path');
     }
     for (const part of array.split('.')) {
       const errs = SecurityValidator.validateJavaScriptIdentifier(part);
       if (errs.length > 0) {
-        errors.push(...errs.map((e) => ({ ...e, tag: 'PUSH' })));
-        return { code: '', errors, warnings };
+        return failWith(errs);
       }
     }
     const valExpr = handlerScope(options).expression(

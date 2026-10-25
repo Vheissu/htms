@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { StyleDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -18,8 +19,7 @@ export const handleStyleTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, report, empty } = handlerDiagnostics('STYLE');
 
   try {
     const selector = element.getAttribute('selector');
@@ -29,49 +29,24 @@ export const handleStyleTag: TagHandler = (
     const exprAttr = element.getAttribute('expr');
 
     if (!selector || !propAttr) {
-      errors.push({
-        type: 'validation',
-        message: 'STYLE requires selector and prop attributes',
-        tag: 'STYLE',
-      });
-      return { code: '', errors, warnings };
+      return fail('STYLE requires selector and prop attributes');
     }
 
     if (!SecurityValidator.isAllowedSelector(selector)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector',
-        tag: 'STYLE',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector');
     }
 
     const prop = propAttr.trim();
     if (!prop) {
-      errors.push({
-        type: 'validation',
-        message: 'STYLE prop is empty',
-        tag: 'STYLE',
-      });
-      return { code: '', errors, warnings };
+      return fail('STYLE prop is empty');
     }
 
     if (isCssProperty(prop)) {
       if (!/^(--[a-zA-Z0-9_-]+|[a-zA-Z][a-zA-Z0-9_-]*)$/.test(prop)) {
-        errors.push({
-          type: 'validation',
-          message: `Invalid CSS property: ${prop}`,
-          tag: 'STYLE',
-        });
-        return { code: '', errors, warnings };
+        return fail(`Invalid CSS property: ${prop}`);
       }
     } else if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(prop)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid style property: ${prop}`,
-        tag: 'STYLE',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid style property: ${prop}`);
     }
 
     const valueExpr =
@@ -79,19 +54,14 @@ export const handleStyleTag: TagHandler = (
         ? handlerScope(options).expression(exprAttr.trim())
         : buildValueExpr(valueAttr);
     if (!valueExpr) {
-      errors.push({
-        type: 'validation',
-        message: 'STYLE requires a value or expr',
-        tag: 'STYLE',
-      });
-      return { code: '', errors, warnings };
+      return fail('STYLE requires a value or expr');
     }
 
     const exprErrors = SecurityValidator.validateContent(valueExpr);
     if (exprErrors.length > 0) {
-      errors.push(...exprErrors.map((error) => ({ ...error, tag: 'STYLE' })));
+      report(exprErrors);
       if (options.strictMode) {
-        return { code: '', errors, warnings };
+        return empty();
       }
     }
 

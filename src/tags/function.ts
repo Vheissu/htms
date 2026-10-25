@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
@@ -66,8 +67,8 @@ export const handleFunctionTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, report, empty } =
+    handlerDiagnostics('FUNCTION');
 
   try {
     const name = element.getAttribute('name');
@@ -76,21 +77,13 @@ export const handleFunctionTag: TagHandler = (
       element.children.length === 0 ? element.textContent?.trim() || '' : '';
 
     if (!name) {
-      errors.push({
-        type: 'validation',
-        message: 'FUNCTION tag requires a name attribute',
-        tag: 'FUNCTION',
-      });
-      return { code: '', errors, warnings };
+      return fail('FUNCTION tag requires a name attribute');
     }
 
     // Validate function name
     const nameErrors = SecurityValidator.validateJavaScriptIdentifier(name);
     if (nameErrors.length > 0) {
-      errors.push(
-        ...nameErrors.map((error) => ({ ...error, tag: 'FUNCTION' }))
-      );
-      return { code: '', errors, warnings };
+      return failWith(nameErrors);
     }
 
     // Validate parameters
@@ -109,7 +102,7 @@ export const handleFunctionTag: TagHandler = (
               message: `Invalid parameter name: ${param}`,
             }))
           );
-          return { code: '', errors, warnings };
+          return empty();
         }
         paramList.push(param);
       }
@@ -119,22 +112,18 @@ export const handleFunctionTag: TagHandler = (
     if (body) {
       const bodyErrors = SecurityValidator.validateContent(body);
       if (bodyErrors.length > 0) {
-        errors.push(
-          ...bodyErrors.map((error) => ({ ...error, tag: 'FUNCTION' }))
-        );
+        report(bodyErrors);
         if (options.strictMode) {
-          return { code: '', errors, warnings };
+          return empty();
         }
       }
 
       // Additional validation for function bodies
       if (/\breturn\s+eval\s*\(|\breturn\s+Function\s*\(/.test(body)) {
-        errors.push({
-          type: 'security',
-          message: 'Function body cannot return eval() or Function() calls',
-          tag: 'FUNCTION',
-        });
-        return { code: '', errors, warnings };
+        return fail(
+          'Function body cannot return eval() or Function() calls',
+          'security'
+        );
       }
     }
 

@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { SourceElement } from '../source-dom';
@@ -16,19 +17,15 @@ export const handlePrintTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, empty } = handlerDiagnostics('PRINT');
 
   try {
     // Validate console method type
     const type = element.getAttribute('type') || 'log';
     if (!ALLOWED_CONSOLE_METHODS.has(type)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid console method: ${type}. Allowed: ${Array.from(ALLOWED_CONSOLE_METHODS).join(', ')}`,
-        tag: 'PRINT',
-      });
-      return { code: '', errors, warnings };
+      return fail(
+        `Invalid console method: ${type}. Allowed: ${Array.from(ALLOWED_CONSOLE_METHODS).join(', ')}`
+      );
     }
 
     // Get and validate content
@@ -47,7 +44,7 @@ export const handlePrintTag: TagHandler = (
     if (contentErrors.length > 0) {
       errors.push(...contentErrors);
       if (options.strictMode) {
-        return { code: '', errors, warnings };
+        return empty();
       }
       warnings.push({
         message: 'Content failed security validation',
@@ -63,7 +60,7 @@ export const handlePrintTag: TagHandler = (
       );
       if (loopVarErrors.length > 0) {
         errors.push(...loopVarErrors);
-        return { code: '', errors, warnings };
+        return empty();
       }
 
       // Safe replacement: only replace exact {loopVar} patterns.

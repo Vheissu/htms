@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { SourceElement } from '../source-dom';
@@ -7,19 +8,15 @@ export const handleInjectTag: TagHandler = (
   element: SourceElement,
   _options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, empty } = handlerDiagnostics('INJECT');
 
   // SECURITY WARNING: This tag is inherently dangerous and disabled by
   // default regardless of strict mode — it requires the env opt-in.
   if (process.env.HTMS_ALLOW_INJECT_TAG !== 'true') {
-    errors.push({
-      type: 'security',
-      message:
-        'INJECT tag is disabled for security reasons. Set HTMS_ALLOW_INJECT_TAG=true to enable (NOT RECOMMENDED)',
-      tag: 'INJECT',
-    });
-    return { code: '', errors, warnings };
+    return fail(
+      'INJECT tag is disabled for security reasons. Set HTMS_ALLOW_INJECT_TAG=true to enable (NOT RECOMMENDED)',
+      'security'
+    );
   }
 
   try {
@@ -27,22 +24,12 @@ export const handleInjectTag: TagHandler = (
     const content = element.innerHTML;
 
     if (!selector || !content) {
-      errors.push({
-        type: 'validation',
-        message: 'INJECT tag requires both selector and content',
-        tag: 'INJECT',
-      });
-      return { code: '', errors, warnings };
+      return fail('INJECT tag requires both selector and content');
     }
 
     // Validate selector - must be a simple CSS selector
     if (!SecurityValidator.isAllowedSelector(selector)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector format',
-        tag: 'INJECT',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector format');
     }
 
     // Security validation of content - this is critical
@@ -54,18 +41,15 @@ export const handleInjectTag: TagHandler = (
         content,
         errors: contentErrors,
       });
-      return { code: '', errors, warnings };
+      return empty();
     }
 
     // Additional validation - no script tags or dangerous attributes
     if (/<script/i.test(content) || /on\w+\s*=/i.test(content)) {
-      errors.push({
-        type: 'security',
-        message:
-          'Script tags and event handlers are not allowed in INJECT content',
-        tag: 'INJECT',
-      });
-      return { code: '', errors, warnings };
+      return fail(
+        'Script tags and event handlers are not allowed in INJECT content',
+        'security'
+      );
     }
 
     // Content is assigned through textContent, so it never reaches an HTML

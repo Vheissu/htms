@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { VisibilityDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -9,34 +10,22 @@ export const handleToggleTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith } = handlerDiagnostics('TOGGLE');
 
   try {
     const target = element.getAttribute('target');
     const condition = element.getAttribute('condition');
     if (!target || !condition) {
-      errors.push({
-        type: 'validation',
-        message: 'TOGGLE requires target and condition',
-        tag: 'TOGGLE',
-      });
-      return { code: '', errors, warnings };
+      return fail('TOGGLE requires target and condition');
     }
 
     if (!SecurityValidator.isAllowedSelector(target)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector format for target',
-        tag: 'TOGGLE',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector format for target');
     }
 
     const condErrors = SecurityValidator.validateContent(condition);
     if (condErrors.length > 0) {
-      errors.push(...condErrors.map((e) => ({ ...e, tag: 'TOGGLE' })));
-      return { code: '', errors, warnings };
+      return failWith(condErrors);
     }
 
     const sel = SecurityValidator.jsStringLiteral(target);

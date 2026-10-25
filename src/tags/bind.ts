@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { BindDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -10,8 +11,7 @@ export const handleBindTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith } = handlerDiagnostics('BIND');
 
   try {
     const selector = element.getAttribute('selector');
@@ -19,36 +19,20 @@ export const handleBindTag: TagHandler = (
     const expr = element.getAttribute('expr');
 
     if (!selector || !expr) {
-      errors.push({
-        type: 'validation',
-        message: 'BIND requires selector and expr',
-        tag: 'BIND',
-      });
-      return { code: '', errors, warnings };
+      return fail('BIND requires selector and expr');
     }
 
     if (!SecurityValidator.isAllowedSelector(selector)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector',
-        tag: 'BIND',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector');
     }
 
     if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(prop)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid property name',
-        tag: 'BIND',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid property name');
     }
 
     const exprErrors = SecurityValidator.validateContent(expr);
     if (exprErrors.length > 0) {
-      errors.push(...exprErrors.map((e) => ({ ...e, tag: 'BIND' })));
-      return { code: '', errors, warnings };
+      return failWith(exprErrors);
     }
 
     const selEsc = SecurityValidator.jsStringLiteral(selector);

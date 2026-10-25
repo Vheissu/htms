@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
@@ -8,26 +9,20 @@ export const handleObjectTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, report } =
+    handlerDiagnostics('OBJECT');
 
   try {
     const name = element.getAttribute('name');
 
     if (!name) {
-      errors.push({
-        type: 'validation',
-        message: 'OBJECT tag requires a name attribute',
-        tag: 'OBJECT',
-      });
-      return { code: '', errors, warnings };
+      return fail('OBJECT tag requires a name attribute');
     }
 
     // Validate object name
     const nameErrors = SecurityValidator.validateJavaScriptIdentifier(name);
     if (nameErrors.length > 0) {
-      errors.push(...nameErrors.map((error) => ({ ...error, tag: 'OBJECT' })));
-      return { code: '', errors, warnings };
+      return failWith(nameErrors);
     }
 
     // Collect object properties from child elements
@@ -73,9 +68,7 @@ export const handleObjectTag: TagHandler = (
         // Security validation of property value
         const valueErrors = SecurityValidator.validateContent(propValue);
         if (valueErrors.length > 0) {
-          errors.push(
-            ...valueErrors.map((error) => ({ ...error, tag: 'OBJECT' }))
-          );
+          report(valueErrors);
           if (options.strictMode) {
             continue;
           }
@@ -88,9 +81,7 @@ export const handleObjectTag: TagHandler = (
         if (SecurityValidator.isNumericLiteral(propValue)) {
           const numErrors = SecurityValidator.validateNumericValue(propValue);
           if (numErrors.length > 0) {
-            errors.push(
-              ...numErrors.map((error) => ({ ...error, tag: 'OBJECT' }))
-            );
+            report(numErrors);
             continue;
           }
           processedValue = propValue;
@@ -121,9 +112,7 @@ export const handleObjectTag: TagHandler = (
               if (typeof item === 'string') {
                 const itemErrors = SecurityValidator.validateContent(item);
                 if (itemErrors.length > 0) {
-                  errors.push(
-                    ...itemErrors.map((error) => ({ ...error, tag: 'OBJECT' }))
-                  );
+                  report(itemErrors);
                   if (options.strictMode) {
                     break;
                   }
@@ -163,18 +152,14 @@ export const handleObjectTag: TagHandler = (
               const keyErrors =
                 SecurityValidator.validateJavaScriptIdentifier(key);
               if (keyErrors.length > 0) {
-                errors.push(
-                  ...keyErrors.map((error) => ({ ...error, tag: 'OBJECT' }))
-                );
+                report(keyErrors);
                 continue;
               }
 
               if (typeof val === 'string') {
                 const valErrors = SecurityValidator.validateContent(val);
                 if (valErrors.length > 0) {
-                  errors.push(
-                    ...valErrors.map((error) => ({ ...error, tag: 'OBJECT' }))
-                  );
+                  report(valErrors);
                   if (options.strictMode) {
                     break;
                   }
@@ -201,9 +186,7 @@ export const handleObjectTag: TagHandler = (
           const varErrors =
             SecurityValidator.validateJavaScriptIdentifier(propValue);
           if (varErrors.length > 0) {
-            errors.push(
-              ...varErrors.map((error) => ({ ...error, tag: 'OBJECT' }))
-            );
+            report(varErrors);
             continue;
           }
           processedValue = handlerScope(options).expression(propValue);

@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { DirectiveNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
@@ -20,40 +21,29 @@ export const handleEmitTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, report, empty } = handlerDiagnostics('EMIT');
 
   try {
     const name = element.getAttribute('name') || element.getAttribute('event');
     const detail = element.getAttribute('detail')?.trim();
 
     if (!name) {
-      errors.push({
-        type: 'validation',
-        message: 'EMIT requires a name attribute (the event type to dispatch)',
-        tag: 'EMIT',
-      });
-      return { code: '', errors, warnings };
+      return fail(
+        'EMIT requires a name attribute (the event type to dispatch)'
+      );
     }
 
     if (!EVENT_NAME_PATTERN.test(name)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid event name: ${name}`,
-        tag: 'EMIT',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid event name: ${name}`);
     }
 
     let detailExpr = 'undefined';
     if (detail) {
       const detailErrors = SecurityValidator.validateContent(detail);
       if (detailErrors.length > 0) {
-        errors.push(
-          ...detailErrors.map((error) => ({ ...error, tag: 'EMIT' }))
-        );
+        report(detailErrors);
         if (options.strictMode) {
-          return { code: '', errors, warnings };
+          return empty();
         }
       }
       detailExpr = handlerScope(options).expression(detail);

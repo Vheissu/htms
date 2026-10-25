@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { AppendDirective, DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
@@ -22,26 +23,15 @@ export const handleAppendTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail } = handlerDiagnostics('APPEND');
 
   try {
     const target = element.getAttribute('target');
     if (!target) {
-      errors.push({
-        type: 'validation',
-        message: 'APPEND requires target',
-        tag: 'APPEND',
-      });
-      return { code: '', errors, warnings };
+      return fail('APPEND requires target');
     }
     if (!SecurityValidator.isAllowedSelector(target)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector',
-        tag: 'APPEND',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector');
     }
 
     const sel = SecurityValidator.jsStringLiteral(target);

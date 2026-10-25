@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
 import { handleElement } from '../handlers';
@@ -10,8 +11,7 @@ export const handleSubmitTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, empty } = handlerDiagnostics('SUBMIT');
 
   try {
     const target = element.getAttribute('target');
@@ -19,21 +19,11 @@ export const handleSubmitTag: TagHandler = (
       (element.getAttribute('prevent') || 'true').toLowerCase() !== 'false';
 
     if (!target) {
-      errors.push({
-        type: 'validation',
-        message: 'SUBMIT requires target',
-        tag: 'SUBMIT',
-      });
-      return { code: '', errors, warnings };
+      return fail('SUBMIT requires target');
     }
 
     if (!SecurityValidator.isAllowedSelector(target)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector format for target',
-        tag: 'SUBMIT',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector format for target');
     }
 
     // Build body from child tags
@@ -48,7 +38,7 @@ export const handleSubmitTag: TagHandler = (
       const r = handleElement(child, childOptions);
       if (r.errors.length > 0) {
         errors.push(...r.errors.map((error) => ({ ...error, tag: 'SUBMIT' })));
-        if (options.strictMode) return { code: '', errors, warnings };
+        if (options.strictMode) return empty();
       }
       if (r.warnings.length > 0) warnings.push(...r.warnings);
       if (r.component?.directives) {

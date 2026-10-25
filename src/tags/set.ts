@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { StateDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
@@ -21,8 +22,7 @@ export const handleSetTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail } = handlerDiagnostics('SET');
 
   try {
     const name = element.getAttribute('name');
@@ -31,21 +31,11 @@ export const handleSetTag: TagHandler = (
     const op = (element.getAttribute('op') || '=').trim();
 
     if (!name) {
-      errors.push({
-        type: 'validation',
-        message: 'SET tag requires a name attribute',
-        tag: 'SET',
-      });
-      return { code: '', errors, warnings };
+      return fail('SET tag requires a name attribute');
     }
 
     if (!ALLOWED_OPS.has(op)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid op: ${op}`,
-        tag: 'SET',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid op: ${op}`);
     }
 
     if ((op === '++' || op === '--') && (value || exprAttr)) {
@@ -54,12 +44,7 @@ export const handleSetTag: TagHandler = (
 
     const parts = validatePath(name);
     if (!parts) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid path: ${name}`,
-        tag: 'SET',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid path: ${name}`);
     }
 
     let processedValue = '';
@@ -68,12 +53,7 @@ export const handleSetTag: TagHandler = (
         processedValue = handlerScope(options).expression(exprAttr.trim());
       } else {
         if (!value) {
-          errors.push({
-            type: 'validation',
-            message: 'SET requires a value unless using ++/--',
-            tag: 'SET',
-          });
-          return { code: '', errors, warnings };
+          return fail('SET requires a value unless using ++/--');
         }
 
         processedValue = valueAttributeToExpression(value, {

@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { DirectiveNode, TemplateNode, WhileDirective } from '../component/ir';
 import {
   elementToTemplateNode,
@@ -18,29 +19,22 @@ export const handleWhileTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, report, empty } =
+    handlerDiagnostics('WHILE');
 
   try {
     const condition = element.getAttribute('condition');
     const maxAttr = element.getAttribute('max');
 
     if (!condition) {
-      errors.push({
-        type: 'validation',
-        message: 'WHILE tag requires a condition attribute',
-        tag: 'WHILE',
-      });
-      return { code: '', errors, warnings };
+      return fail('WHILE tag requires a condition attribute');
     }
 
     const conditionErrors = SecurityValidator.validateContent(condition);
     if (conditionErrors.length > 0) {
-      errors.push(
-        ...conditionErrors.map((error) => ({ ...error, tag: 'WHILE' }))
-      );
+      report(conditionErrors);
       if (options.strictMode) {
-        return { code: '', errors, warnings };
+        return empty();
       }
     }
 
@@ -48,17 +42,11 @@ export const handleWhileTag: TagHandler = (
     if (maxAttr && maxAttr.trim().length > 0) {
       const maxErrors = SecurityValidator.validateNumericValue(maxAttr);
       if (maxErrors.length > 0) {
-        errors.push(...maxErrors.map((error) => ({ ...error, tag: 'WHILE' })));
-        return { code: '', errors, warnings };
+        return failWith(maxErrors);
       }
       maxIterations = Math.floor(Number(maxAttr));
       if (!Number.isFinite(maxIterations) || maxIterations <= 0) {
-        errors.push({
-          type: 'validation',
-          message: 'WHILE max must be a positive number',
-          tag: 'WHILE',
-        });
-        return { code: '', errors, warnings };
+        return fail('WHILE max must be a positive number');
       }
       if (maxIterations > MAX_ITERATION_LIMIT) {
         warnings.push({
@@ -80,11 +68,9 @@ export const handleWhileTag: TagHandler = (
         }
         const textErrors = SecurityValidator.validateContent(text);
         if (textErrors.length > 0) {
-          errors.push(
-            ...textErrors.map((error) => ({ ...error, tag: 'WHILE' }))
-          );
+          report(textErrors);
           if (options.strictMode) {
-            return { code: '', errors, warnings };
+            return empty();
           }
         }
         bodyCode += `${text}\n`;

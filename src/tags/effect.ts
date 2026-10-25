@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
@@ -39,8 +40,8 @@ export const handleEffectTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, report, empty } =
+    handlerDiagnostics('EFFECT');
 
   try {
     const runAttr = element.getAttribute('run')?.trim() ?? '';
@@ -66,11 +67,9 @@ export const handleEffectTag: TagHandler = (
         }
         const textErrors = SecurityValidator.validateContent(text);
         if (textErrors.length > 0) {
-          errors.push(
-            ...textErrors.map((error) => ({ ...error, tag: 'EFFECT' }))
-          );
+          report(textErrors);
           if (options.strictMode) {
-            return { code: '', errors, warnings };
+            return empty();
           }
         }
         collectCode(text);
@@ -86,7 +85,7 @@ export const handleEffectTag: TagHandler = (
             ...childResult.errors.map((error) => ({ ...error, tag: 'EFFECT' }))
           );
           if (options.strictMode) {
-            return { code: '', errors, warnings };
+            return empty();
           }
         }
         if (childResult.warnings.length > 0) {
@@ -106,29 +105,21 @@ export const handleEffectTag: TagHandler = (
     if (runAttr) {
       const runErrors = SecurityValidator.validateContent(runAttr);
       if (runErrors.length > 0) {
-        errors.push(...runErrors.map((error) => ({ ...error, tag: 'EFFECT' })));
-        return { code: '', errors, warnings };
+        return failWith(runErrors);
       }
       collectCode(ensureTerminated(runAttr));
     }
 
     if (bodyStatements.length === 0) {
-      errors.push({
-        type: 'validation',
-        message:
-          'EFFECT requires body content via run attribute, text, or child tags',
-        tag: 'EFFECT',
-      });
-      return { code: '', errors, warnings };
+      return fail(
+        'EFFECT requires body content via run attribute, text, or child tags'
+      );
     }
 
     if (cleanupAttr) {
       const cleanupErrors = SecurityValidator.validateContent(cleanupAttr);
       if (cleanupErrors.length > 0) {
-        errors.push(
-          ...cleanupErrors.map((error) => ({ ...error, tag: 'EFFECT' }))
-        );
-        return { code: '', errors, warnings };
+        return failWith(cleanupErrors);
       }
     }
 
@@ -148,7 +139,7 @@ export const handleEffectTag: TagHandler = (
               message: `Invalid dependency expression: ${dep}`,
             }))
           );
-          return { code: '', errors, warnings };
+          return empty();
         }
         dependencies.push(dep);
       }

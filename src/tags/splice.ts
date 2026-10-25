@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
@@ -9,8 +10,7 @@ export const handleSpliceTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith } = handlerDiagnostics('SPLICE');
 
   try {
     const array = element.getAttribute('array');
@@ -19,28 +19,17 @@ export const handleSpliceTag: TagHandler = (
     const valuesAttr = element.getAttribute('values'); // JSON array or omitted
 
     if (!array) {
-      errors.push({
-        type: 'validation',
-        message: 'SPLICE requires array attribute',
-        tag: 'SPLICE',
-      });
-      return { code: '', errors, warnings };
+      return fail('SPLICE requires array attribute');
     }
 
     // Validate array path
     if (!SecurityValidator.isJavaScriptPath(array)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid array path',
-        tag: 'SPLICE',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid array path');
     }
     for (const part of array.split('.')) {
       const ve = SecurityValidator.validateJavaScriptIdentifier(part);
       if (ve.length) {
-        errors.push(...ve.map((e) => ({ ...e, tag: 'SPLICE' })));
-        return { code: '', errors, warnings };
+        return failWith(ve);
       }
     }
 
@@ -49,20 +38,17 @@ export const handleSpliceTag: TagHandler = (
     if (!indexIsNumeric) {
       const exprErrors = SecurityValidator.validateContent(index);
       if (exprErrors.length) {
-        errors.push(...exprErrors.map((e) => ({ ...e, tag: 'SPLICE' })));
-        return { code: '', errors, warnings };
+        return failWith(exprErrors);
       }
     } else {
       const idxErr = SecurityValidator.validateNumericValue(index);
       if (idxErr.length) {
-        errors.push(...idxErr.map((e) => ({ ...e, tag: 'SPLICE' })));
-        return { code: '', errors, warnings };
+        return failWith(idxErr);
       }
     }
     const delErr = SecurityValidator.validateNumericValue(deleteCount);
     if (delErr.length) {
-      errors.push(...delErr.map((e) => ({ ...e, tag: 'SPLICE' })));
-      return { code: '', errors, warnings };
+      return failWith(delErr);
     }
 
     // Values
@@ -78,12 +64,7 @@ export const handleSpliceTag: TagHandler = (
           ? ', ' + valueExpressions.join(', ')
           : '';
       } catch {
-        errors.push({
-          type: 'validation',
-          message: 'Invalid values JSON array',
-          tag: 'SPLICE',
-        });
-        return { code: '', errors, warnings };
+        return fail('Invalid values JSON array');
       }
     }
 

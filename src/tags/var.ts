@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { StateDirective } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { CompilerLogger } from '../utils/logger';
@@ -10,8 +11,8 @@ export const handleVarTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, failWith, report, empty } =
+    handlerDiagnostics('VAR');
 
   try {
     const name = element.getAttribute('name');
@@ -20,27 +21,21 @@ export const handleVarTag: TagHandler = (
       (element.getAttribute('mutable') || 'false').toLowerCase() === 'true';
 
     if (!name) {
-      errors.push({
-        type: 'validation',
-        message: 'VAR tag requires a name attribute',
-        tag: 'VAR',
-      });
-      return { code: '', errors, warnings };
+      return fail('VAR tag requires a name attribute');
     }
 
     // Validate variable name
     const nameErrors = SecurityValidator.validateJavaScriptIdentifier(name);
     if (nameErrors.length > 0) {
-      errors.push(...nameErrors.map((error) => ({ ...error, tag: 'VAR' })));
-      return { code: '', errors, warnings };
+      return failWith(nameErrors);
     }
 
     // Security validation of value
     const valueErrors = SecurityValidator.validateContent(value);
     if (valueErrors.length > 0) {
-      errors.push(...valueErrors.map((error) => ({ ...error, tag: 'VAR' })));
+      report(valueErrors);
       if (options.strictMode) {
-        return { code: '', errors, warnings };
+        return empty();
       }
     }
 
@@ -55,7 +50,7 @@ export const handleVarTag: TagHandler = (
         tag: 'VAR',
         hint: 'Array and object values must be valid JSON, e.g. value=\'[{"id": 1}]\'.',
       });
-      return { code: '', errors, warnings };
+      return empty();
     }
 
     if (
@@ -67,7 +62,7 @@ export const handleVarTag: TagHandler = (
           (error) => ({ ...error, tag: 'VAR' })
         )
       );
-      return { code: '', errors, warnings };
+      return empty();
     }
 
     const processedValue = handlerScope(options).expression(

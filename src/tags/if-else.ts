@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import {
   elementToTemplateNode,
   isLowerCaseTag,
@@ -130,8 +131,7 @@ export const handleIfElseTags: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, empty } = handlerDiagnostics('IF');
 
   try {
     if (element.tagName.toUpperCase() !== 'IF') {
@@ -140,7 +140,7 @@ export const handleIfElseTags: TagHandler = (
         message: 'This handler only processes IF tags',
         tag: element.tagName,
       });
-      return { code: '', errors, warnings };
+      return empty();
     }
 
     const condition = element.getAttribute('condition');
@@ -150,7 +150,7 @@ export const handleIfElseTags: TagHandler = (
         message: 'IF tag requires a condition attribute',
         tag: 'IF',
       });
-      return { code: '', errors, warnings };
+      return empty();
     }
     const sanitizedCondition = validateCondition(
       condition,
@@ -160,7 +160,7 @@ export const handleIfElseTags: TagHandler = (
       options
     );
     if (!sanitizedCondition) {
-      return { code: '', errors, warnings };
+      return empty();
     }
 
     const ifBranch = collectBranchContent(
@@ -203,7 +203,7 @@ export const handleIfElseTags: TagHandler = (
             tag: tagName,
           });
           if (options.strictMode) {
-            return { code: '', errors, warnings };
+            return empty();
           }
           nextSibling = nextSibling.nextElementSibling;
           continue;
@@ -218,7 +218,7 @@ export const handleIfElseTags: TagHandler = (
         );
         if (!sanitizedElseIf) {
           if (options.strictMode) {
-            return { code: '', errors, warnings };
+            return empty();
           }
           nextSibling = nextSibling.nextElementSibling;
           continue;

@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { DirectiveNode, EventDirective, EventModifiers } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope, withLocals } from '../component/scope';
@@ -91,8 +92,7 @@ export const handleEventTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, report, empty } = handlerDiagnostics('EVENT');
 
   try {
     const target = element.getAttribute('target');
@@ -100,32 +100,17 @@ export const handleEventTag: TagHandler = (
     const action = element.getAttribute('action');
 
     if (!target || !type || (!action && element.children.length === 0)) {
-      errors.push({
-        type: 'validation',
-        message: 'EVENT requires target and type, plus action or child tags',
-        tag: 'EVENT',
-      });
-      return { code: '', errors, warnings };
+      return fail('EVENT requires target and type, plus action or child tags');
     }
 
     // Validate event type: known DOM events or a well-formed custom name
     // so components can listen for events emitted via <emit>.
     if (!KNOWN_EVENT_TYPES.has(type) && !CUSTOM_EVENT_TYPE.test(type)) {
-      errors.push({
-        type: 'validation',
-        message: `Invalid event type: ${type}`,
-        tag: 'EVENT',
-      });
-      return { code: '', errors, warnings };
+      return fail(`Invalid event type: ${type}`);
     }
 
     if (!SecurityValidator.isAllowedSelector(target)) {
-      errors.push({
-        type: 'validation',
-        message: 'Invalid CSS selector format for target',
-        tag: 'EVENT',
-      });
-      return { code: '', errors, warnings };
+      return fail('Invalid CSS selector format for target');
     }
 
     const modifiers: EventModifiers = {};
@@ -144,12 +129,9 @@ export const handleEventTag: TagHandler = (
     if (debounceAttr !== null) {
       const parsed = Number(debounceAttr);
       if (!Number.isFinite(parsed) || parsed < 0) {
-        errors.push({
-          type: 'validation',
-          message: `Invalid debounce value: ${debounceAttr}. Expected milliseconds.`,
-          tag: 'EVENT',
-        });
-        return { code: '', errors, warnings };
+        return fail(
+          `Invalid debounce value: ${debounceAttr}. Expected milliseconds.`
+        );
       }
       modifiers.debounceMs = parsed;
     }
@@ -176,7 +158,7 @@ export const handleEventTag: TagHandler = (
         const r = handleElement(child, childOptions);
         if (r.errors.length > 0) {
           errors.push(...r.errors.map((error) => ({ ...error, tag: 'EVENT' })));
-          if (options.strictMode) return { code: '', errors, warnings };
+          if (options.strictMode) return empty();
         }
         if (r.warnings.length > 0) warnings.push(...r.warnings);
         const hasComponentDirective = !!r.component?.directives?.length;
@@ -195,11 +177,9 @@ export const handleEventTag: TagHandler = (
       // Security validation of action
       const actionErrors = SecurityValidator.validateContent(action);
       if (actionErrors.length > 0) {
-        errors.push(
-          ...actionErrors.map((error) => ({ ...error, tag: 'EVENT' }))
-        );
+        report(actionErrors);
         if (options.strictMode) {
-          return { code: '', errors, warnings };
+          return empty();
         }
       }
 
@@ -207,24 +187,18 @@ export const handleEventTag: TagHandler = (
       if (options.strictMode) {
         const actionFunction = action.split('(')[0].trim();
         if (!SAFE_ACTIONS.has(actionFunction)) {
-          errors.push({
-            type: 'security',
-            message: `Action not in whitelist: ${actionFunction}. Safe actions: ${Array.from(SAFE_ACTIONS).join(', ')}`,
-            tag: 'EVENT',
-          });
-          return { code: '', errors, warnings };
+          return fail(
+            `Action not in whitelist: ${actionFunction}. Safe actions: ${Array.from(SAFE_ACTIONS).join(', ')}`,
+            'security'
+          );
         }
       }
 
       // Validate action syntax - must be a function call
       if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*\s*\([^)]*\)$/.test(action.trim())) {
-        errors.push({
-          type: 'validation',
-          message:
-            'Action must be a function call (e.g., "console.log(\'Hello\')")',
-          tag: 'EVENT',
-        });
-        return { code: '', errors, warnings };
+        return fail(
+          'Action must be a function call (e.g., "console.log(\'Hello\')")'
+        );
       }
       bodyCode = handlerScope(options).statements(action, ['event']);
     }

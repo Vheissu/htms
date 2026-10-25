@@ -1,4 +1,5 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
+import { handlerDiagnostics } from './diagnostics';
 import { DirectiveNode, SwitchDirective, TemplateNode } from '../component/ir';
 import {
   elementToTemplateNode,
@@ -15,8 +16,8 @@ export const handleSwitchTag: TagHandler = (
   element: SourceElement,
   options: TagHandlerOptions = {}
 ): HandlerResult => {
-  const errors: HandlerResult['errors'] = [];
-  const warnings: HandlerResult['warnings'] = [];
+  const { errors, warnings, fail, report, empty } =
+    handlerDiagnostics('SWITCH');
 
   try {
     const exprAttr =
@@ -25,22 +26,15 @@ export const handleSwitchTag: TagHandler = (
     const expression = exprAttr || variable;
 
     if (!expression) {
-      errors.push({
-        type: 'validation',
-        message: 'SWITCH tag requires a variable or expr attribute',
-        tag: 'SWITCH',
-      });
-      return { code: '', errors, warnings };
+      return fail('SWITCH tag requires a variable or expr attribute');
     }
 
     if (exprAttr) {
       const exprErrors = SecurityValidator.validateContent(expression);
       if (exprErrors.length > 0) {
-        errors.push(
-          ...exprErrors.map((error) => ({ ...error, tag: 'SWITCH' }))
-        );
+        report(exprErrors);
         if (options.strictMode) {
-          return { code: '', errors, warnings };
+          return empty();
         }
       }
     } else if (variable) {
@@ -64,7 +58,7 @@ export const handleSwitchTag: TagHandler = (
         }
       }
       if (invalid) {
-        return { code: '', errors, warnings };
+        return empty();
       }
     }
 
@@ -96,9 +90,7 @@ export const handleSwitchTag: TagHandler = (
         // Security validation of case value
         const valueErrors = SecurityValidator.validateContent(caseValue);
         if (valueErrors.length > 0) {
-          errors.push(
-            ...valueErrors.map((error) => ({ ...error, tag: 'SWITCH' }))
-          );
+          report(valueErrors);
           if (options.strictMode) {
             continue;
           }
@@ -110,9 +102,7 @@ export const handleSwitchTag: TagHandler = (
           // Numeric value
           const numErrors = SecurityValidator.validateNumericValue(caseValue);
           if (numErrors.length > 0) {
-            errors.push(
-              ...numErrors.map((error) => ({ ...error, tag: 'SWITCH' }))
-            );
+            report(numErrors);
             continue;
           }
           processedValue = caseValue;
@@ -137,9 +127,7 @@ export const handleSwitchTag: TagHandler = (
             }
             const textErrors = SecurityValidator.validateContent(text);
             if (textErrors.length > 0) {
-              errors.push(
-                ...textErrors.map((error) => ({ ...error, tag: 'SWITCH' }))
-              );
+              report(textErrors);
               if (options.strictMode) {
                 continue;
               }
@@ -226,9 +214,7 @@ export const handleSwitchTag: TagHandler = (
             }
             const textErrors = SecurityValidator.validateContent(text);
             if (textErrors.length > 0) {
-              errors.push(
-                ...textErrors.map((error) => ({ ...error, tag: 'SWITCH' }))
-              );
+              report(textErrors);
               if (options.strictMode) {
                 continue;
               }
