@@ -54,7 +54,10 @@ export function ensureRuntime(): string {
             return;
           }
           let write = 0;
-          for (let read = 0; read < effects.length; read++) {
+          while (write < effects.length && !effects[write].disposed) {
+            write++;
+          }
+          for (let read = write + 1; read < effects.length; read++) {
             const effect = effects[read];
             if (!effect.disposed) {
               effects[write++] = effect;

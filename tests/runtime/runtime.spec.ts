@@ -722,4 +722,44 @@ describe('HTMS runtime', () => {
     await flushMicrotasks();
     expect(run).toHaveBeenCalledTimes(1);
   });
+
+  it.each([0, 2, 3])(
+    'compacts a removed effect at index %s without rewriting its live prefix',
+    async (removedIndex) => {
+      const runtime = getRuntime();
+      const owners = Array.from({ length: 4 }, (): HTMLElement => {
+        const owner = document.createElement('div');
+        document.body.append(owner);
+        return owner;
+      });
+      for (const owner of owners) {
+        runtime.registerEffect({
+          owner,
+          id: 'compact',
+          deps: [(): number => 0],
+          run: (): void => undefined,
+        });
+      }
+      await flushMicrotasks();
+      const records = runtime.effects;
+      const prefixWrite = jest.fn();
+      for (let i = 0; i < removedIndex; i++) {
+        const record = records.at(i);
+        Object.defineProperty(records, String(i), {
+          configurable: true,
+          get: (): typeof record => record,
+          set: prefixWrite,
+        });
+      }
+      runtime.disposeEffectsFor(owners.at(removedIndex));
+      expect(runtime.effects).toBe(records);
+      expect(runtime.effects.map((effect) => effect.owner)).toEqual(
+        owners.filter((_, index) => index !== removedIndex)
+      );
+      expect(prefixWrite).not.toHaveBeenCalled();
+      runtime.notify();
+      await flushMicrotasks();
+      expect(runtime.effects).toHaveLength(3);
+    }
+  );
 });
