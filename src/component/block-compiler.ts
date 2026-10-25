@@ -1902,8 +1902,9 @@ class BlockCompiler {
           }
           if (!registered) {
             registered = true;
+            // Empty arrays give the weak event index a compact, opaque key.
             create.push(
-              'const $$k = { __proto__: null };',
+              'const $$k = [];',
               'this.__htmsEventBlocks.set($$k, $$b);'
             );
           }

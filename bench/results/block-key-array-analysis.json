@@ -1,0 +1,1352 @@
+{
+  "controls": {
+    "current": "5149f4c2280be0e0f72598eda94cb864edccce6d",
+    "preHeapRegression": "dbc7bb640d743b24a97e585681515b8b397cef29",
+    "original": "8096bbec1db7e4bb7a39fb7947d759429591ab63"
+  },
+  "method": "Paired interleaved rounds. Mirrored cohorts average two samples per revision per round for mean differences. Student t 95% intervals. Bootstrap median intervals resample whole paired rounds and subtract pooled medians, 20000 draws, seed 0x251026; cohort and app order in this script determines the random sequence.",
+  "sources": {
+    "src/component/block-compiler.ts": "0bd555ab0e2b2b9a8149ae63dc2008503d9cbe99cf3f17fbceb02aafdc91cbc6",
+    "src/component/template-shape.ts": "ebd7b832148ff2a4725a43cd0e29add9c6263732e46fbd93802185749b66a720",
+    "src/component/compiler.ts": "185090986b3e25dd13b312df2d9d93655d4f7b0ac190591f69a1bd1b41bb8ed7"
+  },
+  "bundles": {
+    "htms-control": {
+      "sha256": "2049a840ce35fae5746571a6919419a1bb23b050781485e4eb96445aac539bb9",
+      "label": "htms-control",
+      "minified": 13717,
+      "gzip": 5020,
+      "brotli": 4442
+    },
+    "htms": {
+      "sha256": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6",
+      "label": "HTMS",
+      "minified": 13689,
+      "gzip": 5013,
+      "brotli": 4433
+    },
+    "htms-pre-heap": {
+      "sha256": "31d2fa14467560458f950caaa49a8ae876cbd9aa842719cc0e35d4ae9a0c0faf",
+      "label": "htms-pre-heap",
+      "minified": 13689,
+      "gzip": 5010,
+      "brotli": 4432
+    },
+    "htms-original": {
+      "sha256": "b500dae90d294e9e461fbd9931a4223ea407c289f61199d907a60aeca687eef8",
+      "label": "htms-original",
+      "minified": 13066,
+      "gzip": 4747,
+      "brotli": 4232
+    },
+    "htms-legacy": {
+      "sha256": "2a2e4fcb63932ff0a4a3831a5798e87661752d92010dd899f63385e00645acce",
+      "label": "HTMS (reconciler)",
+      "minified": 17089,
+      "gzip": 4913,
+      "brotli": 4339
+    }
+  },
+  "benchmarkInputs": {
+    "bench/apps/htms/app.html": "76db7a097b94657ae1dc589a0d0c59e353ec5069981bae122009f909e0c4ade0",
+    "bench/apps/htms/index.html": "3ed55c6b0bf14b29787dddf0cb78c92ff9f96d7a817e8809f8ec3f04df0ca471",
+    "bench/apps/htms/main.js": "79bad8d26c5a7c2cdc94c71a3cbcbe69f6e47388ba257d3cd98fc792524c055b",
+    "bench/apps/react/index.html": "93dc3c4751274d1d072832ff93cb0c0da2e80eb8cf2846358d0a595ae578cd66",
+    "bench/apps/react/main.jsx": "cb9e96021a22cb2114933778864b3f17b2810b44fceb2dcfe6dd38436585488b",
+    "bench/apps/solid/index.html": "d9ba30c333d98d1483042f93caa3ef8ca8e8906a2e583743a99ffa237191c8ec",
+    "bench/apps/solid/main.jsx": "6b6a3c2843e37a222202a5d3c567069f033c1b2464aac68f65cee107e18f75e2",
+    "bench/apps/svelte/Main.svelte": "2f7699f132f12bb9934ec2dead99d10afafd7a2000ba05838f7413654246ae15",
+    "bench/apps/svelte/index.html": "e50f893da9c89b5551c0c792acdae11ee896f75f726f05de77828c58a14a2da1",
+    "bench/apps/svelte/main.js": "9d41e9f525c2005693cc9d8ae2cecd8d036edb6be0235d4f0877f33a4cd98c75",
+    "bench/apps/vanilla/Main.js": "08a5cb7d5cec199396561ed28b3c2db77577f066480f33c19f22ce6b0b0c980f",
+    "bench/apps/vanilla/index.html": "93e2dc8914a8c580b3ce0de95c1cf54a903504de6a69c4f712efdfaa2700e228",
+    "bench/apps/vue/App.vue": "54cce082a9472c54b72e799e5dc4391141ca0789e6b3dc0ec8200422ef041acd",
+    "bench/apps/vue/data.js": "9fb1b13b3dab8b6ce55fc2c88127b260df0b60a15fccd9eb176e43e6ff055f17",
+    "bench/apps/vue/index.html": "ea085aeab30195602238bccbfdd08b881bbddcba306df870f3cef5d48e16f6d8",
+    "bench/apps/vue/main.js": "50cb9f18b1c7115799ae456f0d0038840278b49ea520b5549d468ec76c248fb9",
+    "bench/build.mjs": "dc0d5ed4354da4094ef5278f3927baaff05451797a3b6e7be6ec6e8ea4c79225",
+    "bench/css/main.css": "d8d5b527c71c8a71fd273310650180318f8e8361334d96c9a27bdc85fa1b75e3",
+    "bench/package-lock.json": "e4c9dad81bddbfae21cc160bce63c7e74b7f38f2a9b8a7918e4377e11786bdbb",
+    "bench/package.json": "4a217916ed983e14a92db9d74c35156e1539310cc29645cde57d40a48a3dad0d",
+    "bench/run.mjs": "d67e303271f17b41492d730c322ba08ee0ffaa6a04364cbbcee49636ee152df5"
+  },
+  "cohorts": {
+    "screen": {
+      "file": "block-key-array-screen.json",
+      "environment": {
+        "browser": "Chromium 141.0.7390.37",
+        "os": "Darwin 25.3.0 arm64",
+        "cpu": "Apple M2 Max",
+        "cores": 12,
+        "node": "v25.2.1",
+        "timeZone": "Australia/Brisbane",
+        "htmsRevision": "5149f4c2280be0e0f72598eda94cb864edccce6d",
+        "runs": 15
+      },
+      "mirrored": false,
+      "comparisons": {
+        "htms-control": {
+          "run10k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 361.981,
+            "afterMedian": 360.601,
+            "medianPercentChange": -0.38123547921022904,
+            "pairedMeanDifference": 0.3023333333333388,
+            "pairedMean95CI": [
+              -8.040831307236942,
+              8.64549797390362
+            ],
+            "pairedBootstrapMedian95CI": [
+              -9.129999999999995,
+              4.1059999999999945
+            ],
+            "pairedRoundMedianDifference": -3.811999999999955,
+            "pairedRoundMedian95CI": [
+              -8.52600000000001,
+              4.615000000000009
+            ]
+          },
+          "clear": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 17.471,
+            "afterMedian": 17.468,
+            "medianPercentChange": -0.017171312460650956,
+            "pairedMeanDifference": -0.1018000000000003,
+            "pairedMean95CI": [
+              -0.8106964351862642,
+              0.6070964351862635
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.9390000000000001,
+              1.2169999999999987
+            ],
+            "pairedRoundMedianDifference": -0.0660000000000025,
+            "pairedRoundMedian95CI": [
+              -1.1670000000000016,
+              1.014000000000003
+            ]
+          }
+        },
+        "htms-pre-heap": {
+          "run10k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 368.593,
+            "afterMedian": 360.601,
+            "medianPercentChange": -2.1682451918511814,
+            "pairedMeanDifference": -3.7270666666666634,
+            "pairedMean95CI": [
+              -14.287536313529046,
+              6.833402980195718
+            ],
+            "pairedBootstrapMedian95CI": [
+              -16.02800000000002,
+              1.4329999999999927
+            ],
+            "pairedRoundMedianDifference": -6.935999999999979,
+            "pairedRoundMedian95CI": [
+              -13.192000000000007,
+              3.862000000000023
+            ]
+          },
+          "clear": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 17.799,
+            "afterMedian": 17.468,
+            "medianPercentChange": -1.8596550367998121,
+            "pairedMeanDifference": -0.40066666666666656,
+            "pairedMean95CI": [
+              -1.0061535595731104,
+              0.2048202262397773
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.1559999999999988,
+              0.40300000000000225
+            ],
+            "pairedRoundMedianDifference": -0.4350000000000023,
+            "pairedRoundMedian95CI": [
+              -1.4989999999999988,
+              0.3360000000000021
+            ]
+          }
+        }
+      },
+      "scriptMedians": {
+        "htms-control": {
+          "run10k": 35.933,
+          "clear": 13.579
+        },
+        "htms-array-key": {
+          "run10k": 31.364,
+          "clear": 13.576
+        },
+        "htms-set-proto-key": {
+          "run10k": 32.243,
+          "clear": 13.828
+        },
+        "htms-pre-heap": {
+          "run10k": 32.397,
+          "clear": 14.098
+        }
+      },
+      "memory": {
+        "htms-control": {
+          "ready": 1.7330322265625,
+          "run1k": 2.459522247314453,
+          "clear": 2.129619598388672
+        },
+        "htms-array-key": {
+          "ready": 1.7245597839355469,
+          "run1k": 2.3865280151367188,
+          "clear": 2.1290512084960938
+        },
+        "htms-set-proto-key": {
+          "ready": 1.7165069580078125,
+          "run1k": 2.3982925415039062,
+          "clear": 2.1294403076171875
+        },
+        "htms-pre-heap": {
+          "ready": 1.7297134399414062,
+          "run1k": 2.398174285888672,
+          "clear": 2.1290283203125
+        }
+      },
+      "timedClicks": 120
+    },
+    "full": {
+      "file": "block-key-array-full.json",
+      "environment": {
+        "browser": "Chromium 141.0.7390.37",
+        "os": "Darwin 25.3.0 arm64",
+        "cpu": "Apple M2 Max",
+        "cores": 12,
+        "node": "v25.2.1",
+        "timeZone": "Australia/Brisbane",
+        "htmsRevision": "5149f4c2280be0e0f72598eda94cb864edccce6d",
+        "runs": 15
+      },
+      "mirrored": false,
+      "comparisons": {
+        "htms-control": {
+          "run1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 33.323,
+            "afterMedian": 32.672,
+            "medianPercentChange": -1.953605617741505,
+            "pairedMeanDifference": -0.6146000000000008,
+            "pairedMean95CI": [
+              -1.218512447696787,
+              -0.01068755230321461
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.2530000000000001,
+              0.2889999999999944
+            ],
+            "pairedRoundMedianDifference": -0.8210000000000015,
+            "pairedRoundMedian95CI": [
+              -1.3179999999999978,
+              -0.2150000000000034
+            ]
+          },
+          "replace1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 37.863,
+            "afterMedian": 37.819,
+            "medianPercentChange": -0.1162084356759796,
+            "pairedMeanDifference": -0.15953333333333244,
+            "pairedMean95CI": [
+              -1.0236987602554375,
+              0.7046320935887725
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.0380000000000038,
+              0.8179999999999978
+            ],
+            "pairedRoundMedianDifference": 0.0010000000000047748,
+            "pairedRoundMedian95CI": [
+              -1.588000000000001,
+              1.426000000000002
+            ]
+          },
+          "update10th": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 23.066,
+            "afterMedian": 24.041,
+            "medianPercentChange": 4.227000780369372,
+            "pairedMeanDifference": 1.2213333333333336,
+            "pairedMean95CI": [
+              -0.10829253450122689,
+              2.550959201167894
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.2070000000000007,
+              3.1590000000000025
+            ],
+            "pairedRoundMedianDifference": 1.463000000000001,
+            "pairedRoundMedian95CI": [
+              0.5310000000000024,
+              2.5829999999999984
+            ]
+          },
+          "select": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 4.791,
+            "afterMedian": 4.738,
+            "medianPercentChange": -1.1062408682947167,
+            "pairedMeanDifference": -0.6751333333333334,
+            "pairedMean95CI": [
+              -2.057157464638097,
+              0.7068907979714301
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.6820000000000004,
+              0.6060000000000008
+            ],
+            "pairedRoundMedianDifference": -0.015000000000000568,
+            "pairedRoundMedian95CI": [
+              -1.0830000000000002,
+              0.36400000000000077
+            ]
+          },
+          "swap": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 20.655,
+            "afterMedian": 21.667,
+            "medianPercentChange": 4.899540062938756,
+            "pairedMeanDifference": 0.3741333333333335,
+            "pairedMean95CI": [
+              -1.39668117124309,
+              2.144947837909757
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.068999999999999,
+              2.6670000000000016
+            ],
+            "pairedRoundMedianDifference": 1.5350000000000001,
+            "pairedRoundMedian95CI": [
+              -1.0680000000000014,
+              2.414999999999999
+            ]
+          },
+          "remove": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 16.475,
+            "afterMedian": 16.32,
+            "medianPercentChange": -0.9408194233687439,
+            "pairedMeanDifference": 0.170733333333333,
+            "pairedMean95CI": [
+              -0.7450614601722763,
+              1.0865281268389422
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.8030000000000008,
+              0.39000000000000057
+            ],
+            "pairedRoundMedianDifference": 0.3819999999999979,
+            "pairedRoundMedian95CI": [
+              -0.8030000000000008,
+              0.9179999999999993
+            ]
+          },
+          "run10k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 350.668,
+            "afterMedian": 351.176,
+            "medianPercentChange": 0.14486636932939945,
+            "pairedMeanDifference": 1.4765333333333197,
+            "pairedMean95CI": [
+              -4.1298415257047925,
+              7.082908192371432
+            ],
+            "pairedBootstrapMedian95CI": [
+              -3.6089999999999804,
+              8.30499999999995
+            ],
+            "pairedRoundMedianDifference": 0.31699999999995043,
+            "pairedRoundMedian95CI": [
+              -5.622000000000014,
+              10.183999999999969
+            ]
+          },
+          "append1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 89.423,
+            "afterMedian": 88.026,
+            "medianPercentChange": -1.562237903000352,
+            "pairedMeanDifference": -1.2677333333333298,
+            "pairedMean95CI": [
+              -3.7313995485701588,
+              1.195932881903499
+            ],
+            "pairedBootstrapMedian95CI": [
+              -3.208999999999989,
+              1.8160000000000025
+            ],
+            "pairedRoundMedianDifference": -0.0519999999999925,
+            "pairedRoundMedian95CI": [
+              -3.7809999999999917,
+              1.8160000000000025
+            ]
+          },
+          "clear": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 15.466,
+            "afterMedian": 15.48,
+            "medianPercentChange": 0.09052114315273307,
+            "pairedMeanDifference": 0.28586666666666694,
+            "pairedMean95CI": [
+              -0.51664868784928,
+              1.0883820211826138
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.9329999999999998,
+              1.3680000000000003
+            ],
+            "pairedRoundMedianDifference": -0.06299999999999883,
+            "pairedRoundMedian95CI": [
+              -0.4079999999999995,
+              1.1929999999999996
+            ]
+          }
+        },
+        "htms-original": {
+          "run1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 32.181,
+            "afterMedian": 32.672,
+            "medianPercentChange": 1.5257450048165033,
+            "pairedMeanDifference": 0.32233333333333314,
+            "pairedMean95CI": [
+              -0.41458481145621473,
+              1.059251478122881
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.7579999999999956,
+              1.350999999999999
+            ],
+            "pairedRoundMedianDifference": 0.3470000000000013,
+            "pairedRoundMedian95CI": [
+              -0.7930000000000064,
+              1.2700000000000031
+            ]
+          },
+          "replace1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 36.297,
+            "afterMedian": 37.819,
+            "medianPercentChange": 4.193184009697792,
+            "pairedMeanDifference": -1.0008666666666657,
+            "pairedMean95CI": [
+              -6.084662207345438,
+              4.082928874012108
+            ],
+            "pairedBootstrapMedian95CI": [
+              0.5180000000000007,
+              2.334000000000003
+            ],
+            "pairedRoundMedianDifference": 1.264000000000003,
+            "pairedRoundMedian95CI": [
+              -0.14999999999999858,
+              2.455999999999996
+            ]
+          },
+          "update10th": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 21.622,
+            "afterMedian": 24.041,
+            "medianPercentChange": 11.187679215613722,
+            "pairedMeanDifference": 1.3726666666666667,
+            "pairedMean95CI": [
+              -0.3357989410405062,
+              3.0811322743738394
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.5509999999999984,
+              4.151
+            ],
+            "pairedRoundMedianDifference": 1.176000000000002,
+            "pairedRoundMedian95CI": [
+              -0.6129999999999995,
+              3.184000000000001
+            ]
+          },
+          "select": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 4.425,
+            "afterMedian": 4.738,
+            "medianPercentChange": 7.07344632768363,
+            "pairedMeanDifference": 0.16366666666666654,
+            "pairedMean95CI": [
+              -0.6597313784639017,
+              0.9870647117972348
+            ],
+            "pairedBootstrapMedian95CI": [
+              -0.2810000000000006,
+              0.8109999999999999
+            ],
+            "pairedRoundMedianDifference": 0.2610000000000001,
+            "pairedRoundMedian95CI": [
+              -0.3310000000000004,
+              0.6230000000000002
+            ]
+          },
+          "swap": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 22.334,
+            "afterMedian": 21.667,
+            "medianPercentChange": -2.9864780155816173,
+            "pairedMeanDifference": -1.1437333333333328,
+            "pairedMean95CI": [
+              -2.701013102845958,
+              0.41354643617929243
+            ],
+            "pairedBootstrapMedian95CI": [
+              -3.5539999999999985,
+              1.1080000000000005
+            ],
+            "pairedRoundMedianDifference": -0.49499999999999744,
+            "pairedRoundMedian95CI": [
+              -3.373000000000001,
+              0.14700000000000202
+            ]
+          },
+          "remove": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 15.29,
+            "afterMedian": 16.32,
+            "medianPercentChange": 6.7364290385873105,
+            "pairedMeanDifference": 1.239133333333333,
+            "pairedMean95CI": [
+              0.2006032638517281,
+              2.277663402814938
+            ],
+            "pairedBootstrapMedian95CI": [
+              0.2579999999999991,
+              1.5879999999999992
+            ],
+            "pairedRoundMedianDifference": 0.9800000000000004,
+            "pairedRoundMedian95CI": [
+              0.4009999999999998,
+              1.5889999999999986
+            ]
+          },
+          "run10k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 357.974,
+            "afterMedian": 351.176,
+            "medianPercentChange": -1.8990205992614029,
+            "pairedMeanDifference": -6.165800000000002,
+            "pairedMean95CI": [
+              -10.568901058408297,
+              -1.7626989415917063
+            ],
+            "pairedBootstrapMedian95CI": [
+              -9.672000000000025,
+              2.632000000000005
+            ],
+            "pairedRoundMedianDifference": -5.944000000000017,
+            "pairedRoundMedian95CI": [
+              -11.88900000000001,
+              -1.5559999999999832
+            ]
+          },
+          "append1k": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 91.123,
+            "afterMedian": 88.026,
+            "medianPercentChange": -3.3987028521888063,
+            "pairedMeanDifference": -0.7052666666666634,
+            "pairedMean95CI": [
+              -4.486146514174347,
+              3.07561318084102
+            ],
+            "pairedBootstrapMedian95CI": [
+              -5.823999999999998,
+              0.41200000000000614
+            ],
+            "pairedRoundMedianDifference": -1.6599999999999966,
+            "pairedRoundMedian95CI": [
+              -3.415999999999997,
+              7.203000000000003
+            ]
+          },
+          "clear": {
+            "rounds": 15,
+            "samplesPerRevision": 15,
+            "beforeMedian": 16.719,
+            "afterMedian": 15.48,
+            "medianPercentChange": -7.410730306836532,
+            "pairedMeanDifference": -1.1239999999999997,
+            "pairedMean95CI": [
+              -1.6394097750758228,
+              -0.6085902249241766
+            ],
+            "pairedBootstrapMedian95CI": [
+              -1.9929999999999986,
+              -0.3810000000000002
+            ],
+            "pairedRoundMedianDifference": -1.0980000000000025,
+            "pairedRoundMedian95CI": [
+              -2.064,
+              -0.27999999999999936
+            ]
+          }
+        }
+      },
+      "scriptMedians": {
+        "htms-control": {
+          "run1k": 2.446,
+          "replace1k": 5.163,
+          "update10th": 1.042,
+          "select": 0.414,
+          "swap": 0.665,
+          "remove": 0.429,
+          "run10k": 31.275,
+          "append1k": 5.864,
+          "clear": 12.309
+        },
+        "htms": {
+          "run1k": 2.391,
+          "replace1k": 5.196,
+          "update10th": 1.18,
+          "select": 0.466,
+          "swap": 0.703,
+          "remove": 0.426,
+          "run10k": 30.193,
+          "append1k": 5.714,
+          "clear": 12.713
+        },
+        "htms-original": {
+          "run1k": 2.049,
+          "replace1k": 4.911,
+          "update10th": 1.228,
+          "select": 0.102,
+          "swap": 0.469,
+          "remove": 0.458,
+          "run10k": 30.256,
+          "append1k": 4.77,
+          "clear": 13.378
+        }
+      },
+      "memory": {
+        "htms-control": {
+          "ready": 1.7335777282714844,
+          "run1k": 2.4588394165039062,
+          "clear": 2.1294288635253906
+        },
+        "htms": {
+          "ready": 1.7145500183105469,
+          "run1k": 2.3864517211914062,
+          "clear": 2.129070281982422
+        },
+        "htms-original": {
+          "ready": 1.7162094116210938,
+          "run1k": 2.3264923095703125,
+          "clear": 1.9929580688476562
+        }
+      },
+      "timedClicks": 405,
+      "startup": {
+        "htms-control": {
+          "script": {
+            "median": 8.044,
+            "mean": 8.042933333333332,
+            "stddev": 0.19114708871392588,
+            "min": 7.764,
+            "max": 8.581,
+            "samples": [
+              8.581,
+              7.789,
+              7.857,
+              8.044,
+              8.003,
+              8.05,
+              7.969,
+              8.122,
+              8.145,
+              8.155,
+              7.98,
+              8.013,
+              8.097,
+              7.764,
+              8.075
+            ]
+          },
+          "fcp": {
+            "median": 31.8,
+            "mean": 32.321133333333336,
+            "stddev": 2.5474185215251772,
+            "min": 28.462,
+            "max": 37.053,
+            "samples": [
+              31.908,
+              33.345,
+              34.649,
+              28.667,
+              37.053,
+              30.422,
+              29.816,
+              36.044,
+              35.045,
+              31.707,
+              31.78,
+              32.877,
+              31.242,
+              31.8,
+              28.462
+            ]
+          }
+        },
+        "htms": {
+          "script": {
+            "median": 8.004,
+            "mean": 7.9962,
+            "stddev": 0.19462241832400948,
+            "min": 7.701,
+            "max": 8.374,
+            "samples": [
+              8.067,
+              8.374,
+              8.005,
+              8.35,
+              8.05,
+              7.852,
+              7.865,
+              8.06,
+              7.701,
+              8.004,
+              7.967,
+              7.866,
+              7.939,
+              7.706,
+              8.137
+            ]
+          },
+          "fcp": {
+            "median": 32.934,
+            "mean": 32.58860000000001,
+            "stddev": 3.4957432236527737,
+            "min": 27.32,
+            "max": 40.719,
+            "samples": [
+              27.667,
+              40.719,
+              35.115,
+              33.145,
+              33.662,
+              30.781,
+              27.32,
+              35.1,
+              32.934,
+              36.292,
+              30.676,
+              30.612,
+              28.893,
+              33.312,
+              32.601
+            ]
+          }
+        },
+        "htms-original": {
+          "script": {
+            "median": 8.016,
+            "mean": 8.186200000000001,
+            "stddev": 0.7087691745957515,
+            "min": 7.59,
+            "max": 10.611,
+            "samples": [
+              7.926,
+              7.984,
+              7.702,
+              7.82,
+              8.146,
+              8.243,
+              8.322,
+              8.075,
+              7.946,
+              10.611,
+              8.086,
+              8.469,
+              7.857,
+              7.59,
+              8.016
+            ]
+          },
+          "fcp": {
+            "median": 33.283,
+            "mean": 32.96126666666667,
+            "stddev": 2.860640399497654,
+            "min": 29.02,
+            "max": 38.746,
+            "samples": [
+              29.102,
+              38.746,
+              29.338,
+              29.02,
+              32.213,
+              35.375,
+              33.283,
+              34.37,
+              29.029,
+              33.861,
+              34.25,
+              34.96,
+              35.572,
+              32.91,
+              32.39
+            ]
+          }
+        }
+      }
+    },
+    "confirmation": {
+      "file": "block-key-array-confirmation.json",
+      "environment": {
+        "browser": "Chromium 141.0.7390.37",
+        "os": "Darwin 25.3.0 arm64",
+        "cpu": "Apple M2 Max",
+        "cores": 12,
+        "node": "v25.2.1",
+        "timeZone": "Australia/Brisbane",
+        "htmsRevision": "5149f4c2280be0e0f72598eda94cb864edccce6d",
+        "runs": 121
+      },
+      "mirrored": true,
+      "comparisons": {
+        "htms-control": {
+          "run10k": {
+            "rounds": 121,
+            "samplesPerRevision": 242,
+            "beforeMedian": 362.53700000000003,
+            "afterMedian": 362.0875,
+            "medianPercentChange": -0.12398734474000639,
+            "pairedMeanDifference": 0.8405991735537193,
+            "pairedMean95CI": [
+              -3.1423340015037784,
+              4.823532348611217
+            ],
+            "pairedBootstrapMedian95CI": [
+              -2.754000000000019,
+              2.3240000000000123
+            ],
+            "pairedRoundMedianDifference": -0.07900000000003615,
+            "pairedRoundMedian95CI": [
+              -1.4595000000000198,
+              2.066500000000019
+            ]
+          }
+        },
+        "htms-pre-heap": {
+          "run10k": {
+            "rounds": 121,
+            "samplesPerRevision": 242,
+            "beforeMedian": 364.278,
+            "afterMedian": 362.0875,
+            "medianPercentChange": -0.6013264594622925,
+            "pairedMeanDifference": -1.0901776859504158,
+            "pairedMean95CI": [
+              -4.835872002213824,
+              2.655516630312992
+            ],
+            "pairedBootstrapMedian95CI": [
+              -5.527000000000044,
+              1.0434999999999945
+            ],
+            "pairedRoundMedianDifference": -0.9154999999999518,
+            "pairedRoundMedian95CI": [
+              -4.489000000000033,
+              2.2065000000000055
+            ]
+          }
+        }
+      },
+      "scriptMedians": {
+        "htms-pre-heap": {
+          "run10k": 32.061
+        },
+        "htms-control": {
+          "run10k": 33.415
+        },
+        "htms": {
+          "run10k": 31.039
+        },
+        "htms-copy": {
+          "run10k": 31.148
+        },
+        "htms-control-copy": {
+          "run10k": 33.549
+        },
+        "htms-pre-heap-copy": {
+          "run10k": 32.644
+        }
+      },
+      "memory": {
+        "htms-pre-heap": {
+          "ready": 1.7329635620117188,
+          "run1k": 2.3981475830078125,
+          "clear": 2.129138946533203
+        },
+        "htms-control": {
+          "ready": 1.7330322265625,
+          "run1k": 2.459686279296875,
+          "clear": 2.1296958923339844
+        },
+        "htms": {
+          "ready": 1.7329559326171875,
+          "run1k": 2.386249542236328,
+          "clear": 2.1291427612304688
+        },
+        "htms-copy": {
+          "ready": 1.7287368774414062,
+          "run1k": 2.3868446350097656,
+          "clear": 2.1290512084960938
+        },
+        "htms-control-copy": {
+          "ready": 1.7249794006347656,
+          "run1k": 2.459442138671875,
+          "clear": 2.1294517517089844
+        },
+        "htms-pre-heap-copy": {
+          "ready": 1.7245674133300781,
+          "run1k": 2.398273468017578,
+          "clear": 2.1290626525878906
+        }
+      },
+      "timedClicks": 726
+    },
+    "holdout": {
+      "file": "block-key-array-holdout.json",
+      "environment": {
+        "browser": "Chromium 141.0.7390.37",
+        "os": "Darwin 25.3.0 arm64",
+        "cpu": "Apple M2 Max",
+        "cores": 12,
+        "node": "v25.2.1",
+        "timeZone": "Australia/Brisbane",
+        "htmsRevision": "5149f4c2280be0e0f72598eda94cb864edccce6d",
+        "runs": 121
+      },
+      "mirrored": true,
+      "comparisons": {
+        "htms-control": {
+          "run10k": {
+            "rounds": 121,
+            "samplesPerRevision": 242,
+            "beforeMedian": 350.188,
+            "afterMedian": 349.49699999999996,
+            "medianPercentChange": -0.19732258101363698,
+            "pairedMeanDifference": 0.7746818181818176,
+            "pairedMean95CI": [
+              -1.6748442320689905,
+              3.2242078684326256
+            ],
+            "pairedBootstrapMedian95CI": [
+              -2.032000000000039,
+              0.44549999999998136
+            ],
+            "pairedRoundMedianDifference": -0.9380000000000166,
+            "pairedRoundMedian95CI": [
+              -2.22350000000003,
+              0.9314999999999714
+            ]
+          }
+        }
+      },
+      "scriptMedians": {
+        "htms": {
+          "run10k": 30.049
+        },
+        "htms-control": {
+          "run10k": 30.871
+        },
+        "htms-control-copy": {
+          "run10k": 31.71
+        },
+        "htms-copy": {
+          "run10k": 30.133
+        }
+      },
+      "memory": {
+        "htms": {
+          "ready": 1.7162590026855469,
+          "run1k": 2.3867416381835938,
+          "clear": 2.1290512084960938
+        },
+        "htms-control": {
+          "ready": 1.7177467346191406,
+          "run1k": 2.4593048095703125,
+          "clear": 2.1296157836914062
+        },
+        "htms-control-copy": {
+          "ready": 1.7165069580078125,
+          "run1k": 2.4595603942871094,
+          "clear": 2.129596710205078
+        },
+        "htms-copy": {
+          "ready": 1.7176513671875,
+          "run1k": 2.3872413635253906,
+          "clear": 2.1290512084960938
+        }
+      },
+      "timedClicks": 484
+    }
+  },
+  "previousMeanGuard": {
+    "criteria": {
+      "setAt": "2026-10-25T00:22:12.810871+00:00",
+      "rounds": 121,
+      "operation": "run10k",
+      "apps": "htms-pre-heap,htms-control,htms,htms-copy,htms-control-copy,htms-pre-heap-copy",
+      "creationVs5149f4c": "upper paired mean 95% interval below 1% of the control median",
+      "creationVsDbc7bb6": "paired mean 95% interval below zero",
+      "heap": "recover at least 56 KiB per 1000 active rows against 5149f4c"
+    },
+    "creationUpperBoundMs": 4.823532348611217,
+    "creationMarginMs": 3.62537,
+    "creationVsCurrent": false,
+    "creationVsPreRegression": false
+  },
+  "acceptance": {
+    "criteria": {
+      "setAt": "2026-10-25T00:47:46.411874+00:00",
+      "rounds": 121,
+      "operation": "run10k",
+      "apps": "htms,htms-control,htms-control-copy,htms-copy",
+      "primary": "paired bootstrap upper 95% bound for difference of pooled benchmark medians below 1% of current median",
+      "additional": "paired mean interval must not establish a slowdown",
+      "heap": "recover at least 56 KiB per 1000 active rows",
+      "reason": "Earlier mean-based guard failed; independent holdout uses the unchanged benchmark primary statistic, the median. Earlier results and failed mean guard remain reported."
+    },
+    "creationMedian95CI": [
+      -2.032000000000039,
+      0.44549999999998136
+    ],
+    "creationMedianMarginMs": 3.50188,
+    "creationMedian": true,
+    "creationNoEstablishedMeanLoss": true,
+    "creationMeanUpperWithin1Percent": true,
+    "heapRecoveredKiB": 74.125,
+    "heap": true
+  },
+  "bundleAliasesByCohort": {
+    "screen": {
+      "htms-array-key": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6",
+      "htms-control": "2049a840ce35fae5746571a6919419a1bb23b050781485e4eb96445aac539bb9",
+      "htms-pre-heap": "31d2fa14467560458f950caaa49a8ae876cbd9aa842719cc0e35d4ae9a0c0faf"
+    },
+    "full": {
+      "htms": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6",
+      "htms-control": "2049a840ce35fae5746571a6919419a1bb23b050781485e4eb96445aac539bb9",
+      "htms-original": "b500dae90d294e9e461fbd9931a4223ea407c289f61199d907a60aeca687eef8"
+    },
+    "confirmation": {
+      "htms-pre-heap": "31d2fa14467560458f950caaa49a8ae876cbd9aa842719cc0e35d4ae9a0c0faf",
+      "htms-control": "2049a840ce35fae5746571a6919419a1bb23b050781485e4eb96445aac539bb9",
+      "htms": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6",
+      "htms-copy": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6",
+      "htms-control-copy": "2049a840ce35fae5746571a6919419a1bb23b050781485e4eb96445aac539bb9",
+      "htms-pre-heap-copy": "31d2fa14467560458f950caaa49a8ae876cbd9aa842719cc0e35d4ae9a0c0faf"
+    },
+    "holdout": {
+      "htms": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6",
+      "htms-control": "2049a840ce35fae5746571a6919419a1bb23b050781485e4eb96445aac539bb9",
+      "htms-control-copy": "2049a840ce35fae5746571a6919419a1bb23b050781485e4eb96445aac539bb9",
+      "htms-copy": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6"
+    }
+  },
+  "retention": {
+    "records": [
+      {
+        "app": "htms-control",
+        "cycles": 0,
+        "heapBytes": 724008,
+        "dom": {
+          "documents": 2,
+          "nodes": 92,
+          "jsEventListeners": 2
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-control",
+        "cycles": 6,
+        "heapBytes": 1690044,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-control",
+        "cycles": 30,
+        "heapBytes": 1698532,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-control",
+        "cycles": 90,
+        "heapBytes": 1764236,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-pre-heap",
+        "cycles": 0,
+        "heapBytes": 723936,
+        "dom": {
+          "documents": 2,
+          "nodes": 92,
+          "jsEventListeners": 2
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-pre-heap",
+        "cycles": 6,
+        "heapBytes": 1690016,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-pre-heap",
+        "cycles": 30,
+        "heapBytes": 1705908,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-pre-heap",
+        "cycles": 90,
+        "heapBytes": 1764908,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-original",
+        "cycles": 0,
+        "heapBytes": 722700,
+        "dom": {
+          "documents": 2,
+          "nodes": 92,
+          "jsEventListeners": 2
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-original",
+        "cycles": 6,
+        "heapBytes": 1616212,
+        "dom": {
+          "documents": 2,
+          "nodes": 109,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-original",
+        "cycles": 30,
+        "heapBytes": 1635456,
+        "dom": {
+          "documents": 2,
+          "nodes": 109,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms-original",
+        "cycles": 90,
+        "heapBytes": 1688688,
+        "dom": {
+          "documents": 2,
+          "nodes": 109,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms",
+        "cycles": 0,
+        "heapBytes": 723928,
+        "dom": {
+          "documents": 2,
+          "nodes": 92,
+          "jsEventListeners": 2
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms",
+        "cycles": 6,
+        "heapBytes": 1690044,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms",
+        "cycles": 30,
+        "heapBytes": 1706088,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      },
+      {
+        "app": "htms",
+        "cycles": 90,
+        "heapBytes": 1764992,
+        "dom": {
+          "documents": 2,
+          "nodes": 107,
+          "jsEventListeners": 15
+        },
+        "rows": 0
+      }
+    ],
+    "active": [
+      {
+        "app": "htms-control",
+        "rows": 1000,
+        "heapBytes": 2350304,
+        "dom": {
+          "documents": 2,
+          "nodes": 11107,
+          "jsEventListeners": 15
+        },
+        "keyKind": "object",
+        "uniqueKeys": 1000
+      },
+      {
+        "app": "htms-control",
+        "rows": 10000,
+        "heapBytes": 6015652,
+        "dom": {
+          "documents": 2,
+          "nodes": 110110,
+          "jsEventListeners": 15
+        },
+        "keyKind": "object",
+        "uniqueKeys": 10000
+      },
+      {
+        "app": "htms-pre-heap",
+        "rows": 1000,
+        "heapBytes": 2279240,
+        "dom": {
+          "documents": 2,
+          "nodes": 11107,
+          "jsEventListeners": 15
+        },
+        "keyKind": "object",
+        "uniqueKeys": 1000
+      },
+      {
+        "app": "htms-pre-heap",
+        "rows": 10000,
+        "heapBytes": 5378916,
+        "dom": {
+          "documents": 2,
+          "nodes": 110110,
+          "jsEventListeners": 15
+        },
+        "keyKind": "object",
+        "uniqueKeys": 10000
+      },
+      {
+        "app": "htms-original",
+        "rows": 1000,
+        "heapBytes": 2153712,
+        "dom": {
+          "documents": 2,
+          "nodes": 11109,
+          "jsEventListeners": 15
+        }
+      },
+      {
+        "app": "htms-original",
+        "rows": 10000,
+        "heapBytes": 4583608,
+        "dom": {
+          "documents": 2,
+          "nodes": 110112,
+          "jsEventListeners": 15
+        }
+      },
+      {
+        "app": "htms",
+        "rows": 1000,
+        "heapBytes": 2275256,
+        "dom": {
+          "documents": 2,
+          "nodes": 11107,
+          "jsEventListeners": 15
+        },
+        "keyKind": "array",
+        "uniqueKeys": 1000
+      },
+      {
+        "app": "htms",
+        "rows": 10000,
+        "heapBytes": 5259240,
+        "dom": {
+          "documents": 2,
+          "nodes": 110110,
+          "jsEventListeners": 15
+        },
+        "keyKind": "array",
+        "uniqueKeys": 10000
+      }
+    ],
+    "identicalDOM": true
+  }
+}

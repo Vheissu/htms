@@ -1,0 +1,33 @@
+{
+  "browser": "141.0.7390.37",
+  "note": "V8 representation diagnostic with allow-natives-syntax, separate from benchmark processes and timings.",
+  "shapes": {
+    "plain": {
+      "fastProperties": true,
+      "ownKeys": [],
+      "prototypeIsNull": false
+    },
+    "nullLiteral": {
+      "fastProperties": false,
+      "ownKeys": [],
+      "prototypeIsNull": true
+    },
+    "sharedPrototype": {
+      "fastProperties": true,
+      "ownKeys": [],
+      "prototypeIsNull": false
+    },
+    "setPrototype": {
+      "fastProperties": true,
+      "ownKeys": [],
+      "prototypeIsNull": true
+    },
+    "array": {
+      "fastProperties": true,
+      "ownKeys": [
+        "length"
+      ],
+      "prototypeIsNull": false
+    }
+  }
+}

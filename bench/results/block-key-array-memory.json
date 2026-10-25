@@ -1,0 +1,449 @@
+{
+  "note": "Separate GC/retention and deterministic DOM-equivalence diagnostics; these are not benchmark timings.",
+  "records": [
+    {
+      "app": "htms-control",
+      "cycles": 0,
+      "heapBytes": 724008,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-control",
+      "cycles": 6,
+      "heapBytes": 1690044,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-control",
+      "cycles": 30,
+      "heapBytes": 1698532,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-control",
+      "cycles": 90,
+      "heapBytes": 1764236,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-pre-heap",
+      "cycles": 0,
+      "heapBytes": 723936,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-pre-heap",
+      "cycles": 6,
+      "heapBytes": 1690016,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-pre-heap",
+      "cycles": 30,
+      "heapBytes": 1705908,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-pre-heap",
+      "cycles": 90,
+      "heapBytes": 1764908,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 0,
+      "heapBytes": 722700,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 6,
+      "heapBytes": 1616212,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 30,
+      "heapBytes": 1635456,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms-original",
+      "cycles": 90,
+      "heapBytes": 1688688,
+      "dom": {
+        "documents": 2,
+        "nodes": 109,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 0,
+      "heapBytes": 723928,
+      "dom": {
+        "documents": 2,
+        "nodes": 92,
+        "jsEventListeners": 2
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 6,
+      "heapBytes": 1690044,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 30,
+      "heapBytes": 1706088,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    },
+    {
+      "app": "htms",
+      "cycles": 90,
+      "heapBytes": 1764992,
+      "dom": {
+        "documents": 2,
+        "nodes": 107,
+        "jsEventListeners": 15
+      },
+      "rows": 0
+    }
+  ],
+  "active": [
+    {
+      "app": "htms-control",
+      "rows": 1000,
+      "heapBytes": 2350304,
+      "dom": {
+        "documents": 2,
+        "nodes": 11107,
+        "jsEventListeners": 15
+      },
+      "keys": {
+        "kind": "object",
+        "prototypeOwnKeys": [],
+        "inheritsObjectPrototype": false,
+        "unique": 1000,
+        "empty": true,
+        "sharedPrototype": true,
+        "nullRooted": true
+      }
+    },
+    {
+      "app": "htms-control",
+      "rows": 10000,
+      "heapBytes": 6015652,
+      "dom": {
+        "documents": 2,
+        "nodes": 110110,
+        "jsEventListeners": 15
+      },
+      "keys": {
+        "kind": "object",
+        "prototypeOwnKeys": [],
+        "inheritsObjectPrototype": false,
+        "unique": 10000,
+        "empty": true,
+        "sharedPrototype": true,
+        "nullRooted": true
+      }
+    },
+    {
+      "app": "htms-pre-heap",
+      "rows": 1000,
+      "heapBytes": 2279240,
+      "dom": {
+        "documents": 2,
+        "nodes": 11107,
+        "jsEventListeners": 15
+      },
+      "keys": {
+        "kind": "object",
+        "prototypeOwnKeys": [
+          "constructor",
+          "__defineGetter__",
+          "__defineSetter__",
+          "hasOwnProperty",
+          "__lookupGetter__",
+          "__lookupSetter__",
+          "isPrototypeOf",
+          "propertyIsEnumerable",
+          "toString",
+          "valueOf",
+          "__proto__",
+          "toLocaleString"
+        ],
+        "inheritsObjectPrototype": true,
+        "unique": 1000,
+        "empty": true,
+        "sharedPrototype": true,
+        "nullRooted": true
+      }
+    },
+    {
+      "app": "htms-pre-heap",
+      "rows": 10000,
+      "heapBytes": 5378916,
+      "dom": {
+        "documents": 2,
+        "nodes": 110110,
+        "jsEventListeners": 15
+      },
+      "keys": {
+        "kind": "object",
+        "prototypeOwnKeys": [
+          "constructor",
+          "__defineGetter__",
+          "__defineSetter__",
+          "hasOwnProperty",
+          "__lookupGetter__",
+          "__lookupSetter__",
+          "isPrototypeOf",
+          "propertyIsEnumerable",
+          "toString",
+          "valueOf",
+          "__proto__",
+          "toLocaleString"
+        ],
+        "inheritsObjectPrototype": true,
+        "unique": 10000,
+        "empty": true,
+        "sharedPrototype": true,
+        "nullRooted": true
+      }
+    },
+    {
+      "app": "htms-original",
+      "rows": 1000,
+      "heapBytes": 2153712,
+      "dom": {
+        "documents": 2,
+        "nodes": 11109,
+        "jsEventListeners": 15
+      },
+      "keys": null
+    },
+    {
+      "app": "htms-original",
+      "rows": 10000,
+      "heapBytes": 4583608,
+      "dom": {
+        "documents": 2,
+        "nodes": 110112,
+        "jsEventListeners": 15
+      },
+      "keys": null
+    },
+    {
+      "app": "htms",
+      "rows": 1000,
+      "heapBytes": 2275256,
+      "dom": {
+        "documents": 2,
+        "nodes": 11107,
+        "jsEventListeners": 15
+      },
+      "keys": {
+        "kind": "array",
+        "prototypeOwnKeys": [
+          "length",
+          "constructor",
+          "at",
+          "concat",
+          "copyWithin",
+          "fill",
+          "find",
+          "findIndex",
+          "findLast",
+          "findLastIndex",
+          "lastIndexOf",
+          "pop",
+          "push",
+          "reverse",
+          "shift",
+          "unshift",
+          "slice",
+          "sort",
+          "splice",
+          "includes",
+          "indexOf",
+          "join",
+          "keys",
+          "entries",
+          "values",
+          "forEach",
+          "filter",
+          "flat",
+          "flatMap",
+          "map",
+          "every",
+          "some",
+          "reduce",
+          "reduceRight",
+          "toReversed",
+          "toSorted",
+          "toSpliced",
+          "with",
+          "toLocaleString",
+          "toString"
+        ],
+        "inheritsObjectPrototype": true,
+        "unique": 1000,
+        "empty": true,
+        "sharedPrototype": true,
+        "nullRooted": false
+      }
+    },
+    {
+      "app": "htms",
+      "rows": 10000,
+      "heapBytes": 5259240,
+      "dom": {
+        "documents": 2,
+        "nodes": 110110,
+        "jsEventListeners": 15
+      },
+      "keys": {
+        "kind": "array",
+        "prototypeOwnKeys": [
+          "length",
+          "constructor",
+          "at",
+          "concat",
+          "copyWithin",
+          "fill",
+          "find",
+          "findIndex",
+          "findLast",
+          "findLastIndex",
+          "lastIndexOf",
+          "pop",
+          "push",
+          "reverse",
+          "shift",
+          "unshift",
+          "slice",
+          "sort",
+          "splice",
+          "includes",
+          "indexOf",
+          "join",
+          "keys",
+          "entries",
+          "values",
+          "forEach",
+          "filter",
+          "flat",
+          "flatMap",
+          "map",
+          "every",
+          "some",
+          "reduce",
+          "reduceRight",
+          "toReversed",
+          "toSorted",
+          "toSpliced",
+          "with",
+          "toLocaleString",
+          "toString"
+        ],
+        "inheritsObjectPrototype": true,
+        "unique": 10000,
+        "empty": true,
+        "sharedPrototype": true,
+        "nullRooted": false
+      }
+    }
+  ],
+  "domEquivalence": [
+    {
+      "app": "htms-control",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    },
+    {
+      "app": "htms-pre-heap",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    },
+    {
+      "app": "htms-original",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    },
+    {
+      "app": "htms",
+      "sha256": "5f7e7dad96ea09de46e068eabfe8813f467944e1bf3ba3de13a4da3080ef35fa",
+      "html": "<tr><td class=\"col-md-1\">1</td><td class=\"col-md-4\"><a>alpha &amp; &lt;beta&gt;</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr><tr class=\"danger\"><td class=\"col-md-1\">2</td><td class=\"col-md-4\"><a>second</a></td><td class=\"col-md-1\"><a><span class=\"glyphicon glyphicon-remove\" aria-hidden=\"true\"></span></a></td><td class=\"col-md-6\"></td></tr>"
+    }
+  ]
+}
