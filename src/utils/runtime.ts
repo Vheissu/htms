@@ -1,13 +1,3 @@
-// Inline lookup code so the installed runtime keeps its existing closure layout.
-function bindingTargetLookup(selector: string): string {
-  return `(typeof ${selector} === 'string' &&
-    /^#[A-Za-z_][A-Za-z0-9_-]*$/.test(${selector}) &&
-    document.compatMode === 'CSS1Compat' &&
-    document.contentType === 'text/html'
-      ? document.getElementById(${selector}.slice(1))
-      : document.querySelector(${selector}))`;
-}
-
 export function ensureRuntime(): string {
   return `(function(){
     if (typeof window === 'undefined') return;
@@ -117,8 +107,9 @@ export function ensureRuntime(): string {
               return false;
             }
             try {
-              const selector = watcher.sel;
-              const el = ${bindingTargetLookup('selector')};
+              const el = watcher.id !== null
+                ? document.getElementById(watcher.id)
+                : document.querySelector(watcher.sel);
               if (!el) {
                 if (watcher.autoDispose) {
                   watcher.disposed = true;
@@ -194,10 +185,18 @@ export function ensureRuntime(): string {
           }
         },
         bind: function(sel, prop, fn){
-          const watcher = { sel, prop, fn, disposed: false, autoDispose: true };
+          // getElementById finds what querySelector('#id') would for a plain
+          // ID in a standards-mode HTML document, without parsing a selector.
+          // Quirks mode matches IDs case-insensitively and XML has its own ID
+          // rules, so those keep the CSS lookup.
+          const id = typeof sel === 'string' &&
+            /^#[A-Za-z_][A-Za-z0-9_-]*$/.test(sel) &&
+            document.compatMode === 'CSS1Compat' &&
+            document.contentType === 'text/html' ? sel.slice(1) : null;
+          const watcher = { sel, id, prop, fn, disposed: false, autoDispose: true };
           this.watchers.push(watcher);
           try {
-            const el = ${bindingTargetLookup('sel')};
+            const el = id !== null ? document.getElementById(id) : document.querySelector(sel);
             if (!el) {
               console.warn('BIND target not found:', sel);
             } else {
