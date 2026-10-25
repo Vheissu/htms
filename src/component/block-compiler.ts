@@ -10,6 +10,7 @@ import {
 import { parseReadOnlyProgram } from '../utils/js-parser';
 import { ALL_DIRTY, DEEP_BIT, DependencyAnalyzer } from './dependencies';
 import { scopeExpression, scopeStatements } from './scope';
+import { GLOBAL_EVENT_TARGETS } from './directive-renderer';
 import {
   BOOLEAN_ATTRIBUTES,
   RAW_TEXT_ELEMENTS,
@@ -241,6 +242,15 @@ interface BlockVar {
   mask: number;
 }
 
+// A loop variable as a block sees it: `path` reaches its value from the
+// block's state object.
+interface VisibleVar {
+  name: string;
+  field: 'x' | 'i';
+  path: string;
+  mask: number;
+}
+
 interface BlockPlan {
   id: number;
   parent: BlockPlan | null;
@@ -301,12 +311,18 @@ const LIVE_PROPERTIES = new Set([
   'indeterminate',
 ]);
 
-const GLOBAL_TARGETS = new Map([
-  ['window', 'window'],
-  ['document', 'document'],
-  [':host', 'this'],
-  ['host', 'this'],
-]);
+// `{ once: true, ... }` for a directly attached listener, or null.
+function listenerOptions(modifiers: EventModifiers): string | null {
+  const entries: string[] = [];
+  if (modifiers.once) entries.push('once: true');
+  if (modifiers.passive) entries.push('passive: true');
+  if (modifiers.capture) entries.push('capture: true');
+  return entries.length > 0 ? `{ ${entries.join(', ')} }` : null;
+}
+
+function isTemplate(node: PElement): boolean {
+  return node.ns === 'html' && node.tag === 'template';
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -368,8 +384,19 @@ class BlockCompiler {
   private readonly doc: SourceDocument;
   private readonly analyzer: DependencyAnalyzer;
   private readonly blockMasks = new Map<BlockPlan, number>();
+  // Handler bodies' write reports, resolved once every binding is read.
+  private readonly pendingNotifies: Array<{
+    block: BlockPlan;
+    code: string;
+    inert: readonly string[];
+  }> = [];
+  private readonly keyExpressions = new Map<BlockPlan, string>();
+  // Elements handlers refer to before their field names are assigned.
+  private readonly placeholders = new Map<PElement, number>();
+  private readonly placeholderNodes: PElement[] = [];
   private handlerCount = 0;
   private eventRootCount = 0;
+  private walkCounter = 0;
 
   constructor(private readonly options: BlockCompileOptions) {
     this.fields = new Set(options.componentFields);
@@ -449,19 +476,9 @@ class BlockCompiler {
   }
 
   // Loop variables visible in a block, innermost first.
-  private visibleVars(block: BlockPlan): Array<{
-    name: string;
-    field: 'x' | 'i';
-    path: string;
-    mask: number;
-  }> {
+  private visibleVars(block: BlockPlan): VisibleVar[] {
     const seen = new Set<string>();
-    const result: Array<{
-      name: string;
-      field: 'x' | 'i';
-      path: string;
-      mask: number;
-    }> = [];
+    const result: VisibleVar[] = [];
     let hops = 0;
     for (
       let current: BlockPlan | null = block;
@@ -533,12 +550,6 @@ class BlockCompiler {
   // The line that reports a handler body's nested writes. Its mask depends
   // on which fields bindings read, so it is a placeholder until every
   // binding has been compiled; a body with nothing to report loses the line.
-  private readonly pendingNotifies: Array<{
-    block: BlockPlan;
-    code: string;
-    inert: readonly string[];
-  }> = [];
-
   private notifyLines(
     block: BlockPlan,
     body: readonly string[],
@@ -941,30 +952,15 @@ class BlockCompiler {
       !DELEGATED_EVENTS.has(eventType) ||
       modifiers.capture === true ||
       modifiers.passive === true;
-    if (direct) {
-      const entries: string[] = [];
-      if (modifiers.once) entries.push('once: true');
-      if (modifiers.passive) entries.push('passive: true');
-      if (modifiers.capture) entries.push('capture: true');
-      block.creates.push({
-        kind: 'event',
-        node: element,
-        type: eventType,
-        handler: name,
-        usesEvent,
-        options: entries.length > 0 ? `{ ${entries.join(', ')} }` : null,
-      });
-    } else {
-      this.delegated.add(eventType);
-      block.creates.push({
-        kind: 'event',
-        node: element,
-        type: eventType,
-        handler: name,
-        usesEvent,
-        options: null,
-      });
-    }
+    if (!direct) this.delegated.add(eventType);
+    block.creates.push({
+      kind: 'event',
+      node: element,
+      type: eventType,
+      handler: name,
+      usesEvent,
+      options: direct ? listenerOptions(modifiers) : null,
+    });
     element.wantLocal = true;
   }
 
@@ -1034,6 +1030,21 @@ class BlockCompiler {
     }
   }
 
+  // Adds a branch to `sub` rendering `template` and `directives`, chosen
+  // when `test` holds (null for the default branch).
+  private addBranch(
+    block: BlockPlan,
+    sub: CondSub,
+    test: string | null,
+    template: TemplateNode[],
+    directives: DirectiveNode[] | undefined
+  ): void {
+    const branch = this.newBlock(block, 'branch', []);
+    this.fillBlock(branch, template, directives);
+    sub.branches.push({ test, body: branch });
+    this.mountSample(branch, sub.end);
+  }
+
   private fillBlock(
     block: BlockPlan,
     template: TemplateNode[],
@@ -1071,24 +1082,24 @@ class BlockCompiler {
           this.readMask(block, directive.expression)
         );
         for (const switchCase of directive.cases) {
-          const branch = this.newBlock(block, 'branch', []);
-          this.fillBlock(branch, switchCase.template, switchCase.directives);
+          // The case value's reads are taken after its branch is built.
+          this.addBranch(
+            block,
+            sub,
+            `${subject} === ${switchCase.value}`,
+            switchCase.template,
+            switchCase.directives
+          );
           sub.testMask |= this.readMask(block, switchCase.value);
-          sub.branches.push({
-            test: `${subject} === ${switchCase.value}`,
-            body: branch,
-          });
-          this.mountSample(branch, sub.end);
         }
         if (directive.defaultCase) {
-          const branch = this.newBlock(block, 'branch', []);
-          this.fillBlock(
-            branch,
+          this.addBranch(
+            block,
+            sub,
+            null,
             directive.defaultCase.template,
             directive.defaultCase.directives
           );
-          sub.branches.push({ test: null, body: branch });
-          this.mountSample(branch, sub.end);
         }
         return;
       }
@@ -1124,10 +1135,13 @@ class BlockCompiler {
             null,
             0
           );
-          const branch = this.newBlock(block, 'branch', []);
-          this.fillBlock(branch, directive.template, directive.directives);
-          sub.branches.push({ test: null, body: branch });
-          this.mountSample(branch, sub.end);
+          this.addBranch(
+            block,
+            sub,
+            null,
+            directive.template,
+            directive.directives
+          );
         }
         return;
       }
@@ -1302,15 +1316,14 @@ class BlockCompiler {
     // Flatten else-if chains: whenFalse holding only another condition.
     let current: ConditionDirective | null = directive;
     while (current) {
-      const branch = this.newBlock(block, 'branch', []);
-      this.fillBlock(
-        branch,
+      this.addBranch(
+        block,
+        sub,
+        current.condition,
         current.whenTrue.template,
         current.whenTrue.directives
       );
       sub.testMask |= this.readMask(block, current.condition);
-      sub.branches.push({ test: current.condition, body: branch });
-      this.mountSample(branch, sub.end);
       const otherwise: ConditionDirective['whenFalse'] = current.whenFalse;
       current = null;
       if (!otherwise) break;
@@ -1323,10 +1336,13 @@ class BlockCompiler {
         current = nested[0];
         continue;
       }
-      const elseBranch = this.newBlock(block, 'branch', []);
-      this.fillBlock(elseBranch, otherwise.template, otherwise.directives);
-      sub.branches.push({ test: null, body: elseBranch });
-      this.mountSample(elseBranch, sub.end);
+      this.addBranch(
+        block,
+        sub,
+        null,
+        otherwise.template,
+        otherwise.directives
+      );
     }
   }
 
@@ -1430,8 +1446,6 @@ class BlockCompiler {
     this.mountSample(body, end);
   }
 
-  private readonly keyExpressions = new Map<BlockPlan, string>();
-
   private buildEventDirective(
     block: BlockPlan,
     directive: EventDirective,
@@ -1448,7 +1462,7 @@ class BlockCompiler {
       ...this.notifyLines(block, statements, [eventRootVar]),
     ];
     const modifiers = directive.modifiers ?? {};
-    const global = GLOBAL_TARGETS.get(directive.selector.trim());
+    const global = GLOBAL_EVENT_TARGETS.get(directive.selector.trim());
     if (global) {
       if (block.kind !== 'root') {
         throw new UnsupportedBlockFeature(
@@ -1464,11 +1478,8 @@ class BlockCompiler {
           expression: () => '(this.__htmsRoot || this)',
         }
       );
-      const entries: string[] = [];
-      if (modifiers.once) entries.push('once: true');
-      if (modifiers.passive) entries.push('passive: true');
-      if (modifiers.capture) entries.push('capture: true');
-      const options = entries.length > 0 ? `, { ${entries.join(', ')} }` : '';
+      const entries = listenerOptions(modifiers);
+      const options = entries ? `, ${entries}` : '';
       const listener = usesEvent
         ? `(event) => this.${name}(event, this.__htmsBlock)`
         : `() => this.${name}(this.__htmsBlock)`;
@@ -1503,9 +1514,6 @@ class BlockCompiler {
   private fieldName(node: PElement): string {
     return `@@field:${this.placeholderId(node)}@@`;
   }
-
-  private readonly placeholders = new Map<PElement, number>();
-  private readonly placeholderNodes: PElement[] = [];
 
   private placeholderId(node: PElement): number {
     let id = this.placeholders.get(node);
@@ -1597,7 +1605,7 @@ class BlockCompiler {
         const owner = container.element;
         if (
           owner &&
-          !(owner.ns === 'html' && owner.tag === 'template') &&
+          !isTemplate(owner) &&
           container.children.length === 2 &&
           container.children[0] === start &&
           container.children[1] === end
@@ -1772,7 +1780,7 @@ class BlockCompiler {
       ) {
         return false;
       }
-      if (node.ns === 'html' && node.tag === 'template') {
+      if (isTemplate(node)) {
         return true;
       }
       return this.sameStructure(element, node.children);
@@ -2083,7 +2091,7 @@ class BlockCompiler {
     const needs = (node: PNode): boolean =>
       node.local !== null ||
       (node.kind === 'element' &&
-        !(node.ns === 'html' && node.tag === 'template') &&
+        !isTemplate(node) &&
         node.children.some(needs));
     let last = -1;
     children.forEach((child, index) => {
@@ -2110,8 +2118,6 @@ class BlockCompiler {
       }
     }
   }
-
-  private walkCounter = 0;
 
   // The update method's body. Each part runs only when `$$d`, the mask of
   // fields changed since the last update, overlaps the fields it reads;

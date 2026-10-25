@@ -17,30 +17,20 @@ import {
 } from './dependencies';
 import {
   ComponentIR,
-  DirectiveNode,
-  LoopDirective,
-  ConditionDirective,
-  EventDirective,
-  VisibilityDirective,
-  AttributeDirective,
-  AppendDirective,
-  BindDirective,
-  KeyedListDirective,
-  SwitchDirective,
-  WhileDirective,
-  ClassDirective,
-  StyleDirective,
   StateDirective,
-  TemplateNode,
   MethodDirective,
   walkComponentIR,
-  walkDirectives,
   walkTemplateElements,
 } from './ir';
 import {
-  renderEventPreamble,
+  RenderContext,
+  StateMasks,
+  renderDirective,
+  renderEventBody,
+  renderStateDirective,
+} from './directive-renderer';
+import {
   serializeTemplateNodes,
-  URL_ATTRIBUTES,
   templateNodesHaveDirectives,
   templateNodesHaveInterpolations,
   templateNodesToHTML,
@@ -59,6 +49,23 @@ import { ensureRuntime } from '../utils/runtime';
 import { addNodeLocation, addNodeLocations } from '../diagnostics';
 import { SourceDocument, SourceElement } from '../source-dom';
 import { withReadOnlyParseCache } from '../utils/js-parser';
+import {
+  ATTRIBUTE_CHANGED_CALLBACK,
+  CONSTRUCTOR_START,
+  DISCONNECT_START,
+  DISPOSE_EFFECTS,
+  ENSURE_RENDER_ROOT,
+  FOCUS_HELPERS,
+  LEGACY_LISTENER_HELPERS,
+  SHARED_EVENT_HELPERS,
+  STATE_HELPERS,
+  UPDATE_HELPERS,
+  inputHelpers,
+  reconciliationHelpers,
+  renderMethod,
+  renderRootHelper,
+  staticTemplateGetter,
+} from './class-helpers';
 
 interface ComponentMetadata {
   tagName: string;
@@ -72,16 +79,6 @@ interface ComponentMetadata {
 interface ComponentProperty {
   propName: string;
   type: ComponentInputType;
-}
-
-function collectEmittedEventNames(ir: ComponentIR): string[] {
-  const names = new Set<string>();
-  walkComponentIR(ir, (directive) => {
-    if (directive.kind === 'statement' && directive.emittedEventName) {
-      names.add(directive.emittedEventName);
-    }
-  });
-  return Array.from(names);
 }
 
 interface ComponentInput {
@@ -116,130 +113,112 @@ const RESERVED_COMPONENT_PROPERTIES = new Set([
   'updateComplete',
 ]);
 
-function isReservedComponentProperty(name: string): boolean {
-  return name.startsWith('__htms') || RESERVED_COMPONENT_PROPERTIES.has(name);
+// Names a component field cannot take: the generated class's own members
+// and HTMLElement properties.
+function conflictsWithElement(name: string): boolean {
+  return (
+    name.startsWith('__htms') ||
+    RESERVED_COMPONENT_PROPERTIES.has(name) ||
+    NATIVE_ELEMENT_PROPERTIES.has(name)
+  );
 }
 
-function isNativeElementProperty(name: string): boolean {
-  return NATIVE_ELEMENT_PROPERTIES.has(name);
+interface LifecycleState {
+  init: StateDirective[];
+  derive: StateDirective[];
 }
 
-function containsState(ir: ComponentIR): boolean {
-  let found = false;
+// What class generation needs to know about a component's IR, gathered in
+// one walk. Lists keep the order their directives appear in.
+interface ComponentSummary {
+  methods: MethodDirective[];
+  // Roots of every state path, and of the paths state is initialized at.
+  stateRoots: string[];
+  initialStateRoots: string[];
+  // State init/derive directives can appear anywhere in the IR (top level,
+  // inside branches, or embedded in markup). They are hoisted to the top of
+  // render() so declared state is initialized before any template uses it.
+  lifecycleState: LifecycleState;
+  emittedEvents: string[];
+  // Selectors of elements whose properties the component sets.
+  controlledSelectors: string[];
+  hasState: boolean;
+  // <event> directives, or event or model bindings.
+  hasEvents: boolean;
+  hasBindings: boolean;
+  requiresRuntime: boolean;
+}
+
+function summarizeComponent(ir: ComponentIR): ComponentSummary {
+  const methods: MethodDirective[] = [];
+  const stateRoots = new Set<string>();
+  const initialStateRoots = new Set<string>();
+  const lifecycleState: LifecycleState = { init: [], derive: [] };
+  const emittedEvents = new Set<string>();
+  const controlledSelectors = new Set<string>();
+  let hasState = false;
+  let hasEvents = false;
+  let requiresRuntime = false;
   walkComponentIR(ir, (directive) => {
-    if (directive.kind === 'state') {
-      found = true;
+    switch (directive.kind) {
+      case 'method':
+        methods.push(directive);
+        break;
+      case 'state': {
+        hasState = true;
+        const [root] = directive.path;
+        if (root !== undefined) stateRoots.add(root);
+        if (directive.mode === 'init') {
+          if (root !== undefined) initialStateRoots.add(root);
+          lifecycleState.init.push(directive);
+        } else if (directive.mode === 'derive') {
+          lifecycleState.derive.push(directive);
+        }
+        break;
+      }
+      case 'statement':
+        if (directive.emittedEventName) {
+          emittedEvents.add(directive.emittedEventName);
+        }
+        if (directive.requiresRuntime) requiresRuntime = true;
+        break;
+      case 'event':
+        hasEvents = true;
+        break;
+      case 'bind':
+        controlledSelectors.add(directive.selector);
+        break;
+      case 'attribute':
+        if (directive.target === 'property') {
+          controlledSelectors.add(directive.selector);
+        }
+        break;
     }
   });
-  return found;
-}
-
-function containsEvent(ir: ComponentIR): boolean {
-  let found = false;
-  walkComponentIR(ir, (directive) => {
-    if (directive.kind === 'event') {
-      found = true;
-    }
-  });
+  let hasBindings = false;
   walkTemplateElements(ir, (node) => {
+    if (!node.bindings || node.bindings.length === 0) return;
+    hasBindings = true;
     if (
-      node.bindings?.some(
+      node.bindings.some(
         (binding) => binding.kind === 'event' || binding.kind === 'model'
       )
     ) {
-      found = true;
+      hasEvents = true;
     }
   });
-  return found;
-}
-
-function containsBindings(ir: ComponentIR): boolean {
-  let found = false;
-  walkTemplateElements(ir, (node) => {
-    if ((node.bindings?.length ?? 0) > 0) {
-      found = true;
-    }
-  });
-  return found;
-}
-
-function collectMethods(ir: ComponentIR): MethodDirective[] {
-  const methods: MethodDirective[] = [];
-  walkComponentIR(ir, (directive) => {
-    if (directive.kind === 'method') {
-      methods.push(directive);
-    }
-  });
-  return methods;
-}
-
-function containsRuntimeDependency(ir: ComponentIR): boolean {
-  let found = false;
-  walkComponentIR(ir, (directive) => {
-    if (directive.kind === 'statement' && directive.requiresRuntime) {
-      found = true;
-    }
-  });
-  return found;
-}
-
-function collectControlledSelectors(ir: ComponentIR): string[] {
-  const selectors = new Set<string>();
-  walkComponentIR(ir, (directive) => {
-    if (directive.kind === 'bind') {
-      selectors.add(directive.selector);
-    }
-    if (directive.kind === 'attribute' && directive.target === 'property') {
-      selectors.add(directive.selector);
-    }
-  });
-  return Array.from(selectors);
-}
-
-function collectStateRoots(ir: ComponentIR): string[] {
-  const roots = new Set<string>();
-  walkComponentIR(ir, (directive) => {
-    if (directive.kind === 'state' && directive.path.length > 0) {
-      roots.add(directive.path[0]);
-    }
-  });
-  return Array.from(roots);
-}
-
-function collectInitialStateRoots(ir: ComponentIR): string[] {
-  const roots = new Set<string>();
-  walkComponentIR(ir, (directive) => {
-    if (
-      directive.kind === 'state' &&
-      directive.mode === 'init' &&
-      directive.path.length > 0
-    ) {
-      roots.add(directive.path[0]);
-    }
-  });
-  return Array.from(roots);
-}
-
-// State init/derive directives can appear anywhere in the IR (top level,
-// inside branches, or embedded in markup). They are hoisted to the top of
-// render() so declared state is initialized before any template uses it.
-function collectLifecycleStateDirectives(ir: ComponentIR): {
-  init: StateDirective[];
-  derive: StateDirective[];
-} {
-  const init: StateDirective[] = [];
-  const derive: StateDirective[] = [];
-  walkComponentIR(ir, (directive) => {
-    if (directive.kind !== 'state') {
-      return;
-    }
-    if (directive.mode === 'init') {
-      init.push(directive);
-    } else if (directive.mode === 'derive') {
-      derive.push(directive);
-    }
-  });
-  return { init, derive };
+  return {
+    methods,
+    stateRoots: [...stateRoots],
+    initialStateRoots: [...initialStateRoots],
+    lifecycleState,
+    emittedEvents: [...emittedEvents],
+    controlledSelectors: [...controlledSelectors],
+    hasState,
+    hasEvents,
+    hasBindings,
+    requiresRuntime,
+  };
 }
 
 export function compileComponents(
@@ -382,13 +361,12 @@ function compileComponentElement(
   const warnings: CompilerWarning[] = [];
 
   const metadata = readComponentMetadata(element, errors, warnings);
-  addNodeLocations(errors, element);
-  addNodeLocations(warnings, element);
   if (!metadata) {
+    addNodeLocations(errors, element);
+    addNodeLocations(warnings, element);
     return { codeSnippets: [], errors, warnings, requiresRuntime: false };
   }
 
-  const renderTargetVar = 'componentRoot';
   const componentFields = collectComponentFields(element, metadata);
   const {
     ir: renderIR,
@@ -396,7 +374,7 @@ function compileComponentElement(
     warnings: renderWarnings,
   } = elementsToComponentCode(
     element,
-    renderTargetVar,
+    RENDER_TARGET_VAR,
     options,
     componentFields
   );
@@ -404,20 +382,16 @@ function compileComponentElement(
   errors.push(...renderErrors);
   warnings.push(...renderWarnings);
 
+  const summary = summarizeComponent(renderIR);
   const inputNames = new Set(metadata.inputs.map((input) => input.propName));
-  for (const stateName of collectInitialStateRoots(renderIR)) {
-    if (
-      isReservedComponentProperty(stateName) ||
-      isNativeElementProperty(stateName)
-    ) {
+  for (const stateName of summary.initialStateRoots) {
+    if (conflictsWithElement(stateName)) {
       errors.push({
         type: 'validation',
         message: `Component state "${stateName}" conflicts with the custom element runtime`,
         tag: 'COMPONENT',
       });
-      continue;
-    }
-    if (inputNames.has(stateName)) {
+    } else if (inputNames.has(stateName)) {
       errors.push({
         type: 'validation',
         message: `Component field "${stateName}" cannot be both a prop and local state`,
@@ -426,13 +400,10 @@ function compileComponentElement(
     }
   }
 
-  const stateRoots = new Set(collectInitialStateRoots(renderIR));
+  const stateRoots = new Set(summary.initialStateRoots);
   const methodNames = new Set<string>();
-  for (const method of collectMethods(renderIR)) {
-    if (
-      isReservedComponentProperty(method.name) ||
-      isNativeElementProperty(method.name)
-    ) {
+  for (const method of summary.methods) {
+    if (conflictsWithElement(method.name)) {
       errors.push({
         type: 'validation',
         message: `Method "${method.name}" conflicts with the custom element runtime`,
@@ -465,7 +436,7 @@ function compileComponentElement(
   const { code: classCode, usesBlocks } = buildComponentClass(
     metadata,
     renderIR,
-    renderTargetVar,
+    summary,
     componentFields,
     options.renderer === 'legacy' ? null : element.ownerDocument
   );
@@ -481,7 +452,7 @@ function compileComponentElement(
     codeSnippets: [classCode, registrationCode],
     errors,
     warnings,
-    requiresRuntime: containsRuntimeDependency(renderIR),
+    requiresRuntime: summary.requiresRuntime,
     usesBlocks,
     artifact: {
       name: metadata.tagName,
@@ -489,10 +460,8 @@ function compileComponentElement(
       tagName: metadata.tagName,
       shadowMode: metadata.shadowMode,
       inputs: metadata.inputs.map((input) => ({ ...input })),
-      events: collectEmittedEventNames(renderIR).map((name) => ({
-        name,
-      })),
-      methods: collectMethods(renderIR).map((method) => ({
+      events: summary.emittedEvents.map((name) => ({ name })),
+      methods: summary.methods.map((method) => ({
         name: method.name,
         params: [...method.params],
         async: method.async,
@@ -660,10 +629,7 @@ function parseComponentProps(
       continue;
     }
 
-    if (
-      isReservedComponentProperty(propName) ||
-      isNativeElementProperty(propName)
-    ) {
+    if (conflictsWithElement(propName)) {
       errors.push({
         type: 'validation',
         message: `Property "${propName}" conflicts with the component runtime`,
@@ -771,10 +737,7 @@ function resolveComponentInputs(
       continue;
     }
 
-    if (
-      isReservedComponentProperty(propName) ||
-      isNativeElementProperty(propName)
-    ) {
+    if (conflictsWithElement(propName)) {
       errors.push({
         type: 'validation',
         message: `Observed attribute "${attributeName}" maps to reserved property "${propName}"`,
@@ -783,144 +746,51 @@ function resolveComponentInputs(
       continue;
     }
 
-    if (!inputs.has(propName)) {
-      inputs.set(propName, {
-        propName,
-        attributeName,
-        type: 'string',
-      });
-      continue;
-    }
-
     const existing = inputs.get(propName);
     if (existing) {
       existing.attributeName = attributeName;
+    } else {
+      inputs.set(propName, { propName, attributeName, type: 'string' });
     }
   }
 
   return Array.from(inputs.values());
 }
 
+// The variable render() fills before the reconciling renderer applies it to
+// the root.
+const RENDER_TARGET_VAR = 'componentRoot';
+
 function buildComponentClass(
   metadata: ComponentMetadata,
   renderIR: ComponentIR,
-  renderTargetVar: string,
-  componentFields: ReadonlySet<string> = new Set(),
-  blockDocument: SourceDocument | null = null
+  summary: ComponentSummary,
+  componentFields: ReadonlySet<string>,
+  blockDocument: SourceDocument | null
 ): { code: string; usesBlocks: boolean } {
-  const observedGetter =
-    metadata.observedAttributes.length > 0
-      ? `  static get observedAttributes() { return ${JSON.stringify(metadata.observedAttributes)}; }`
-      : '';
-
-  const inputInitialization = (
-    analyzer: DependencyAnalyzer | null,
-    usedMask: number
-  ): string =>
-    metadata.inputs
-      .map((input) => {
-        const bit = analyzer ? analyzer.bit(input.propName) : ALL_DIRTY;
-        return `    this.__htmsDefineInputProperty(${JSON.stringify(input.propName)}, ${JSON.stringify(input.attributeName)}, ${JSON.stringify(input.type)}, ${bit}, ${(bit & usedMask) !== 0});`;
-      })
-      .join('\n');
-
-  const inputMap =
-    metadata.inputs.length > 0
-      ? Object.fromEntries(
-          metadata.inputs.map((input) => [
-            input.attributeName,
-            { propName: input.propName, type: input.type },
-          ])
-        )
-      : {};
-
-  const shadowInit =
-    metadata.shadowMode === 'none' ? `    this.__htmsRoot = this;` : '';
-
-  const renderRootHelper =
-    metadata.shadowMode === 'none'
-      ? ''
-      : `  __htmsEnsureRenderRoot() {
-    if (this.__htmsRoot) {
-      return this.__htmsRoot;
-    }
-
-    const declarativeTemplate = Array.from(this.children).find(child =>
-      child.localName === 'template' && child.hasAttribute('shadowrootmode')
-    );
-    const existingRoot = this.shadowRoot;
-    const root = existingRoot || this.attachShadow({ mode: '${metadata.shadowMode}' });
-    if (declarativeTemplate) {
-      root.appendChild(declarativeTemplate.content);
-      declarativeTemplate.remove();
-    }
-    this.__htmsRoot = root;
-    return root;
-  }
-
-`;
-
-  const attributeChanged =
-    metadata.observedAttributes.length > 0
-      ? `  attributeChangedCallback(name, oldValue, newValue) {
-    if (oldValue === newValue) {
-      return;
-    }
-    const reflected = this.__htmsSetInputFromAttribute(name, newValue);
-    if (!reflected && this.__htmsConnected) {
-      this.requestUpdate();
-    }
-  }`
-      : '';
-
-  const lifecycleExtras = [observedGetter, attributeChanged].filter(
-    (section) => section.length > 0
-  );
-  const lifecycleSection =
-    lifecycleExtras.length > 0 ? `\n\n${lifecycleExtras.join('\n\n')}\n` : '\n';
-
-  const templateHTML = templateNodesToHTML(renderIR.templateNodes);
-  const componentInterpolationVars = Array.from(
+  const fields = Array.from(
     new Set([
       ...metadata.inputs.map((input) => input.propName),
-      ...collectStateRoots(renderIR),
-      ...collectMethods(renderIR).map((method) => method.name),
+      ...summary.stateRoots,
+      ...summary.methods.map((method) => method.name),
       ...componentFields,
     ])
   );
   const inputNames = new Set(metadata.inputs.map((input) => input.propName));
-  const reactiveStateRoots = collectInitialStateRoots(renderIR).filter(
+  const reactiveStateRoots = summary.initialStateRoots.filter(
     (name) => !inputNames.has(name)
   );
-  const hasDynamicTemplateValues = templateNodesHaveInterpolations(
-    renderIR.templateNodes,
-    [],
-    componentInterpolationVars
-  );
-  const hasStaticTemplate =
-    templateHTML.trim().length > 0 &&
-    !hasDynamicTemplateValues &&
-    !templateNodesHaveDirectives(renderIR.templateNodes);
-  const hasEventDirectives = containsEvent(renderIR);
-  const hasStateDirectives = containsState(renderIR);
-  const preservesFocus =
-    metadata.inputs.length > 0 ||
-    hasStateDirectives ||
-    containsBindings(renderIR);
-  const controlledSelectors = collectControlledSelectors(renderIR);
-  const directiveCounter = { value: 0 };
-  const lifecycleState = collectLifecycleStateDirectives(renderIR);
+  const context: RenderContext = { counter: { value: 0 }, fields };
 
   const methodBodies = new Map<string, MethodCode>();
-  for (const method of collectMethods(renderIR)) {
+  for (const method of summary.methods) {
     const bodyLines = method.body.flatMap((directive) =>
       renderDirective(
         directive,
         '(this.__htmsRoot || this)',
-        directiveCounter,
         '      ',
         method.params,
-        componentInterpolationVars
+        context
       )
     );
     methodBodies.set(method.name, {
@@ -929,22 +799,29 @@ function buildComponentClass(
     });
   }
 
-  let blockPlan: BlockComponentPlan | null = null;
-  let analyzer: DependencyAnalyzer | null = null;
-  let deriveMasks: readonly (number | null)[] = [];
+  const shared: SharedClassInput = {
+    metadata,
+    summary,
+    methodBodies,
+    reactiveStateRoots,
+    lifecycleSection: lifecycleSection(metadata),
+    shadowInit:
+      metadata.shadowMode === 'none' ? `    this.__htmsRoot = this;` : '',
+  };
+
   if (blockDocument) {
-    analyzer = createAnalyzer(
+    const analyzer = createAnalyzer(
       renderIR,
       reactiveStateRoots,
       inputNames,
-      lifecycleState,
+      summary.lifecycleState,
       methodBodies
     );
     // Register derive reads before block compilation resolves write masks.
     // Effects and fetches can be the only consumers of a derived field, so
     // their reads would otherwise be absent when a state helper's mask is
     // finalized.
-    deriveMasks = analyzeDeriveMasks(analyzer, lifecycleState);
+    const deriveMasks = analyzeDeriveMasks(analyzer, summary.lifecycleState);
     // Handlers' write masks depend on which fields bindings read, which the
     // block compiler only knows once every binding is compiled; it resolves
     // these placeholders at the end.
@@ -953,21 +830,24 @@ function buildComponentClass(
         .map((segment) => encodeURIComponent(segment).replace(/\./g, '%2E'))
         .join('.')}@@`;
     try {
-      blockPlan = compileBlockComponent(renderIR, {
+      const plan = compileBlockComponent(renderIR, {
         className: metadata.className,
         document: blockDocument,
-        componentFields: componentInterpolationVars,
+        componentFields: fields,
         analyzer,
         renderEventBody: (directive, eventRootVar, scopeVars) =>
           renderEventBody(
             directive,
             eventRootVar,
-            directiveCounter,
             scopeVars,
-            componentInterpolationVars,
+            context,
             stateMasks
           ),
       });
+      return {
+        code: buildBlockComponentClass(shared, plan, analyzer, deriveMasks),
+        usesBlocks: true,
+      };
     } catch (error) {
       if (!(error instanceof UnsupportedBlockFeature)) {
         throw error;
@@ -978,868 +858,63 @@ function buildComponentClass(
       });
     }
   }
-  const renderDirectiveChild = (
-    directive: DirectiveNode,
-    targetVar: string
-  ): string[] =>
-    renderDirective(
-      directive,
-      targetVar,
-      directiveCounter,
-      '',
-      [],
-      componentInterpolationVars
-    );
-  const templateStatements = hasStaticTemplate
-    ? ''
-    : serializeTemplateNodes(
-        renderIR.templateNodes,
-        renderTargetVar,
-        [],
-        componentInterpolationVars,
-        renderDirectiveChild,
-        directiveCounter
-      );
+  return {
+    code: buildReconcilingComponentClass(shared, renderIR, context),
+    usesBlocks: false,
+  };
+}
 
-  const renderLines: string[] = [
-    `    const root = this.__htmsRoot || this;`,
-    `    if (!root) {`,
-    `      throw new Error('Component root not initialized');`,
-    `    }`,
-    `    const ${renderTargetVar} = document.createDocumentFragment();`,
-  ];
+// What both renderers' classes are built from.
+interface SharedClassInput {
+  metadata: ComponentMetadata;
+  summary: ComponentSummary;
+  methodBodies: ReadonlyMap<string, MethodCode>;
+  reactiveStateRoots: readonly string[];
+  lifecycleSection: string;
+  shadowInit: string;
+}
 
-  if (preservesFocus) {
-    renderLines.push(
-      `    const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, ${JSON.stringify(controlledSelectors)});`
+function lifecycleSection(metadata: ComponentMetadata): string {
+  const extras: string[] = [];
+  if (metadata.observedAttributes.length > 0) {
+    extras.push(
+      `  static get observedAttributes() { return ${JSON.stringify(metadata.observedAttributes)}; }`,
+      ATTRIBUTE_CHANGED_CALLBACK
     );
   }
+  return extras.length > 0 ? `\n\n${extras.join('\n\n')}\n` : '\n';
+}
 
-  if (hasEventDirectives) {
-    renderLines.push(`    this.__htmsCleanupRenderListeners();`);
-  }
-
-  for (const directive of lifecycleState.init) {
-    renderLines.push(...renderStateDirective(directive, '    '));
-  }
-  for (const directive of lifecycleState.derive) {
-    renderLines.push(...renderStateDirective(directive, '    '));
-  }
-
-  if (hasStaticTemplate) {
-    renderLines.push(
-      `    const staticFragment = ${metadata.className}.__htmsTemplate.content.cloneNode(true);`
-    );
-    renderLines.push(`    ${renderTargetVar}.appendChild(staticFragment);`);
-  } else if (templateStatements.trim().length > 0) {
-    for (const line of templateStatements.split('\n')) {
-      if (line.trim().length === 0) continue;
-      renderLines.push(`    ${line}`);
-    }
-  }
-
-  for (const directive of renderIR.directives) {
-    if (
-      directive.kind === 'state' &&
-      (directive.mode === 'init' || directive.mode === 'derive')
-    ) {
-      continue;
-    }
-    const directiveLines = renderDirective(
-      directive,
-      renderTargetVar,
-      directiveCounter,
-      '    ',
-      [],
-      componentInterpolationVars
-    );
-    renderLines.push(...directiveLines);
-  }
-
-  renderLines.push(
-    `    this.__htmsReconcileChildren(root, ${renderTargetVar});`
+function inputHelperMembers(metadata: ComponentMetadata): string {
+  if (metadata.inputs.length === 0) return '';
+  return inputHelpers(
+    Object.fromEntries(
+      metadata.inputs.map((input) => [
+        input.attributeName,
+        { propName: input.propName, type: input.type },
+      ])
+    )
   );
-
-  if (preservesFocus) {
-    renderLines.push(`    this.__htmsRestoreFocus(root, __htmsFocusSnapshot);`);
-  }
-
-  const staticTemplateProperty = hasStaticTemplate
-    ? `  static get __htmsTemplate() {\n    if (!this.__templateCache) {\n      const template = document.createElement('template');\n      template.innerHTML = ${JSON.stringify(templateHTML)};\n      this.__templateCache = template;\n    }\n    return this.__templateCache;\n  }\n\n`
-    : '';
-
-  const inputHelpers =
-    metadata.inputs.length > 0
-      ? `  static get __htmsInputMap() {
-    return ${JSON.stringify(inputMap)};
-  }
-
-  __htmsDeserializeAttribute(type, value) {
-    if (type === 'boolean') {
-      return value !== null;
-    }
-    if (value === null) {
-      return null;
-    }
-    if (type === 'number') {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    if (type === 'json') {
-      try {
-        return JSON.parse(value);
-      } catch (error) {
-        return null;
-      }
-    }
-    return value;
-  }
-
-  __htmsDefineInputProperty(propName, attributeName, type, bit, rendered) {
-    const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
-    const ownValue = hadOwnValue ? this[propName] : undefined;
-    if (hadOwnValue) {
-      delete this[propName];
-    }
-
-    // \`bit\` marks the property dirty; \`rendered\` is false when nothing
-    // the component renders reads it, so a change needs no render.
-    Object.defineProperty(this, propName, {
-      configurable: true,
-      enumerable: true,
-      get: () => this.__htmsProps[propName],
-      set: value => {
-        const previous = this.__htmsProps[propName];
-        if (Object.is(previous, value)) {
-          return;
-        }
-        this.__htmsProps[propName] = value;
-        this.__htmsDirty |= bit;
-        if (rendered) {
-          this.__htmsRequestRender();
-        }
-      }
-    });
-
-    if (hadOwnValue) {
-      this.__htmsProps[propName] = ownValue;
-      return;
-    }
-
-    if (this.hasAttribute(attributeName)) {
-      this.__htmsProps[propName] = this.__htmsDeserializeAttribute(
-        type,
-        this.getAttribute(attributeName)
-      );
-      return;
-    }
-
-    this.__htmsProps[propName] = type === 'boolean' ? false : null;
-  }
-
-  __htmsSetInputFromAttribute(name, value) {
-    const input = this.constructor.__htmsInputMap[name];
-    if (!input) {
-      return false;
-    }
-    this[input.propName] = this.__htmsDeserializeAttribute(input.type, value);
-    return true;
-  }
-
-`
-      : '';
-
-  const stateHelpers = hasStateDirectives
-    ? `  __htmsDefineStateProperty(propName, bit = -1, rendered = true) {
-    const hadOwnValue = Object.prototype.hasOwnProperty.call(this, propName);
-    const ownValue = hadOwnValue ? this[propName] : undefined;
-    if (hadOwnValue) {
-      delete this[propName];
-    }
-
-    Object.defineProperty(this, propName, {
-      configurable: true,
-      enumerable: true,
-      get: () => this.__htmsState[propName],
-      set: value => {
-        const previous = this.__htmsState[propName];
-        if (Object.is(previous, value)) {
-          return;
-        }
-        this.__htmsState[propName] = value;
-        this.__htmsDirty |= bit;
-        if (rendered && !this.__htmsRendering) {
-          this.__htmsRequestRender();
-        }
-      }
-    });
-
-    if (hadOwnValue) {
-      this.__htmsState[propName] = ownValue;
-    }
-  }
-
-  __htmsAdoptState(propName) {
-    // A value assigned before the element upgraded is an own property that
-    // would hide the class accessor; move it into state.
-    if (Object.prototype.hasOwnProperty.call(this, propName)) {
-      const value = this[propName];
-      delete this[propName];
-      this.__htmsState[propName] = value;
-    }
-  }
-
-  __htmsNotifyStateChange(mask = -1) {
-    // \`mask\` names the fields a nested write changed; every bit when the
-    // caller does not know.
-    this.__htmsDirty |= mask;
-    if (!this.__htmsRendering) {
-      this.__htmsRequestRender();
-    }
-  }
-
-  __htmsResolvePath(path) {
-    if (!Array.isArray(path) || path.length === 0) {
-      throw new Error('Invalid state path');
-    }
-    let ref = this;
-    for (let i = 0; i < path.length - 1; i++) {
-      const key = path[i];
-      const next = ref[key];
-      if (next === undefined || next === null || typeof next !== 'object') {
-        ref[key] = {};
-      }
-      ref = ref[key];
-    }
-    return { target: ref, key: path[path.length - 1] };
-  }
-
-  __htmsInitState(path, initializer) {
-    const { target, key } = this.__htmsResolvePath(path);
-    const storage = target === this ? this.__htmsState : target;
-    if (!Object.prototype.hasOwnProperty.call(storage, key)) {
-      target[key] = initializer();
-    }
-  }
-
-  __htmsSetState(path, op, valueFactory, mask) {
-    const { target, key } = this.__htmsResolvePath(path);
-    if (op === '++') {
-      const current = typeof target[key] === 'number' ? target[key] : 0;
-      target[key] = current + 1;
-      this.__htmsNotifyStateChange(mask);
-      return;
-    }
-    if (op === '--') {
-      const current = typeof target[key] === 'number' ? target[key] : 0;
-      target[key] = current - 1;
-      this.__htmsNotifyStateChange(mask);
-      return;
-    }
-    const current = target[key];
-    const value = valueFactory();
-    switch (op) {
-      case '+=':
-        if (current == null) {
-          target[key] = typeof value === 'string' ? value : 0 + value;
-        } else {
-          target[key] = current + value;
-        }
-        break;
-      case '-=':
-        target[key] = (typeof current === 'number' ? current : 0) - value;
-        break;
-      case '*=':
-        target[key] = (typeof current === 'number' ? current : 0) * value;
-        break;
-      case '/=':
-        target[key] = (typeof current === 'number' ? current : 0) / value;
-        break;
-      default:
-        target[key] = value;
-    }
-    this.__htmsNotifyStateChange(mask);
-  }
-
-  __htmsEnsureArray(path) {
-    const { target, key } = this.__htmsResolvePath(path);
-    if (!Array.isArray(target[key])) {
-      target[key] = [];
-    }
-    return target[key];
-  }
-
-  __htmsPushState(path, valueFactory, mask) {
-    const arr = this.__htmsEnsureArray(path);
-    arr.push(valueFactory());
-    this.__htmsNotifyStateChange(mask);
-  }
-
-  __htmsSpliceState(path, indexFactory, deleteFactory, valuesFactory, mask) {
-    const arr = this.__htmsEnsureArray(path);
-    const index = indexFactory();
-    const del = deleteFactory();
-    const values = valuesFactory();
-    arr.splice(index, del, ...values);
-    this.__htmsNotifyStateChange(mask);
-  }
-
-`
-    : '';
-
-  const updateHelpers = `  get updateComplete() {
-    // A promise exists only while a render is pending and someone waits.
-    if (!this.__htmsRenderScheduled && !this.__htmsRendering) {
-      return Promise.resolve();
-    }
-    return this.__htmsUpdatePromise || (this.__htmsUpdatePromise = new Promise(resolve => {
-      this.__htmsResolveUpdate = resolve;
-    }));
-  }
-
-  get renderError() {
-    return this.__htmsLastError;
-  }
-
-  requestUpdate() {
-    this.__htmsDirty = -1;
-    this.__htmsRequestRender();
-    return this.updateComplete;
-  }
-
-  $(selector) {
-    return (this.__htmsRoot || this).querySelector(selector);
-  }
-
-  $$(selector) {
-    return Array.from((this.__htmsRoot || this).querySelectorAll(selector));
-  }
-
-  emit(name, detail, options) {
-    return this.dispatchEvent(new CustomEvent(name, Object.assign({
-      detail,
-      bubbles: true,
-      composed: true,
-      cancelable: false
-    }, options)));
-  }
-
-  __htmsAfterMethod(mask = -1) {
-    // Methods may mutate nested state; re-render afterwards unless the
-    // method was called while rendering (e.g. from an interpolation).
-    // \`mask\` names the fields the method's nested writes can change.
-    this.__htmsDirty |= mask;
-    if (!this.__htmsRendering) {
-      this.__htmsRequestRender();
-    }
-  }
-
-  __htmsSafeUrl(value) {
-    const text = value == null ? '' : String(value);
-    const normalized = text.replace(/[\\u0000-\\u0020]/g, '').toLowerCase();
-    if (
-      normalized.startsWith('javascript:') ||
-      normalized.startsWith('vbscript:') ||
-      normalized.startsWith('data:text/html')
-    ) {
-      console.warn('HTMS blocked an unsafe URL:', text);
-      return 'about:blank';
-    }
-    return text;
-  }
-
-  __htmsToText(value) {
-    return value == null ? '' : String(value);
-  }
-
-  __htmsRequestRender() {
-    if (this.__htmsConnected && !this.__htmsRenderScheduled) {
-      this.__htmsRenderScheduled = true;
-      queueMicrotask(this.__htmsFlush);
-    }
-  }
-
-  __htmsFlushRender() {
-    if (!this.__htmsRenderScheduled) {
-      return;
-    }
-    this.__htmsRenderScheduled = false;
-    if (this.__htmsConnected) {
-      this.render();
-    } else {
-      this.__htmsFinishUpdate();
-    }
-  }
-
-  __htmsFinishUpdate() {
-    const resolve = this.__htmsResolveUpdate;
-    if (resolve) {
-      this.__htmsResolveUpdate = null;
-      this.__htmsUpdatePromise = null;
-      resolve();
-    }
-  }
-
-  __htmsReportRenderError(error) {
-    this.__htmsLastError = error;
-    const errorEvent = new CustomEvent('htms-error', {
-      detail: { error, component: this },
-      bubbles: true,
-      composed: true,
-      cancelable: true
-    });
-    const shouldLog = this.dispatchEvent(errorEvent);
-    if (shouldLog) {
-      console.error('HTMS component render failed:', error);
-    }
-  }
-
-`;
-
-  const legacyListenerHelpers = `  __htmsMarkListener(target, eventType, handler, options) {
-    if (!target.__htmsListeners) {
-      target.__htmsListeners = [];
-    }
-    target.__htmsListeners.push({ eventType, handler, options });
-  }
-
-  __htmsActivateListeners(target, source) {
-    const listeners = source.__htmsListeners || [];
-    for (const listener of listeners) {
-      this.__htmsListen(target, listener.eventType, listener.handler, listener.options);
-    }
-  }
-
-  __htmsResolveEventRoot(currentTarget, sourceScope) {
-    if (sourceScope && sourceScope.__htmsMountedNode) {
-      return sourceScope.__htmsMountedNode;
-    }
-    if (sourceScope && sourceScope.nodeType === Node.ELEMENT_NODE && sourceScope.isConnected) {
-      return sourceScope;
-    }
-    const eventRoot = currentTarget && typeof currentTarget.getRootNode === 'function'
-      ? currentTarget.getRootNode()
-      : null;
-    if (eventRoot && eventRoot !== document) {
-      return eventRoot;
-    }
-    return this.__htmsRoot || this;
-  }
-
-`;
-
-  const sharedEventHelpers = `  __htmsListen(target, eventType, handler, options) {
-    target.addEventListener(eventType, handler, options);
-    this.__htmsRenderCleanups.push(() => {
-      target.removeEventListener(eventType, handler, options);
-    });
-  }
-
-  __htmsClaimOnce(target, id) {
-    if (!target) {
-      return true;
-    }
-    if (!target.__htmsOnceFired) {
-      target.__htmsOnceFired = new Set();
-    }
-    if (target.__htmsOnceFired.has(id)) {
-      return false;
-    }
-    target.__htmsOnceFired.add(id);
-    return true;
-  }
-
-  __htmsDebounce(event, id, delay, callback) {
-    const target = event.currentTarget;
-    const deferred = this.__htmsDeferEvent(event);
-    let timers = this.__htmsTimers.get(target);
-    if (!timers) {
-      timers = new Map();
-      this.__htmsTimers.set(target, timers);
-    }
-    clearTimeout(timers.get(id));
-    timers.set(id, setTimeout(() => {
-      timers.delete(id);
-      if (timers.size === 0) {
-        this.__htmsTimers.delete(target);
-      }
-      callback(deferred);
-    }, delay));
-  }
-
-  __htmsDeferEvent(event) {
-    // currentTarget is reset to null once dispatch ends; keep the value the
-    // handler saw so deferred bodies can still read event.currentTarget.
-    const currentTarget = event.currentTarget;
-    if (typeof Proxy !== 'function') {
-      return event;
-    }
-    return new Proxy(event, {
-      get(target, property) {
-        if (property === 'currentTarget') {
-          return currentTarget;
-        }
-        const value = Reflect.get(target, property, target);
-        return typeof value === 'function' ? value.bind(target) : value;
-      }
-    });
-  }
-
-  __htmsClearTimers() {
-    for (const timers of this.__htmsTimers.values()) {
-      for (const timer of timers.values()) {
-        clearTimeout(timer);
-      }
-    }
-    this.__htmsTimers.clear();
-  }
-
-  __htmsCleanupRenderListeners() {
-    const cleanups = this.__htmsRenderCleanups;
-    this.__htmsRenderCleanups = [];
-    for (const cleanup of cleanups) {
-      cleanup();
-    }
-  }
-
-`;
-
-  const eventHelpers = hasEventDirectives
-    ? `${legacyListenerHelpers}${sharedEventHelpers}`
-    : '';
-
-  const reconciliationHelpers = `  __htmsMarkProperty(target, path, value) {
-    if (!target.__htmsProperties) {
-      target.__htmsProperties = [];
-    }
-    target.__htmsProperties.push({ path, value });
-  }
-
-  __htmsApplyProperties(target, source) {
-    const properties = source.__htmsProperties;
-    if (!properties) return;
-    for (const property of properties) {
-      let receiver = target;
-      for (const segment of property.path.slice(0, -1)) {
-        if (receiver[segment] == null) {
-          receiver[segment] = {};
-        }
-        receiver = receiver[segment];
-      }
-      receiver[property.path[property.path.length - 1]] = property.value;
-    }
-  }
-
-  __htmsNodesMatch(target, source) {
-    if (
-      !target ||
-      target.nodeType !== source.nodeType ||
-      target.nodeName !== source.nodeName ||
-      target.namespaceURI !== source.namespaceURI
-    ) {
-      return false;
-    }
-    if (source.nodeType !== Node.ELEMENT_NODE) {
-      return true;
-    }
-    const sourceKey = source.getAttribute('data-key');
-    const targetKey = target.getAttribute('data-key');
-    return sourceKey === null && targetKey === null
-      ? true
-      : sourceKey === targetKey;
-  }
-
-  __htmsFindMatchingNode(reference, source, keyedTargets, idTargets) {
-    if (source.nodeType === Node.ELEMENT_NODE) {
-      const key = source.getAttribute('data-key');
-      const id = source.id;
-      if (key !== null) {
-        const candidate = keyedTargets && keyedTargets.get(key);
-        if (this.__htmsNodesMatch(candidate, source)) {
-          keyedTargets.delete(key);
-          return candidate;
-        }
-      } else if (id) {
-        const candidate = idTargets && idTargets.get(id);
-        if (this.__htmsNodesMatch(candidate, source)) {
-          idTargets.delete(id);
-          return candidate;
-        }
-      }
-    }
-    return this.__htmsNodesMatch(reference, source) ? reference : null;
-  }
-
-  __htmsAttributeSnapshot(node) {
-    const attrs = node.attributes;
-    // null is a recorded empty snapshot; undefined means not adopted yet.
-    if (attrs.length === 0) return null;
-    const snapshot = Object.create(null);
-    for (let i = 0; i < attrs.length; i++) {
-      const attr = attrs[i];
-      snapshot[attr.name] = attr.value;
-    }
-    return snapshot;
-  }
-
-  __htmsRecordAttributes(node) {
-    if (node.nodeType !== Node.ELEMENT_NODE) {
-      return;
-    }
-    node.__htmsAttrs = this.__htmsAttributeSnapshot(node);
-    Array.from(node.querySelectorAll('*')).forEach(child => {
-      child.__htmsAttrs = this.__htmsAttributeSnapshot(child);
-    });
-  }
-
-  __htmsSyncAttributes(target, source) {
-    const next = this.__htmsAttributeSnapshot(source);
-    const previous = target.__htmsAttrs;
-    if (previous === undefined) {
-      // First sync of an adopted node (server-rendered markup): match the
-      // rendered output exactly.
-      Array.from(target.attributes).forEach(attr => {
-        if (!next || !(attr.name in next)) {
-          target.removeAttribute(attr.name);
-        }
-      });
-      for (const name in next) {
-        if (target.getAttribute(name) !== next[name]) {
-          target.setAttribute(name, next[name]);
-        }
-      }
-    } else {
-      // Only touch attributes whose rendered value changed. Attributes the
-      // browser or other code changed (an opened <details>, a class added by
-      // a library) survive unrelated re-renders.
-      for (const name in previous) {
-        if (!next || !(name in next)) {
-          target.removeAttribute(name);
-        }
-      }
-      for (const name in next) {
-        if (!previous || previous[name] !== next[name]) {
-          target.setAttribute(name, next[name]);
-        }
-      }
-    }
-    target.__htmsAttrs = next;
-  }
-
-  __htmsActivateTree(node) {
-${
-  hasEventDirectives
-    ? `    if (node.nodeType !== Node.ELEMENT_NODE) {
-      return;
-    }
-    this.__htmsActivateListeners(node, node);
-    Array.from(node.querySelectorAll('*')).forEach(child => {
-      this.__htmsActivateListeners(child, child);
-    });
-`
-    : `    return;
-`
-}  }
-
-  __htmsSyncNode(target, source) {
-    source.__htmsMountedNode = target;
-    if (
-      source.nodeType === Node.TEXT_NODE ||
-      source.nodeType === Node.COMMENT_NODE
-    ) {
-      if (target.nodeValue !== source.nodeValue) {
-        target.nodeValue = source.nodeValue;
-      }
-      return;
-    }
-    if (source.nodeType !== Node.ELEMENT_NODE) {
-      return;
-    }
-
-    this.__htmsSyncAttributes(target, source);
-    this.__htmsApplyProperties(target, source);
-${
-  hasEventDirectives
-    ? `    this.__htmsActivateListeners(target, source);
-`
-    : ''
-}    if (source.localName === 'template' && target.content && source.content) {
-      this.__htmsReconcileChildren(target.content, source.content);
-      return;
-    }
-    this.__htmsReconcileChildren(target, source);
-  }
-
-  __htmsReconcileChildren(targetParent, sourceParent) {
-    if (!sourceParent.firstChild) {
-      if (targetParent.firstChild) targetParent.textContent = '';
-      return;
-    }
-    const sourceChildren = Array.from(sourceParent.childNodes);
-    // Most child lists have no identities to look up.
-    let keyedTargets = null;
-    let idTargets = null;
-    Array.from(targetParent.children || []).forEach(child => {
-      const key = child.getAttribute('data-key');
-      if (key !== null) {
-        if (!keyedTargets) keyedTargets = new Map();
-        if (!keyedTargets.has(key)) keyedTargets.set(key, child);
-      }
-      if (child.id) {
-        if (!idTargets) idTargets = new Map();
-        if (!idTargets.has(child.id)) idTargets.set(child.id, child);
-      }
-    });
-    let reference = targetParent.firstChild;
-
-    for (const source of sourceChildren) {
-      const match = this.__htmsFindMatchingNode(
-        reference,
-        source,
-        keyedTargets,
-        idTargets
-      );
-      if (!match) {
-        targetParent.insertBefore(source, reference);
-        source.__htmsMountedNode = source;
-        this.__htmsRecordAttributes(source);
-        this.__htmsActivateTree(source);
-        reference = source.nextSibling;
-        continue;
-      }
-
-      if (match !== reference) {
-        targetParent.insertBefore(match, reference);
-      }
-      this.__htmsSyncNode(match, source);
-      reference = match.nextSibling;
-    }
-
-    while (reference) {
-      const next = reference.nextSibling;
-      targetParent.removeChild(reference);
-      reference = next;
-    }
-  }
-
-`;
-
-  const focusHelpers = preservesFocus
-    ? `  __htmsSnapshotFocus(root, controlledSelectors) {
-    const documentActive = typeof document !== 'undefined' ? document.activeElement : null;
-    const candidate = root.activeElement || (documentActive && root.contains(documentActive) ? documentActive : null);
-    if (!candidate || candidate === root) {
-      return null;
-    }
-
-    const path = [];
-    let current = candidate;
-    while (current && current !== root) {
-      const parent = current.parentNode;
-      if (!parent) {
-        return null;
-      }
-      path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
-      current = parent;
-    }
-    if (current !== root) {
-      return null;
-    }
-
-    let controlled = candidate.__htmsControlled === true;
-    if (!controlled && typeof candidate.matches === 'function') {
-      for (const selector of controlledSelectors) {
-        try {
-          if (candidate.matches(selector)) {
-            controlled = true;
-            break;
-          }
-        } catch (error) {
-          console.warn('HTMS ignored invalid controlled selector:', selector, error);
-        }
-      }
-    }
-
-    return {
-      path,
-      id: candidate.id || null,
-      nodeName: candidate.nodeName,
-      value: !controlled && 'value' in candidate ? candidate.value : undefined,
-      checked: !controlled && 'checked' in candidate ? candidate.checked : undefined,
-      selectionStart: typeof candidate.selectionStart === 'number' ? candidate.selectionStart : null,
-      selectionEnd: typeof candidate.selectionEnd === 'number' ? candidate.selectionEnd : null,
-      selectionDirection: candidate.selectionDirection || 'none',
-      scrollTop: candidate.scrollTop,
-      scrollLeft: candidate.scrollLeft
-    };
-  }
-
-  __htmsRestoreFocus(root, snapshot) {
-    if (!snapshot) {
-      return;
-    }
-
-    let candidate = null;
-    if (snapshot.id) {
-      candidate = Array.from(root.querySelectorAll('[id]')).find(node => node.id === snapshot.id) || null;
-    }
-    if (!candidate) {
-      candidate = root;
-      for (const index of snapshot.path) {
-        candidate = candidate && candidate.childNodes ? candidate.childNodes[index] : null;
-        if (!candidate) {
-          return;
-        }
-      }
-    }
-    if (!candidate || candidate.nodeName !== snapshot.nodeName || typeof candidate.focus !== 'function') {
-      return;
-    }
-
-    if (snapshot.value !== undefined && 'value' in candidate) {
-      candidate.value = snapshot.value;
-    }
-    if (snapshot.checked !== undefined && 'checked' in candidate) {
-      candidate.checked = snapshot.checked;
-    }
-    try {
-      candidate.focus({ preventScroll: true });
-    } catch (error) {
-      candidate.focus();
-    }
-    if (
-      snapshot.selectionStart !== null &&
-      snapshot.selectionEnd !== null &&
-      typeof candidate.setSelectionRange === 'function'
-    ) {
-      try {
-        candidate.setSelectionRange(
-          snapshot.selectionStart,
-          snapshot.selectionEnd,
-          snapshot.selectionDirection
-        );
-      } catch (error) {
-        // Some input types do not expose a selectable text range.
-      }
-    }
-    candidate.scrollTop = snapshot.scrollTop;
-    candidate.scrollLeft = snapshot.scrollLeft;
-  }
-
-`
-    : '';
-
-  // A method whose only writes go through setters needs no follow-up; one
-  // that changes state objects in place reports the fields it may have
-  // touched. Without the analysis every method reports everything.
-  const methodsCode = collectMethods(renderIR)
+}
+
+function renderRootMember(metadata: ComponentMetadata): string {
+  return metadata.shadowMode === 'none'
+    ? ''
+    : renderRootHelper(metadata.shadowMode);
+}
+
+// A method whose only writes go through setters needs no follow-up; one
+// that changes state objects in place reports the fields it may have
+// touched. Without the analysis every method reports everything.
+function methodMembers(
+  input: SharedClassInput,
+  analyzer: DependencyAnalyzer | null
+): string {
+  return input.summary.methods
     .map((method) => {
-      const body = methodBodies.get(method.name)?.body ?? '';
+      const body = input.methodBodies.get(method.name)?.body ?? '';
       const header = `  ${method.async ? 'async ' : ''}${method.name}(${method.params.join(', ')}) {`;
-      const mask =
-        blockPlan && analyzer
-          ? analyzer.methodWriteMask(method.name)
-          : ALL_DIRTY;
+      const mask = analyzer ? analyzer.methodWriteMask(method.name) : ALL_DIRTY;
       if (mask === 0) {
         return `${header}
 ${body.replace(/^ {2}/gm, '')}
@@ -1858,121 +933,133 @@ ${body}
 `;
     })
     .join('');
+}
 
-  const usedMask = blockPlan ? blockPlan.usedMask : ALL_DIRTY;
-  const statePropertyInitialization = reactiveStateRoots
-    .map((stateName) => {
-      if (!blockPlan || !analyzer) {
-        return `    this.__htmsDefineStateProperty(${JSON.stringify(stateName)}, -1, true);`;
-      }
-      const bit = analyzer.bit(stateName);
-      return `    this.__htmsDefineStateProperty(${JSON.stringify(stateName)}, ${bit}, ${(bit & usedMask) !== 0});`;
+// Constructor lines defining the state and input accessors. A field's bit
+// marks it dirty; a field nothing rendered reads (outside `usedMask`)
+// schedules no render.
+function propertyInitialization(
+  input: SharedClassInput,
+  analyzer: DependencyAnalyzer | null,
+  usedMask: number
+): { state: string; inputs: string } {
+  const bit = (name: string): number =>
+    analyzer ? analyzer.bit(name) : ALL_DIRTY;
+  const state = input.reactiveStateRoots
+    .map((name) => {
+      const stateBit = bit(name);
+      return `    this.__htmsDefineStateProperty(${JSON.stringify(name)}, ${stateBit}, ${(stateBit & usedMask) !== 0});`;
     })
     .join('\n');
+  const inputs = input.metadata.inputs
+    .map(({ propName, attributeName, type }) => {
+      const inputBit = bit(propName);
+      return `    this.__htmsDefineInputProperty(${JSON.stringify(propName)}, ${JSON.stringify(attributeName)}, ${JSON.stringify(type)}, ${inputBit}, ${(inputBit & usedMask) !== 0});`;
+    })
+    .join('\n');
+  return { state, inputs };
+}
+
+function buildReconcilingComponentClass(
+  input: SharedClassInput,
+  renderIR: ComponentIR,
+  context: RenderContext
+): string {
+  const { metadata, summary } = input;
+  const { fields } = context;
+  const hasEvents = summary.hasEvents;
+  const preservesFocus =
+    metadata.inputs.length > 0 || summary.hasState || summary.hasBindings;
+  const templateHTML = templateNodesToHTML(renderIR.templateNodes);
+  const hasStaticTemplate =
+    templateHTML.trim().length > 0 &&
+    !templateNodesHaveInterpolations(renderIR.templateNodes, [], fields) &&
+    !templateNodesHaveDirectives(renderIR.templateNodes);
+
+  const renderLines: string[] = [
+    `    const root = this.__htmsRoot || this;`,
+    `    if (!root) {`,
+    `      throw new Error('Component root not initialized');`,
+    `    }`,
+    `    const ${RENDER_TARGET_VAR} = document.createDocumentFragment();`,
+  ];
+  if (preservesFocus) {
+    renderLines.push(
+      `    const __htmsFocusSnapshot = this.__htmsSnapshotFocus(root, ${JSON.stringify(summary.controlledSelectors)});`
+    );
+  }
+  if (hasEvents) {
+    renderLines.push(`    this.__htmsCleanupRenderListeners();`);
+  }
+  for (const directive of summary.lifecycleState.init) {
+    renderLines.push(...renderStateDirective(directive, '    '));
+  }
+  for (const directive of summary.lifecycleState.derive) {
+    renderLines.push(...renderStateDirective(directive, '    '));
+  }
+  if (hasStaticTemplate) {
+    renderLines.push(
+      `    const staticFragment = ${metadata.className}.__htmsTemplate.content.cloneNode(true);`,
+      `    ${RENDER_TARGET_VAR}.appendChild(staticFragment);`
+    );
+  } else {
+    const templateStatements = serializeTemplateNodes(
+      renderIR.templateNodes,
+      RENDER_TARGET_VAR,
+      [],
+      fields,
+      (directive, targetVar) =>
+        renderDirective(directive, targetVar, '', [], context),
+      context.counter
+    );
+    for (const line of templateStatements.split('\n')) {
+      if (line.trim().length > 0) renderLines.push(`    ${line}`);
+    }
+  }
+  for (const directive of renderIR.directives) {
+    renderLines.push(
+      ...renderDirective(directive, RENDER_TARGET_VAR, '    ', [], context)
+    );
+  }
+  renderLines.push(
+    `    this.__htmsReconcileChildren(root, ${RENDER_TARGET_VAR});`
+  );
+  if (preservesFocus) {
+    renderLines.push(`    this.__htmsRestoreFocus(root, __htmsFocusSnapshot);`);
+  }
   const renderBody = renderLines.map((line) => `  ${line}`).join('\n');
 
-  if (blockPlan) {
-    return {
-      code: buildBlockComponentClass({
-        metadata,
-        deriveMasks,
-        renderIR,
-        plan: blockPlan,
-        sections: [
-          methodsCode,
-          inputHelpers,
-          stateHelpers,
-          updateHelpers,
-          renderRootHelper,
-        ],
-        sharedEventHelpers,
-        lifecycleSection,
-        shadowInit,
-        statePropertyInitialization,
-        inputInitialization: inputInitialization(analyzer, usedMask),
-        stateMasks: (path, elementWrite) =>
-          analyzer?.stateWriteMask(path, elementWrite) ?? ALL_DIRTY,
-      }),
-      usesBlocks: true,
-    };
-  }
-  const inputInit = inputInitialization(null, ALL_DIRTY);
+  const members = [
+    hasStaticTemplate ? staticTemplateGetter(templateHTML) : '',
+    methodMembers(input, null),
+    inputHelperMembers(metadata),
+    summary.hasState ? STATE_HELPERS : '',
+    UPDATE_HELPERS,
+    hasEvents ? `${LEGACY_LISTENER_HELPERS}${SHARED_EVENT_HELPERS}` : '',
+    reconciliationHelpers(hasEvents),
+    renderRootMember(metadata),
+    preservesFocus ? FOCUS_HELPERS : '',
+  ].join('');
+  const { state, inputs } = propertyInitialization(input, null, ALL_DIRTY);
 
-  return {
-    code: finalizeStateStorage(`class ${metadata.className} extends HTMLElement {
-${staticTemplateProperty}${methodsCode}${inputHelpers}${stateHelpers}${updateHelpers}${eventHelpers}${reconciliationHelpers}${renderRootHelper}${focusHelpers}  constructor() {
-    super();
-    this.__htmsRoot = null;
-    this.__htmsProps = Object.create(__HTMS_CLASS__.__htmsStore());
-    this.__htmsState = Object.create(__HTMS_CLASS__.__htmsStore());
-    this.__htmsConnected = false;
-    this.__htmsRendering = false;
-    this.__htmsRenderScheduled = false;
-    this.__htmsResolveUpdate = null;
-    this.__htmsUpdatePromise = null;
-    this.__htmsFlush = () => this.__htmsFlushRender();
-    this.__htmsLastError = null;
-    this.__htmsDirty = -1;
-${hasEventDirectives ? `    this.__htmsRenderCleanups = [];\n    this.__htmsTimers = new Map();\n` : ''}
-${shadowInit}
-${statePropertyInitialization ? `${statePropertyInitialization}\n` : ''}${inputInit ? `${inputInit}\n` : ''}  }
+  return finalizeStateStorage(`class ${metadata.className} extends HTMLElement {
+${members}  constructor() {
+${CONSTRUCTOR_START}${hasEvents ? `    this.__htmsRenderCleanups = [];\n    this.__htmsTimers = new Map();\n` : ''}
+${input.shadowInit}
+${state ? `${state}\n` : ''}${inputs ? `${inputs}\n` : ''}  }
 
   connectedCallback() {
-${metadata.shadowMode === 'none' ? '' : `    this.__htmsEnsureRenderRoot();\n`}    this.__htmsConnected = true;
+${metadata.shadowMode === 'none' ? '' : ENSURE_RENDER_ROOT}    this.__htmsConnected = true;
     this.render();
-  }${lifecycleSection}
+  }${input.lifecycleSection}
 
   disconnectedCallback() {
-    this.__htmsConnected = false;
-    this.__htmsRenderScheduled = false;
-    this.__htmsFinishUpdate();
-${hasEventDirectives ? `    this.__htmsCleanupRenderListeners();\n    this.__htmsClearTimers();\n` : ''}
-    if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
-      window.__htms.disposeEffectsFor(this);
-    }
-  }
+${DISCONNECT_START}${hasEvents ? `    this.__htmsCleanupRenderListeners();\n    this.__htmsClearTimers();\n` : ''}
+${DISPOSE_EFFECTS}  }
 
-  render() {
-    this.__htmsRenderScheduled = false;
-    this.__htmsRendering = true;
-    this.__htmsLastError = null;
-    try {
-${renderBody}
-    } catch (error) {
-      this.__htmsReportRenderError(error);
-    } finally {
-      this.__htmsRendering = false;
-      this.__htmsFinishUpdate();
-    }
-  }
-}`),
-    usesBlocks: false,
-  };
+${renderMethod(renderBody)}
+}`);
 }
-
-interface BlockClassInput {
-  metadata: ComponentMetadata;
-  deriveMasks: readonly (number | null)[];
-  renderIR: ComponentIR;
-  plan: BlockComponentPlan;
-  // Members shared with the reconciling renderer: methods, prop and state
-  // accessors, the update API and the shadow root helper.
-  sections: string[];
-  sharedEventHelpers: string;
-  lifecycleSection: string;
-  shadowInit: string;
-  statePropertyInitialization: string;
-  inputInitialization: string;
-  // Mask the state helpers report for writing a path.
-  stateMasks: StateMasks;
-}
-
-// The mask a state helper reports for a write to `path`, or a placeholder
-// the block compiler fills in. `elementWrite` for push and splice.
-type StateMasks = (
-  path: readonly string[],
-  elementWrite: boolean
-) => string | number;
 
 function guardDerivedLines(
   lines: string | readonly string[],
@@ -2048,9 +1135,9 @@ function createAnalyzer(
   return analyzer;
 }
 
-// Drops internal `__htms*` methods nothing reachable calls. Public members
-// and lifecycle callbacks are the roots; a helper is kept when a kept member
-// mentions it.
+// A class member's first line: its name is the first group.
+const MEMBER_START = /^ {2}(?:static |get |set |async )*([$\w]+)\(/gm;
+
 // State and input values live in fast-mode store objects (a null-prototype
 // object is a slow dictionary in V8, an object created from one is not).
 // Reactive state becomes class accessors over that store, so reads in
@@ -2062,9 +1149,7 @@ function finalizeStateStorage(classCode: string): string {
   if (!header) return classCode;
   const className = header[1];
   const members = new Set<string>();
-  for (const match of classCode.matchAll(
-    /^ {2}(?:static |get |set |async )*([$\w]+)\(/gm
-  )) {
+  for (const match of classCode.matchAll(MEMBER_START)) {
     members.add(match[1]);
   }
   const accessors: string[] = [];
@@ -2101,9 +1186,11 @@ function finalizeStateStorage(classCode: string): string {
   );
 }
 
-const MEMBER_START = /^ {2}(?:static |get |set |async )*([$\w]+)\(/gm;
 const HELPER_WORD = /(?<!\w)__htms\w*/g;
 
+// Drops internal `__htms*` methods nothing reachable calls. Public members
+// and lifecycle callbacks are the roots; a helper is kept when a kept member
+// mentions it.
 function pruneUnusedHelpers(classCode: string): string {
   // Each member runs from the start of its first line to the start of the
   // next member's; the last one stops before the class's closing line.
@@ -2158,26 +1245,38 @@ function pruneUnusedHelpers(classCode: string): string {
   return output + classCode.slice(cursor);
 }
 
-function buildBlockComponentClass(input: BlockClassInput): string {
-  const { metadata, renderIR, plan } = input;
+function buildBlockComponentClass(
+  input: SharedClassInput,
+  plan: BlockComponentPlan,
+  analyzer: DependencyAnalyzer,
+  deriveMasks: readonly (number | null)[]
+): string {
+  const { metadata, summary } = input;
   const className = metadata.className;
   const delegated = plan.delegatedEvents;
   const hasListeners = plan.hasHandlers || plan.globalListeners.length > 0;
+  const stateMasks: StateMasks = (path, elementWrite) =>
+    analyzer.stateWriteMask(path, elementWrite);
 
-  const lifecycleState = collectLifecycleStateDirectives(renderIR);
+  const methods = methodMembers(input, analyzer);
+  const { state, inputs } = propertyInitialization(
+    input,
+    analyzer,
+    plan.usedMask
+  );
+
   const renderLines: string[] = [];
   // Initial values are only missing before the first render.
-  if (lifecycleState.init.length > 0) {
+  if (summary.lifecycleState.init.length > 0) {
     renderLines.push('if (!this.__htmsBlock) {');
-    for (const directive of lifecycleState.init) {
-      renderLines.push(
-        ...renderStateDirective(directive, '  ', input.stateMasks)
-      );
+    for (const directive of summary.lifecycleState.init) {
+      renderLines.push(...renderStateDirective(directive, '  ', stateMasks));
     }
     renderLines.push('}');
   }
-  lifecycleState.derive.forEach((directive, index) => {
+  summary.lifecycleState.derive.forEach((directive, index) => {
     const [root] = directive.path;
+    const mask = deriveMasks.at(index) ?? null;
     if (directive.path.length === 1 && root !== undefined) {
       // A root path needs no resolving.
       const target = /^[A-Za-z_$][\w$]*$/.test(root)
@@ -2186,14 +1285,14 @@ function buildBlockComponentClass(input: BlockClassInput): string {
       renderLines.push(
         ...guardDerivedLines(
           `${target} = (${directive.value ?? 'undefined'});`,
-          input.deriveMasks.at(index) ?? null
+          mask
         )
       );
     } else {
       renderLines.push(
         ...guardDerivedLines(
-          renderStateDirective(directive, '', input.stateMasks),
-          input.deriveMasks.at(index) ?? null
+          renderStateDirective(directive, '', stateMasks),
+          mask
         )
       );
     }
@@ -2242,17 +1341,18 @@ function buildBlockComponentClass(input: BlockClassInput): string {
 
 `;
 
-  const delegatedList = JSON.stringify(delegated);
-  const addDelegated =
+  const delegatedListeners = (method: string): string =>
     delegated.length > 0
-      ? `    for (const type of ${delegatedList}) {\n      (this.__htmsRoot || this).addEventListener(type, this.__htmsD);\n      (this.__htmsRoot || this).addEventListener(type, this.__htmsD, true);\n    }\n`
-      : '';
-  const removeDelegated =
-    delegated.length > 0
-      ? `    for (const type of ${delegatedList}) {\n      (this.__htmsRoot || this).removeEventListener(type, this.__htmsD);\n      (this.__htmsRoot || this).removeEventListener(type, this.__htmsD, true);\n    }\n`
+      ? `    for (const type of ${JSON.stringify(delegated)}) {\n      (this.__htmsRoot || this).${method}(type, this.__htmsD);\n      (this.__htmsRoot || this).${method}(type, this.__htmsD, true);\n    }\n`
       : '';
 
-  const sections = input.sections;
+  const sections = [
+    methods,
+    inputHelperMembers(metadata),
+    summary.hasState ? STATE_HELPERS : '',
+    UPDATE_HELPERS,
+    renderRootMember(metadata),
+  ];
   const generated = [plan.members, ...sections, renderBody].join('\n');
   const usesTimers = generated.includes('__htmsDebounce(');
   const usesGlobals = plan.globalListeners.length > 0;
@@ -2260,943 +1360,18 @@ function buildBlockComponentClass(input: BlockClassInput): string {
   return pruneUnusedHelpers(
     finalizeStateStorage(`class ${className} extends HTMLElement {
 ${plan.members}
-${sections.join('')}${hasListeners ? input.sharedEventHelpers : ''}${mount}  constructor() {
-    super();
-    this.__htmsRoot = null;
-    this.__htmsProps = Object.create(__HTMS_CLASS__.__htmsStore());
-    this.__htmsState = Object.create(__HTMS_CLASS__.__htmsStore());
-    this.__htmsConnected = false;
-    this.__htmsRendering = false;
-    this.__htmsRenderScheduled = false;
-    this.__htmsResolveUpdate = null;
-    this.__htmsUpdatePromise = null;
-    this.__htmsFlush = () => this.__htmsFlushRender();
-    this.__htmsLastError = null;
-    this.__htmsDirty = -1;
-    this.__htmsBlock = null;
-${usesGlobals ? `    this.__htmsRenderCleanups = [];\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsTimers = new Map();\n` : ''}${delegated.length > 0 ? `    this.__htmsEventBlocks = new WeakMap();\n    this.__htmsD = (event) => __htmsDispatch(this, event);\n` : ''}${input.shadowInit ? `${input.shadowInit}\n` : ''}${input.statePropertyInitialization ? `${input.statePropertyInitialization}\n` : ''}${input.inputInitialization ? `${input.inputInitialization}\n` : ''}  }
+${sections.join('')}${hasListeners ? SHARED_EVENT_HELPERS : ''}${mount}  constructor() {
+${CONSTRUCTOR_START}    this.__htmsBlock = null;
+${usesGlobals ? `    this.__htmsRenderCleanups = [];\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsTimers = new Map();\n` : ''}${delegated.length > 0 ? `    this.__htmsEventBlocks = new WeakMap();\n    this.__htmsD = (event) => __htmsDispatch(this, event);\n` : ''}${input.shadowInit ? `${input.shadowInit}\n` : ''}${state ? `${state}\n` : ''}${inputs ? `${inputs}\n` : ''}  }
 
   connectedCallback() {
-${metadata.shadowMode === 'none' ? '' : `    this.__htmsEnsureRenderRoot();\n`}    this.__htmsConnected = true;
-${addDelegated}    this.render();
+${metadata.shadowMode === 'none' ? '' : ENSURE_RENDER_ROOT}    this.__htmsConnected = true;
+${delegatedListeners('addEventListener')}    this.render();
   }${input.lifecycleSection}
   disconnectedCallback() {
-    this.__htmsConnected = false;
-    this.__htmsRenderScheduled = false;
-    this.__htmsFinishUpdate();
-${removeDelegated}${usesGlobals ? `    this.__htmsCleanupRenderListeners();\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsClearTimers();\n` : ''}    if (typeof window !== 'undefined' && window.__htms && typeof window.__htms.disposeEffectsFor === 'function') {
-      window.__htms.disposeEffectsFor(this);
-    }
-  }
+${DISCONNECT_START}${delegatedListeners('removeEventListener')}${usesGlobals ? `    this.__htmsCleanupRenderListeners();\n    this.__htmsGlobalsBound = false;\n` : ''}${usesTimers ? `    this.__htmsClearTimers();\n` : ''}${DISPOSE_EFFECTS}  }
 
-  render() {
-    this.__htmsRenderScheduled = false;
-    this.__htmsRendering = true;
-    this.__htmsLastError = null;
-    try {
-${renderBody}
-    } catch (error) {
-      this.__htmsReportRenderError(error);
-    } finally {
-      this.__htmsRendering = false;
-      this.__htmsFinishUpdate();
-    }
-  }
+${renderMethod(renderBody)}
 }`)
   );
-}
-
-function renderDirective(
-  directive: DirectiveNode,
-  targetVar: string,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[] = [],
-  componentInterpolationVars: string[] = [],
-  stateMasks?: StateMasks
-): string[] {
-  if (directive.kind === 'statement') {
-    return directive.code
-      .split('\n')
-      .filter((line) => line.trim().length > 0)
-      .map((line) => `${indent}${line}`);
-  }
-
-  if (directive.kind === 'loop') {
-    return renderLoopDirective(
-      directive,
-      targetVar,
-      counter,
-      indent,
-      scopeVars,
-      componentInterpolationVars
-    );
-  }
-
-  if (directive.kind === 'condition') {
-    return renderConditionDirective(
-      directive,
-      targetVar,
-      counter,
-      indent,
-      scopeVars,
-      componentInterpolationVars
-    );
-  }
-
-  if (directive.kind === 'event') {
-    return renderEventDirective(
-      directive,
-      targetVar,
-      counter,
-      indent,
-      scopeVars,
-      componentInterpolationVars
-    );
-  }
-
-  if (directive.kind === 'visibility') {
-    return renderVisibilityDirective(directive, targetVar, counter, indent);
-  }
-
-  if (directive.kind === 'switch') {
-    return renderSwitchDirective(
-      directive,
-      targetVar,
-      counter,
-      indent,
-      scopeVars,
-      componentInterpolationVars
-    );
-  }
-
-  if (directive.kind === 'while') {
-    return renderWhileDirective(
-      directive,
-      targetVar,
-      counter,
-      indent,
-      scopeVars,
-      componentInterpolationVars
-    );
-  }
-
-  if (directive.kind === 'class') {
-    return renderClassDirective(directive, targetVar, indent);
-  }
-
-  if (directive.kind === 'style') {
-    return renderStyleDirective(directive, targetVar, indent);
-  }
-
-  if (directive.kind === 'attribute') {
-    return renderAttributeDirective(directive, targetVar, counter, indent);
-  }
-
-  if (directive.kind === 'append') {
-    return renderAppendDirective(
-      directive,
-      targetVar,
-      counter,
-      indent,
-      scopeVars,
-      componentInterpolationVars
-    );
-  }
-
-  if (directive.kind === 'bind') {
-    return renderBindDirective(directive, targetVar, counter, indent);
-  }
-
-  if (directive.kind === 'keyed-list') {
-    return renderKeyedListDirective(
-      directive,
-      targetVar,
-      counter,
-      indent,
-      scopeVars,
-      componentInterpolationVars
-    );
-  }
-
-  if (directive.kind === 'state') {
-    // init/derive directives are hoisted to the top of render() so state
-    // is initialized before any template or directive reads it.
-    if (directive.mode === 'init' || directive.mode === 'derive') {
-      return [];
-    }
-    return renderStateDirective(directive, indent, stateMasks);
-  }
-
-  return [];
-}
-
-function renderLoopDirective(
-  directive: LoopDirective,
-  targetVar: string,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[],
-  componentInterpolationVars: string[]
-): string[] {
-  const lines: string[] = [];
-  const fragmentVar = `_frag${counter.value++}`;
-  const innerIndent = `${indent}  `;
-  const loopScopeVars = [...scopeVars];
-
-  if (directive.mode === 'array') {
-    const rawSourceVar = `_source${counter.value++}`;
-    const arraySourceVar = `_items${counter.value++}`;
-    lines.push(`${indent}const ${rawSourceVar} = ${directive.source};`);
-    lines.push(
-      `${indent}const ${arraySourceVar} = Array.isArray(${rawSourceVar}) ? ${rawSourceVar} : [];`
-    );
-
-    loopScopeVars.push(directive.itemVar);
-    if (directive.indexVar) {
-      loopScopeVars.push(directive.indexVar);
-      lines.push(
-        `${indent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${arraySourceVar}.length; ${directive.indexVar}++) {`
-      );
-      lines.push(
-        `${innerIndent}const ${directive.itemVar} = ${arraySourceVar}[${directive.indexVar}];`
-      );
-    } else {
-      lines.push(
-        `${indent}for (const ${directive.itemVar} of ${arraySourceVar}) {`
-      );
-    }
-  } else {
-    loopScopeVars.push(directive.indexVar);
-    const countVar = `_count${counter.value++}`;
-    lines.push(`${indent}const ${countVar} = ${directive.count};`);
-    lines.push(
-      `${indent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${countVar}; ${directive.indexVar}++) {`
-    );
-  }
-
-  lines.push(
-    `${innerIndent}const ${fragmentVar} = document.createDocumentFragment();`
-  );
-  lines.push(
-    ...fillFragment(
-      fragmentVar,
-      directive.template,
-      directive.directives,
-      counter,
-      innerIndent,
-      loopScopeVars,
-      componentInterpolationVars
-    )
-  );
-  if (directive.mode === 'array' && directive.key) {
-    // Reconciliation matches keyed rows by data-key, so reordering moves
-    // their DOM nodes instead of rewriting them.
-    const keyedVar = `_keyed${counter.value++}`;
-    lines.push(
-      `${innerIndent}const ${keyedVar} = ${fragmentVar}.firstElementChild;`,
-      `${innerIndent}if (${keyedVar}) { ${keyedVar}.setAttribute('data-key', String(${directive.key})); }`
-    );
-  }
-  lines.push(`${innerIndent}${targetVar}.appendChild(${fragmentVar});`);
-  lines.push(`${indent}}`);
-  return lines;
-}
-
-function renderConditionDirective(
-  directive: ConditionDirective,
-  targetVar: string,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[],
-  componentInterpolationVars: string[]
-): string[] {
-  const lines: string[] = [];
-  const trueFragment = `_frag${counter.value++}`;
-  const trueIndent = `${indent}  `;
-
-  lines.push(`${indent}if (${directive.condition}) {`);
-  lines.push(
-    `${trueIndent}const ${trueFragment} = document.createDocumentFragment();`
-  );
-  lines.push(
-    ...fillFragment(
-      trueFragment,
-      directive.whenTrue.template,
-      directive.whenTrue.directives,
-      counter,
-      trueIndent,
-      scopeVars,
-      componentInterpolationVars
-    )
-  );
-
-  lines.push(`${trueIndent}${targetVar}.appendChild(${trueFragment});`);
-  lines.push(`${indent}}`);
-
-  if (directive.whenFalse) {
-    const falseFragment = `_frag${counter.value++}`;
-    lines.push(`${indent}else {`);
-    lines.push(
-      `${trueIndent}const ${falseFragment} = document.createDocumentFragment();`
-    );
-    lines.push(
-      ...fillFragment(
-        falseFragment,
-        directive.whenFalse.template,
-        directive.whenFalse.directives,
-        counter,
-        trueIndent,
-        scopeVars,
-        componentInterpolationVars
-      )
-    );
-
-    lines.push(`${trueIndent}${targetVar}.appendChild(${falseFragment});`);
-    lines.push(`${indent}}`);
-  }
-
-  return lines;
-}
-
-function renderEventDirective(
-  directive: EventDirective,
-  targetVar: string,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[],
-  componentInterpolationVars: string[]
-): string[] {
-  const lines: string[] = [];
-  const handlerVar = `_handler${counter.value++}`;
-  const eventRootVar = `_eventRoot${counter.value++}`;
-  const timerVar = `_timer${counter.value++}`;
-  const innerIndent = `${indent}  `;
-  const bodyIndent = `${innerIndent}    `;
-  const modifiers = directive.modifiers ?? {};
-
-  // The statements that run when the event fires (or after debounce).
-  const bodyLines: string[] = [
-    `const ${eventRootVar} = this.__htmsResolveEventRoot(event.currentTarget, ${targetVar});`,
-    ...renderEventBody(
-      directive,
-      eventRootVar,
-      counter,
-      scopeVars,
-      componentInterpolationVars
-    ),
-  ];
-
-  const listenerOptions =
-    modifiers.once || modifiers.passive
-      ? `, { once: ${modifiers.once === true}, passive: ${modifiers.passive === true} }`
-      : '';
-
-  // Listeners are re-created on every render, so per-listener state (the
-  // `once` flag, pending debounce timers) lives on the mounted element and
-  // the component, keyed by this directive's id.
-  const listenerId = JSON.stringify(timerVar);
-  const globalTarget = GLOBAL_EVENT_TARGETS.get(directive.selector.trim());
-  lines.push(`${indent}{`);
-  lines.push(
-    globalTarget
-      ? `${innerIndent}const eventTargets = typeof window === 'undefined' ? [] : [${globalTarget}];`
-      : `${innerIndent}const eventTargets = ${targetVar}.querySelectorAll(${JSON.stringify(directive.selector)});`
-  );
-  lines.push(`${innerIndent}eventTargets.forEach(targetEl => {`);
-  lines.push(`${bodyIndent}const ${handlerVar} = (event) => {`);
-  lines.push(...renderEventPreamble(modifiers, listenerId, `${bodyIndent}  `));
-  if (modifiers.debounceMs !== undefined) {
-    lines.push(
-      `${bodyIndent}  this.__htmsDebounce(event, ${listenerId}, ${modifiers.debounceMs}, (event) => {`
-    );
-    for (const line of bodyLines) {
-      lines.push(`${bodyIndent}    ${line}`);
-    }
-    lines.push(`${bodyIndent}  });`);
-  } else {
-    for (const line of bodyLines) {
-      lines.push(`${bodyIndent}  ${line}`);
-    }
-  }
-  lines.push(`${bodyIndent}};`);
-  // Window, document and host listeners attach directly for this render;
-  // element listeners are marked on the fresh node and attached to the
-  // live node during reconciliation.
-  lines.push(
-    globalTarget
-      ? `${bodyIndent}this.__htmsListen(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar}${listenerOptions});`
-      : `${bodyIndent}this.__htmsMarkListener(targetEl, ${JSON.stringify(directive.eventType)}, ${handlerVar}${listenerOptions});`
-  );
-  lines.push(`${innerIndent}});`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-// The statements an <event> directive runs when it fires: its body, then
-// its nested directives against `eventRootVar`, then a re-render when any of
-// them changed state.
-function renderEventBody(
-  directive: EventDirective,
-  eventRootVar: string,
-  counter: { value: number },
-  scopeVars: string[],
-  componentInterpolationVars: string[],
-  stateMasks?: StateMasks
-): string[] {
-  const bodyLines: string[] = [];
-  if (directive.body.length > 0) {
-    bodyLines.push(...directive.body);
-  } else {
-    bodyLines.push('// No statements');
-  }
-  if (directive.directives) {
-    for (const nested of directive.directives) {
-      bodyLines.push(
-        ...renderDirective(
-          nested,
-          eventRootVar,
-          counter,
-          '',
-          scopeVars,
-          componentInterpolationVars,
-          stateMasks
-        )
-      );
-    }
-  }
-  // With dependency masks the block compiler adds the render request from
-  // the body's writes; the reconciling renderer re-renders on any change.
-  if (stateMasks) return bodyLines;
-  let hasStateChange = false;
-  walkDirectives(directive.directives, (nested) => {
-    if (nested.kind === 'state') {
-      hasStateChange = true;
-    }
-  });
-  if (hasStateChange) {
-    bodyLines.push(`this.requestUpdate();`);
-  }
-  return bodyLines;
-}
-
-// <event target="window"> and friends listen outside the render root.
-const GLOBAL_EVENT_TARGETS = new Map([
-  ['window', 'window'],
-  ['document', 'document'],
-  [':host', 'this'],
-  ['host', 'this'],
-]);
-
-function renderVisibilityDirective(
-  directive: VisibilityDirective,
-  targetVar: string,
-  _counter: { value: number },
-  indent: string
-): string[] {
-  const lines: string[] = [];
-  const innerIndent = `${indent}  `;
-  const condition = directive.condition;
-  const selector = JSON.stringify(directive.selector);
-
-  lines.push(`${indent}{`);
-  lines.push(
-    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
-  );
-  lines.push(`${innerIndent}targets.forEach(node => {`);
-  lines.push(
-    `${innerIndent}  node.style.display = (${condition}) ? '' : 'none';`
-  );
-  lines.push(`${innerIndent}});`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-function renderAttributeDirective(
-  directive: AttributeDirective,
-  targetVar: string,
-  _counter: { value: number },
-  indent: string
-): string[] {
-  const lines: string[] = [];
-  const innerIndent = `${indent}  `;
-  const selector = JSON.stringify(directive.selector);
-  const name = JSON.stringify(directive.name);
-  const value = directive.value;
-
-  lines.push(`${indent}{`);
-  lines.push(
-    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
-  );
-  lines.push(`${innerIndent}targets.forEach(node => {`);
-  if (directive.target === 'attribute') {
-    lines.push(`${innerIndent}  const attributeValue = ${value};`);
-    lines.push(
-      `${innerIndent}  if (attributeValue == null || attributeValue === false) { node.removeAttribute(${name}); }`
-    );
-    const safeValue = URL_ATTRIBUTES.has(directive.name.toLowerCase())
-      ? `this.__htmsSafeUrl(attributeValue)`
-      : 'String(attributeValue)';
-    lines.push(
-      `${innerIndent}  else { node.setAttribute(${name}, attributeValue === true ? '' : ${safeValue}); }`
-    );
-  } else {
-    lines.push(
-      URL_ATTRIBUTES.has((directive.path?.[0] ?? directive.name).toLowerCase())
-        ? `${innerIndent}  const propertyValue = this.__htmsSafeUrl(${value});`
-        : `${innerIndent}  const propertyValue = ${value};`
-    );
-    if (directive.path && directive.path.length > 1) {
-      const pathAccess = directive.path
-        .map((segment) => `['${segment}']`)
-        .join('');
-      lines.push(`${innerIndent}  node${pathAccess} = propertyValue;`);
-    } else {
-      lines.push(`${innerIndent}  node[${name}] = propertyValue;`);
-    }
-    lines.push(
-      `${innerIndent}  this.__htmsMarkProperty(node, ${JSON.stringify(directive.path ?? [directive.name])}, propertyValue);`
-    );
-  }
-  lines.push(`${innerIndent}});`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-function renderSwitchDirective(
-  directive: SwitchDirective,
-  targetVar: string,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[],
-  componentInterpolationVars: string[]
-): string[] {
-  const lines: string[] = [];
-  const switchVar = `_switch${counter.value++}`;
-  const branchIndent = `${indent}  `;
-
-  lines.push(`${indent}const ${switchVar} = ${directive.expression};`);
-
-  directive.cases.forEach((caseBlock, index) => {
-    const condition = `${switchVar} === ${caseBlock.value}`;
-    lines.push(`${indent}${index === 0 ? 'if' : 'else if'} (${condition}) {`);
-    const fragmentVar = `_frag${counter.value++}`;
-    lines.push(
-      `${branchIndent}const ${fragmentVar} = document.createDocumentFragment();`
-    );
-    lines.push(
-      ...fillFragment(
-        fragmentVar,
-        caseBlock.template,
-        caseBlock.directives,
-        counter,
-        branchIndent,
-        scopeVars,
-        componentInterpolationVars
-      )
-    );
-    lines.push(`${branchIndent}${targetVar}.appendChild(${fragmentVar});`);
-    lines.push(`${indent}}`);
-  });
-
-  if (directive.defaultCase) {
-    const fragmentVar = `_frag${counter.value++}`;
-    lines.push(`${indent}else {`);
-    lines.push(
-      `${branchIndent}const ${fragmentVar} = document.createDocumentFragment();`
-    );
-    lines.push(
-      ...fillFragment(
-        fragmentVar,
-        directive.defaultCase.template,
-        directive.defaultCase.directives,
-        counter,
-        branchIndent,
-        scopeVars,
-        componentInterpolationVars
-      )
-    );
-    lines.push(`${branchIndent}${targetVar}.appendChild(${fragmentVar});`);
-    lines.push(`${indent}}`);
-  }
-
-  return lines;
-}
-
-function renderWhileDirective(
-  directive: WhileDirective,
-  targetVar: string,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[],
-  componentInterpolationVars: string[]
-): string[] {
-  const lines: string[] = [];
-  const guardVar = `_guard${counter.value++}`;
-  const fragmentVar = `_frag${counter.value++}`;
-  const innerIndent = `${indent}  `;
-  const loopIndent = `${innerIndent}  `;
-
-  lines.push(`${indent}{`);
-  lines.push(`${innerIndent}let ${guardVar} = 0;`);
-  lines.push(`${innerIndent}while (${directive.condition}) {`);
-  lines.push(
-    `${loopIndent}if (${guardVar}++ >= ${directive.maxIterations}) { console.warn('WHILE exceeded max iterations'); break; }`
-  );
-  lines.push(
-    `${loopIndent}const ${fragmentVar} = document.createDocumentFragment();`
-  );
-  lines.push(
-    ...fillFragment(
-      fragmentVar,
-      directive.template,
-      directive.directives,
-      counter,
-      loopIndent,
-      scopeVars,
-      componentInterpolationVars
-    )
-  );
-  lines.push(`${loopIndent}${targetVar}.appendChild(${fragmentVar});`);
-  lines.push(`${innerIndent}}`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-function renderClassDirective(
-  directive: ClassDirective,
-  targetVar: string,
-  indent: string
-): string[] {
-  const lines: string[] = [];
-  const innerIndent = `${indent}  `;
-  const selector = JSON.stringify(directive.selector);
-  const action = directive.action;
-  const condition = directive.condition;
-  const classList = directive.classNames
-    .map((name) => JSON.stringify(name))
-    .join(', ');
-
-  lines.push(`${indent}{`);
-  lines.push(
-    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
-  );
-  lines.push(`${innerIndent}targets.forEach(node => {`);
-  lines.push(`${innerIndent}  const classes = [${classList}];`);
-  lines.push(`${innerIndent}  classes.forEach(cls => {`);
-  if (condition) {
-    lines.push(
-      `${innerIndent}    node.classList.toggle(cls, !!(${condition}));`
-    );
-  } else if (action === 'add') {
-    lines.push(`${innerIndent}    node.classList.add(cls);`);
-  } else if (action === 'remove') {
-    lines.push(`${innerIndent}    node.classList.remove(cls);`);
-  } else {
-    lines.push(`${innerIndent}    node.classList.toggle(cls);`);
-  }
-  lines.push(`${innerIndent}  });`);
-  lines.push(`${innerIndent}});`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-function renderStyleDirective(
-  directive: StyleDirective,
-  targetVar: string,
-  indent: string
-): string[] {
-  const lines: string[] = [];
-  const innerIndent = `${indent}  `;
-  const selector = JSON.stringify(directive.selector);
-  const prop = JSON.stringify(directive.property);
-  const value = directive.value;
-
-  lines.push(`${indent}{`);
-  lines.push(
-    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
-  );
-  lines.push(`${innerIndent}targets.forEach(node => {`);
-  if (directive.mode === 'css') {
-    lines.push(`${innerIndent}  node.style.setProperty(${prop}, ${value});`);
-  } else {
-    lines.push(`${innerIndent}  node.style[${prop}] = ${value};`);
-  }
-  lines.push(`${innerIndent}});`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-function fillFragment(
-  fragmentVar: string,
-  template: TemplateNode[],
-  directives: DirectiveNode[] | undefined,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[] = [],
-  componentInterpolationVars: string[] = []
-): string[] {
-  const lines: string[] = [];
-  const serialized = serializeTemplateNodes(
-    template,
-    fragmentVar,
-    scopeVars,
-    componentInterpolationVars,
-    (nested, target) =>
-      renderDirective(
-        nested,
-        target,
-        counter,
-        '',
-        scopeVars,
-        componentInterpolationVars
-      ),
-    counter
-  );
-
-  if (serialized.trim().length > 0) {
-    for (const line of serialized.split('\n')) {
-      if (line.trim().length === 0) {
-        continue;
-      }
-      lines.push(`${indent}${line}`);
-    }
-  }
-
-  if (directives) {
-    for (const nested of directives) {
-      lines.push(
-        ...renderDirective(
-          nested,
-          fragmentVar,
-          counter,
-          indent,
-          scopeVars,
-          componentInterpolationVars
-        )
-      );
-    }
-  }
-
-  return lines;
-}
-
-function renderAppendDirective(
-  directive: AppendDirective,
-  targetVar: string,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[],
-  componentInterpolationVars: string[]
-): string[] {
-  const lines: string[] = [];
-  const innerIndent = `${indent}  `;
-  const selector = JSON.stringify(directive.selector);
-  const fragmentVar = `_frag${counter.value++}`;
-
-  lines.push(`${indent}{`);
-  lines.push(
-    `${innerIndent}const targets = ${targetVar}.querySelectorAll(${selector});`
-  );
-  lines.push(`${innerIndent}targets.forEach(node => {`);
-  lines.push(
-    `${innerIndent}  const ${fragmentVar} = document.createDocumentFragment();`
-  );
-  lines.push(
-    ...fillFragment(
-      fragmentVar,
-      directive.template,
-      directive.directives,
-      counter,
-      `${innerIndent}  `,
-      scopeVars,
-      componentInterpolationVars
-    )
-  );
-  lines.push(`${innerIndent}  node.appendChild(${fragmentVar});`);
-  lines.push(`${innerIndent}});`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-function renderBindDirective(
-  directive: BindDirective,
-  targetVar: string,
-  _counter: { value: number },
-  indent: string
-): string[] {
-  const lines: string[] = [];
-  const innerIndent = `${indent}  `;
-  const selector = JSON.stringify(directive.selector);
-  const property = JSON.stringify(directive.property);
-  const expression = directive.expression;
-
-  lines.push(`${indent}{`);
-  lines.push(
-    `${innerIndent}const nodes = ${targetVar}.querySelectorAll(${selector});`
-  );
-  lines.push(`${innerIndent}nodes.forEach(node => {`);
-  lines.push(`${innerIndent}  try {`);
-  lines.push(
-    `${innerIndent}    const value = (function() { return ${expression}; }).call(this);`
-  );
-  lines.push(`${innerIndent}    node[${property}] = value;`);
-  lines.push(
-    `${innerIndent}    this.__htmsMarkProperty(node, [${property}], value);`
-  );
-  lines.push(`${innerIndent}  } catch (error) {`);
-  lines.push(
-    `${innerIndent}    console.error(${JSON.stringify(`BIND evaluation failed for ${directive.selector}`)}, error);`
-  );
-  lines.push(`${innerIndent}  }`);
-  lines.push(`${innerIndent}});`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-function renderKeyedListDirective(
-  directive: KeyedListDirective,
-  targetVar: string,
-  counter: { value: number },
-  indent: string,
-  scopeVars: string[],
-  componentInterpolationVars: string[]
-): string[] {
-  const lines: string[] = [];
-  const innerIndent = `${indent}  `;
-  const bodyIndent = `${innerIndent}  `;
-  const loopIndent = `${bodyIndent}  `;
-  const selector = JSON.stringify(directive.selector);
-  const targetsVar = `_targets${counter.value++}`;
-  const rawSourceVar = `_source${counter.value++}`;
-  const arraySourceVar = `_items${counter.value++}`;
-  const fragmentVar = `_frag${counter.value++}`;
-  const keyVar = `_key${counter.value++}`;
-  const keyTextVar = `_keyText${counter.value++}`;
-  const keyedNodeVar = `_keyedNode${counter.value++}`;
-  const loopScopeVars = [...scopeVars, directive.itemVar, directive.indexVar];
-
-  lines.push(`${indent}{`);
-  lines.push(
-    `${innerIndent}const ${targetsVar} = ${targetVar}.querySelectorAll(${selector});`
-  );
-  lines.push(`${innerIndent}${targetsVar}.forEach(container => {`);
-  lines.push(`${bodyIndent}const ${rawSourceVar} = ${directive.source};`);
-  lines.push(
-    `${bodyIndent}const ${arraySourceVar} = Array.isArray(${rawSourceVar}) ? ${rawSourceVar} : [];`
-  );
-  lines.push(
-    `${bodyIndent}for (let ${directive.indexVar} = 0; ${directive.indexVar} < ${arraySourceVar}.length; ${directive.indexVar}++) {`
-  );
-  lines.push(
-    `${loopIndent}const ${directive.itemVar} = ${arraySourceVar}[${directive.indexVar}];`
-  );
-  lines.push(
-    `${loopIndent}const ${fragmentVar} = document.createDocumentFragment();`
-  );
-  lines.push(
-    ...fillFragment(
-      fragmentVar,
-      directive.template,
-      undefined,
-      counter,
-      loopIndent,
-      loopScopeVars,
-      componentInterpolationVars
-    )
-  );
-  lines.push(`${loopIndent}const ${keyVar} = ${directive.key};`);
-  lines.push(`${loopIndent}const ${keyTextVar} = String(${keyVar});`);
-  lines.push(
-    `${loopIndent}const ${keyedNodeVar} = ${fragmentVar}.firstElementChild;`
-  );
-  lines.push(
-    `${loopIndent}if (${keyedNodeVar} && typeof ${keyedNodeVar}.setAttribute === 'function') {`
-  );
-  lines.push(
-    `${loopIndent}  ${keyedNodeVar}.setAttribute('data-key', ${keyTextVar});`
-  );
-  lines.push(`${loopIndent}}`);
-  lines.push(`${loopIndent}if (${keyedNodeVar}) {`);
-  lines.push(`${loopIndent}  container.appendChild(${keyedNodeVar});`);
-  if (directive.directives && directive.directives.length > 0) {
-    for (const nested of directive.directives) {
-      lines.push(
-        ...renderDirective(
-          nested,
-          keyedNodeVar,
-          counter,
-          `${loopIndent}  `,
-          loopScopeVars,
-          componentInterpolationVars
-        )
-      );
-    }
-  }
-  lines.push(`${loopIndent}} else {`);
-  lines.push(`${loopIndent}  container.appendChild(${fragmentVar});`);
-  lines.push(`${loopIndent}}`);
-  lines.push(`${bodyIndent}}`);
-  lines.push(`${innerIndent}});`);
-  lines.push(`${indent}}`);
-
-  return lines;
-}
-
-// `stateMasks` gives the mask the state helpers report for the write;
-// without it (the reconciling renderer) they report every field.
-function renderStateDirective(
-  directive: StateDirective,
-  indent: string,
-  stateMasks?: StateMasks
-): string[] {
-  const lines: string[] = [];
-  const pathLiteral = JSON.stringify(directive.path);
-  const mask =
-    stateMasks && directive.path.length > 0
-      ? `, ${stateMasks(directive.path, directive.mode === 'push' || directive.mode === 'splice')}`
-      : '';
-
-  switch (directive.mode) {
-    case 'init':
-      lines.push(
-        `${indent}this.__htmsInitState(${pathLiteral}, () => (${directive.value ?? 'undefined'}));`
-      );
-      break;
-    case 'derive':
-      lines.push(`${indent}{`);
-      lines.push(
-        `${indent}  const resolved = this.__htmsResolvePath(${pathLiteral});`
-      );
-      lines.push(
-        `${indent}  resolved.target[resolved.key] = (${directive.value ?? 'undefined'});`
-      );
-      lines.push(`${indent}}`);
-      break;
-    case 'set':
-      lines.push(
-        `${indent}this.__htmsSetState(${pathLiteral}, '${directive.op ?? '='}', () => (${directive.op === '++' || directive.op === '--' ? 'undefined' : (directive.value ?? 'undefined')})${mask});`
-      );
-      break;
-    case 'push':
-      lines.push(
-        `${indent}this.__htmsPushState(${pathLiteral}, () => (${directive.value ?? 'undefined'})${mask});`
-      );
-      break;
-    case 'splice':
-      lines.push(
-        `${indent}this.__htmsSpliceState(${pathLiteral}, () => (${directive.index ?? '0'}), () => (${directive.deleteCount ?? '0'}), () => [${(directive.values ?? []).join(', ')}]${mask});`
-      );
-      break;
-  }
-
-  return lines;
 }
