@@ -1,3 +1,13 @@
+// Inline lookup code so the installed runtime keeps its existing closure layout.
+function bindingTargetLookup(selector: string): string {
+  return `(typeof ${selector} === 'string' &&
+    /^#[A-Za-z_][A-Za-z0-9_-]*$/.test(${selector}) &&
+    document.compatMode === 'CSS1Compat' &&
+    document.contentType === 'text/html'
+      ? document.getElementById(${selector}.slice(1))
+      : document.querySelector(${selector}))`;
+}
+
 export function ensureRuntime(): string {
   return `(function(){
     if (typeof window === 'undefined') return;
@@ -107,7 +117,8 @@ export function ensureRuntime(): string {
               return false;
             }
             try {
-              const el = document.querySelector(watcher.sel);
+              const selector = watcher.sel;
+              const el = ${bindingTargetLookup('selector')};
               if (!el) {
                 if (watcher.autoDispose) {
                   watcher.disposed = true;
@@ -186,7 +197,7 @@ export function ensureRuntime(): string {
           const watcher = { sel, prop, fn, disposed: false, autoDispose: true };
           this.watchers.push(watcher);
           try {
-            const el = document.querySelector(sel);
+            const el = ${bindingTargetLookup('sel')};
             if (!el) {
               console.warn('BIND target not found:', sel);
             } else {

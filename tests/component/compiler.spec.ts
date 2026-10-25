@@ -38,7 +38,8 @@ describe('Component compiler', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     const testWindow = window as HtmsTestWindow;
-    delete testWindow.__htms;
+    // The runtime singleton is non-configurable and lives for this document.
+    // Removing the components above disposes their owned effects.
     delete testWindow.__effectRuns;
     delete testWindow.__effectCleanupCount;
   });
