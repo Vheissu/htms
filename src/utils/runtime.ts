@@ -8,6 +8,7 @@ export function ensureRuntime(): string {
         pendingEffects: [],
         flushingEffects: false,
         effectMutationDepth: 0,
+        effectsNeedCompaction: false,
         // Effects are registered from every component render. Looking up an
         // existing record by scanning the whole effects array makes a page
         // with many components quadratic in the number of registrations.
@@ -47,6 +48,20 @@ export function ensureRuntime(): string {
               this.primitiveEffects.delete(effect.owner);
             }
           }
+        },
+        compactEffects: function(effects){
+          if (!this.effectsNeedCompaction) {
+            return;
+          }
+          let write = 0;
+          for (let read = 0; read < effects.length; read++) {
+            const effect = effects[read];
+            if (!effect.disposed) {
+              effects[write++] = effect;
+            }
+          }
+          effects.length = write;
+          this.effectsNeedCompaction = false;
         },
         commitPendingEffects: function(){
           if (this.flushingEffects || this.effectMutationDepth > 0) {
@@ -150,14 +165,7 @@ export function ensureRuntime(): string {
             }
           } finally {
             this.flushingEffects = false;
-            let write = 0;
-            for (let read = 0; read < effects.length; read++) {
-              const effect = effects[read];
-              if (!effect.disposed) {
-                effects[write++] = effect;
-              }
-            }
-            effects.length = write;
+            this.compactEffects(effects);
             this.commitPendingEffects();
           }
         },
@@ -209,6 +217,7 @@ export function ensureRuntime(): string {
                   return;
                 }
                 record.disposed = true;
+                runtime.effectsNeedCompaction = true;
                 record.runVersion++;
                 runtime.removeEffectIndex(record);
                 runtime.effectMutationDepth++;
@@ -343,6 +352,14 @@ export function ensureRuntime(): string {
           if (!owner) {
             return;
           }
+          // Most disconnected components never owned an effect. The index
+          // answers that without scanning other components' live records.
+          // Still compact records disposed through handles since the last
+          // flush, even when this owner has no remaining indexed effects.
+          const index = this.effectIndex(owner, false);
+          if ((!index || index.size === 0) && !this.effectsNeedCompaction) {
+            return;
+          }
           this.effectMutationDepth++;
           try {
             const effects = this.effects;
@@ -354,14 +371,7 @@ export function ensureRuntime(): string {
                   effect.dispose();
                 }
               }
-              let write = 0;
-              for (let read = 0; read < effects.length; read++) {
-                const effect = effects[read];
-                if (!effect.disposed) {
-                  effects[write++] = effect;
-                }
-              }
-              effects.length = write;
+              this.compactEffects(effects);
             } else {
               for (let i = 0; i < effects.length; i++) {
                 if (effects[i].owner === owner) {

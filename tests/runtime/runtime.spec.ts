@@ -14,19 +14,21 @@ interface EffectHandle {
 }
 
 interface HtmsRuntime {
+  effects: Array<{ owner: unknown; disposed: boolean }>;
+  pendingEffects: Array<{ owner: unknown; disposed: boolean }>;
   bind: (selector: string, property: string, getter: () => unknown) => void;
   notify: () => void;
   registerEffect: (effect: EffectRegistration) => EffectHandle;
   disposeEffectsFor: (owner: unknown) => void;
 }
 
-const runtimeWindow = window as Window & { __htms?: HtmsRuntime };
+let runtimeWindow: { __htms?: HtmsRuntime } = {};
 
 function applyRuntime(): void {
-  delete runtimeWindow.__htms;
+  // The runtime property is non-configurable, so each test needs a fresh host.
+  runtimeWindow = {};
   const runtimeScript = ensureRuntime();
-  // Execute generated bootstrap script in the current window context
-  Function(runtimeScript)();
+  Function('window', runtimeScript)(runtimeWindow);
 }
 
 function getRuntime(): HtmsRuntime {
@@ -48,7 +50,7 @@ describe('HTMS runtime', () => {
   });
 
   afterEach(() => {
-    delete runtimeWindow.__htms;
+    runtimeWindow = {};
   });
 
   it('updates bound nodes when notify is triggered', async () => {
@@ -344,6 +346,7 @@ describe('HTMS runtime', () => {
     document.body.appendChild(owner);
     const dependency = 0;
     let calls = 0;
+    let pendingCount = 0;
 
     runtime.registerEffect({
       owner,
@@ -358,11 +361,14 @@ describe('HTMS runtime', () => {
             calls += 1;
           },
         });
+        runtime.disposeEffectsFor(document.createElement('div'));
+        pendingCount = runtime.pendingEffects.length;
       },
     });
     await flushMicrotasks();
 
     expect(calls).toBe(1);
+    expect(pendingCount).toBe(1);
   });
 
   it('retains an effect recreated by cleanup during owner disposal', async () => {
@@ -448,5 +454,96 @@ describe('HTMS runtime', () => {
     await flushMicrotasks();
 
     expect(callsC).toBe(2);
+  });
+
+  it('does not scan live effects when an unrelated component disconnects', async () => {
+    const runtime = getRuntime();
+    const owner = document.createElement('div');
+    document.body.appendChild(owner);
+    const run = jest.fn();
+    for (let i = 0; i < 100; i++) {
+      runtime.registerEffect({
+        owner,
+        id: `effect:unrelated:${i}`,
+        deps: [(): number => 0],
+        run,
+      });
+    }
+    await flushMicrotasks();
+    const readOwner = jest.fn((): HTMLElement => owner);
+    for (const effect of runtime.effects) {
+      Object.defineProperty(effect, 'owner', { get: readOwner });
+    }
+
+    runtime.disposeEffectsFor(document.createElement('div'));
+
+    expect(readOwner).not.toHaveBeenCalled();
+    expect(runtime.effects).toHaveLength(100);
+    expect(run).toHaveBeenCalledTimes(100);
+  });
+
+  it.each([true, false])(
+    'compacts handle-disposed effects when disposing an empty owner (same owner: %s)',
+    async (sameOwner) => {
+      const runtime = getRuntime();
+      const owner = document.createElement('div');
+      document.body.appendChild(owner);
+      const cleanup = jest.fn();
+      const handle = runtime.registerEffect({
+        owner,
+        id: 'effect:handle-compaction',
+        deps: [],
+        run: (): (() => void) => cleanup,
+      });
+      await flushMicrotasks();
+
+      handle.dispose();
+      runtime.disposeEffectsFor(
+        sameOwner ? owner : document.createElement('div')
+      );
+
+      expect(runtime.effects).toHaveLength(0);
+      expect(runtime.pendingEffects).toHaveLength(0);
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('drops pending effects disposed during cleanup and preserves survivors', async () => {
+    const runtime = getRuntime();
+    const owner = document.createElement('div');
+    const survivor = document.createElement('div');
+    document.body.append(owner, survivor);
+    const pendingRun = jest.fn();
+    const survivorRun = jest.fn();
+    runtime.registerEffect({
+      owner,
+      id: 'effect:pending-cleanup',
+      deps: [],
+      run: (): (() => void) => (): void => {
+        const pending = runtime.registerEffect({
+          owner,
+          id: 'effect:disposed-pending',
+          deps: [],
+          run: pendingRun,
+        });
+        pending.dispose();
+      },
+    });
+    runtime.registerEffect({
+      owner: survivor,
+      id: 'effect:survivor',
+      deps: [(): number => 0],
+      run: survivorRun,
+    });
+    await flushMicrotasks();
+
+    runtime.disposeEffectsFor(owner);
+    expect(runtime.effects.map((effect) => effect.owner)).toEqual([survivor]);
+    expect(runtime.pendingEffects).toHaveLength(0);
+    await flushMicrotasks();
+
+    expect(pendingRun).not.toHaveBeenCalled();
+    expect(survivorRun).toHaveBeenCalledTimes(1);
+    expect(runtime.effects).toHaveLength(1);
   });
 });
