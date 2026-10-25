@@ -360,29 +360,16 @@ export function ensureRuntime(): string {
           if ((!index || index.size === 0) && !this.effectsNeedCompaction) {
             return;
           }
+          // Cleanup can register or dispose effects. Snapshot this owner's
+          // records so newly registered effects survive this disposal pass.
+          const owned = index ? Array.from(index.values()) : [];
           this.effectMutationDepth++;
           try {
-            const effects = this.effects;
-            const pendingCount = this.pendingEffects.length;
-            if (!this.flushingEffects && this.effectMutationDepth === 1) {
-              for (let i = 0; i < effects.length; i++) {
-                const effect = effects[i];
-                if (effect.owner === owner) {
-                  effect.dispose();
-                }
-              }
-              this.compactEffects(effects);
-            } else {
-              for (let i = 0; i < effects.length; i++) {
-                if (effects[i].owner === owner) {
-                  effects[i].dispose();
-                }
-              }
+            for (let i = 0; i < owned.length; i++) {
+              owned[i].dispose();
             }
-            for (let i = 0; i < pendingCount; i++) {
-              if (this.pendingEffects[i].owner === owner) {
-                this.pendingEffects[i].dispose();
-              }
+            if (!this.flushingEffects && this.effectMutationDepth === 1) {
+              this.compactEffects(this.effects);
             }
           } finally {
             this.effectMutationDepth--;

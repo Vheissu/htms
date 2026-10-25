@@ -1,0 +1,273 @@
+{
+  "date": "2026-10-25T05:32:01.919Z",
+  "environment": {
+    "browser": "141.0.7390.37",
+    "os": "Darwin 25.3.0 arm64",
+    "node": "v25.2.1",
+    "cpu": "Apple M2 Max"
+  },
+  "runs": 31,
+  "count": 1000,
+  "effects": 1000,
+  "warmups": 5,
+  "throttle": 4,
+  "profiled": false,
+  "order": [
+    "baseline",
+    "candidate"
+  ],
+  "samples": {
+    "baseline": [
+      {
+        "total": 9.403,
+        "script": 5.417
+      },
+      {
+        "total": 6.49,
+        "script": 4.313
+      },
+      {
+        "total": 6.591,
+        "script": 4.423
+      },
+      {
+        "total": 6.522,
+        "script": 4.457
+      },
+      {
+        "total": 6.859,
+        "script": 4.245
+      },
+      {
+        "total": 6.714,
+        "script": 4.778
+      },
+      {
+        "total": 8.22,
+        "script": 5.184
+      },
+      {
+        "total": 7.135,
+        "script": 5.167
+      },
+      {
+        "total": 7.428,
+        "script": 4.985
+      },
+      {
+        "total": 6.386,
+        "script": 4.229
+      },
+      {
+        "total": 6.95,
+        "script": 4.122
+      },
+      {
+        "total": 7.543,
+        "script": 5.014
+      },
+      {
+        "total": 8.893,
+        "script": 5.433
+      },
+      {
+        "total": 6.924,
+        "script": 4.406
+      },
+      {
+        "total": 6.898,
+        "script": 4.99
+      },
+      {
+        "total": 9.507,
+        "script": 5.868
+      },
+      {
+        "total": 6.423,
+        "script": 4.458
+      },
+      {
+        "total": 7.511,
+        "script": 4.864
+      },
+      {
+        "total": 6.876,
+        "script": 4.703
+      },
+      {
+        "total": 9.384,
+        "script": 5.871
+      },
+      {
+        "total": 7.487,
+        "script": 5.245
+      },
+      {
+        "total": 8.365,
+        "script": 5.355
+      },
+      {
+        "total": 6.875,
+        "script": 4.262
+      },
+      {
+        "total": 6.899,
+        "script": 4.839
+      },
+      {
+        "total": 7.126,
+        "script": 4.686
+      },
+      {
+        "total": 6.625,
+        "script": 4.588
+      },
+      {
+        "total": 7.554,
+        "script": 5.427
+      },
+      {
+        "total": 6.865,
+        "script": 4.296
+      },
+      {
+        "total": 7.022,
+        "script": 4.762
+      },
+      {
+        "total": 6.641,
+        "script": 4.552
+      },
+      {
+        "total": 6.008,
+        "script": 4.305
+      }
+    ],
+    "candidate": [
+      {
+        "total": 7.858,
+        "script": 4.796
+      },
+      {
+        "total": 6.43,
+        "script": 4.545
+      },
+      {
+        "total": 5.71,
+        "script": 3.348
+      },
+      {
+        "total": 5.846,
+        "script": 4.242
+      },
+      {
+        "total": 6.813,
+        "script": 4.362
+      },
+      {
+        "total": 8.946,
+        "script": 5.328
+      },
+      {
+        "total": 7.244,
+        "script": 5.358
+      },
+      {
+        "total": 7.243,
+        "script": 4.946
+      },
+      {
+        "total": 6.8,
+        "script": 4.181
+      },
+      {
+        "total": 6.376,
+        "script": 4.566
+      },
+      {
+        "total": 5.805,
+        "script": 4.252
+      },
+      {
+        "total": 6.209,
+        "script": 3.921
+      },
+      {
+        "total": 6.387,
+        "script": 4.425
+      },
+      {
+        "total": 8.857,
+        "script": 5.558
+      },
+      {
+        "total": 6.17,
+        "script": 4.369
+      },
+      {
+        "total": 6.763,
+        "script": 4.849
+      },
+      {
+        "total": 6.42,
+        "script": 5.051
+      },
+      {
+        "total": 9.915,
+        "script": 5.769
+      },
+      {
+        "total": 6.692,
+        "script": 4.607
+      },
+      {
+        "total": 8.936,
+        "script": 4.851
+      },
+      {
+        "total": 10.691,
+        "script": 6.683
+      },
+      {
+        "total": 7.041,
+        "script": 4.857
+      },
+      {
+        "total": 7.027,
+        "script": 5.234
+      },
+      {
+        "total": 7.042,
+        "script": 4.683
+      },
+      {
+        "total": 7.77,
+        "script": 5.151
+      },
+      {
+        "total": 8.217,
+        "script": 5.287
+      },
+      {
+        "total": 7.125,
+        "script": 4.521
+      },
+      {
+        "total": 6.291,
+        "script": 4.454
+      },
+      {
+        "total": 6.747,
+        "script": 4.194
+      },
+      {
+        "total": 5.923,
+        "script": 4.272
+      },
+      {
+        "total": 6.467,
+        "script": 4.028
+      }
+    ]
+  }
+}

@@ -546,4 +546,81 @@ describe('HTMS runtime', () => {
     expect(survivorRun).toHaveBeenCalledTimes(1);
     expect(runtime.effects).toHaveLength(1);
   });
+
+  it('disposes an owner without reading unrelated effect owners', async () => {
+    const runtime = getRuntime();
+    const owner = document.createElement('div');
+    const unrelated = document.createElement('div');
+    document.body.append(owner, unrelated);
+    const cleanup = jest.fn();
+    runtime.registerEffect({
+      owner,
+      id: 'owned',
+      deps: [],
+      run: (): (() => void) => cleanup,
+    });
+    for (let i = 0; i < 100; i++) {
+      runtime.registerEffect({
+        owner: unrelated,
+        id: `unrelated:${i}`,
+        deps: [(): number => 0],
+        run: (): void => undefined,
+      });
+    }
+    await flushMicrotasks();
+    const readOwner = jest.fn((): HTMLElement => unrelated);
+    for (const effect of runtime.effects.slice(1)) {
+      Object.defineProperty(effect, 'owner', { get: readOwner });
+    }
+    runtime.disposeEffectsFor(owner);
+    expect(readOwner).not.toHaveBeenCalled();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(runtime.effects).toHaveLength(100);
+  });
+
+  it('preserves cleanup order and newly registered effects during owner disposal', async () => {
+    const runtime = getRuntime();
+    const owner = document.createElement('div');
+    document.body.append(owner);
+    const order: string[] = [];
+    runtime.registerEffect({
+      owner,
+      id: 'first',
+      deps: [(): number => 0],
+      run: (): (() => void) => (): void => {
+        order.push('first');
+        second.dispose();
+        runtime.registerEffect({
+          owner,
+          id: 'second',
+          deps: [(): number => 0],
+          run: (): void => {
+            order.push('replacement');
+          },
+        });
+      },
+    });
+    const second = runtime.registerEffect({
+      owner,
+      id: 'second',
+      deps: [(): number => 0],
+      run: (): (() => void) => (): void => {
+        order.push('second');
+      },
+    });
+    runtime.registerEffect({
+      owner,
+      id: 'third',
+      deps: [(): number => 0],
+      run: (): (() => void) => (): void => {
+        order.push('third');
+      },
+    });
+    await flushMicrotasks();
+    runtime.disposeEffectsFor(owner);
+    expect(order).toEqual(['first', 'second', 'third']);
+    expect(runtime.effects).toHaveLength(1);
+    await flushMicrotasks();
+    expect(order).toEqual(['first', 'second', 'third', 'replacement']);
+  });
 });

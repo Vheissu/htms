@@ -1,0 +1,94 @@
+{
+  "manifest": {
+    "at": "2026-10-25T05:29:38.660325+00:00",
+    "baseline": "e89fb6b05466fa3515b79f6f027058436f5fc4ae",
+    "confirmation": "31 mirrored rounds, candidate/baseline/baseline-copy/candidate-copy; 62 samples per revision, all retained. Upper 95% paired-bootstrap median and paired mean bounds must be negative. 20000 draws seed 0x251029."
+  },
+  "comparisons": {
+    "confirmation": {
+      "total": {
+        "baselineMedianMs": 46.3155,
+        "candidateMedianMs": 33.8955,
+        "changePercent": -26.816076691388414,
+        "medianDifferenceMs": -12.420000000000002,
+        "pairedBootstrapMedianDifference95CiMs": [
+          -14.866500000000002,
+          -11.017499999999998
+        ],
+        "pairedMeanDifferenceMs": -13.597806451612902,
+        "pairedMeanDifference95CiMs": [
+          -14.585228551441197,
+          -12.610384351784607
+        ],
+        "passes": true,
+        "samplesPerRevision": 62,
+        "rounds": 31
+      },
+      "script": {
+        "baselineMedianMs": 42.766000000000005,
+        "candidateMedianMs": 30.265,
+        "changePercent": -29.231164944114497,
+        "medianDifferenceMs": -12.501000000000005,
+        "pairedBootstrapMedianDifference95CiMs": [
+          -15.288,
+          -11.585
+        ],
+        "pairedMeanDifferenceMs": -13.727048387096774,
+        "pairedMeanDifference95CiMs": [
+          -14.744397877256974,
+          -12.709698896936574
+        ],
+        "passes": true,
+        "samplesPerRevision": 62,
+        "rounds": 31
+      }
+    }
+  },
+  "method": "Medians pool both samples per revision per round. Bootstrap resamples whole mirrored rounds with 20000 draws, seed 0x251029. Mean intervals use paired round averages and Student t=2.043 (31 rounds). All samples retained.",
+  "benchmarkInputs": {
+    "bench/apps/htms/app.html": "76db7a097b94657ae1dc589a0d0c59e353ec5069981bae122009f909e0c4ade0",
+    "bench/apps/htms/index.html": "3ed55c6b0bf14b29787dddf0cb78c92ff9f96d7a817e8809f8ec3f04df0ca471",
+    "bench/apps/htms/main.js": "79bad8d26c5a7c2cdc94c71a3cbcbe69f6e47388ba257d3cd98fc792524c055b",
+    "bench/apps/react/index.html": "93dc3c4751274d1d072832ff93cb0c0da2e80eb8cf2846358d0a595ae578cd66",
+    "bench/apps/react/main.jsx": "cb9e96021a22cb2114933778864b3f17b2810b44fceb2dcfe6dd38436585488b",
+    "bench/apps/solid/index.html": "d9ba30c333d98d1483042f93caa3ef8ca8e8906a2e583743a99ffa237191c8ec",
+    "bench/apps/solid/main.jsx": "6b6a3c2843e37a222202a5d3c567069f033c1b2464aac68f65cee107e18f75e2",
+    "bench/apps/svelte/Main.svelte": "2f7699f132f12bb9934ec2dead99d10afafd7a2000ba05838f7413654246ae15",
+    "bench/apps/svelte/index.html": "e50f893da9c89b5551c0c792acdae11ee896f75f726f05de77828c58a14a2da1",
+    "bench/apps/svelte/main.js": "9d41e9f525c2005693cc9d8ae2cecd8d036edb6be0235d4f0877f33a4cd98c75",
+    "bench/apps/vanilla/Main.js": "08a5cb7d5cec199396561ed28b3c2db77577f066480f33c19f22ce6b0b0c980f",
+    "bench/apps/vanilla/index.html": "93e2dc8914a8c580b3ce0de95c1cf54a903504de6a69c4f712efdfaa2700e228",
+    "bench/apps/vue/App.vue": "54cce082a9472c54b72e799e5dc4391141ca0789e6b3dc0ec8200422ef041acd",
+    "bench/apps/vue/data.js": "9fb1b13b3dab8b6ce55fc2c88127b260df0b60a15fccd9eb176e43e6ff055f17",
+    "bench/apps/vue/index.html": "ea085aeab30195602238bccbfdd08b881bbddcba306df870f3cef5d48e16f6d8",
+    "bench/apps/vue/main.js": "50cb9f18b1c7115799ae456f0d0038840278b49ea520b5549d468ec76c248fb9",
+    "bench/build.mjs": "dc0d5ed4354da4094ef5278f3927baaff05451797a3b6e7be6ec6e8ea4c79225",
+    "bench/css/main.css": "d8d5b527c71c8a71fd273310650180318f8e8361334d96c9a27bdc85fa1b75e3",
+    "bench/package-lock.json": "e4c9dad81bddbfae21cc160bce63c7e74b7f38f2a9b8a7918e4377e11786bdbb",
+    "bench/package.json": "4a217916ed983e14a92db9d74c35156e1539310cc29645cde57d40a48a3dad0d",
+    "bench/run.mjs": "d67e303271f17b41492d730c322ba08ee0ffaa6a04364cbbcee49636ee152df5",
+    "bench/compiler.mjs": "b983120788cb297ec7ecc8c9641dfc74237b532f3f74286a6dd8a21d3e161524",
+    "bench/effects.mjs": "b4f4206b3aaac398b900b8d24136853f6bb95c8ef9d4100e9d7a0e8fda1fa1a9",
+    "bench/derived.mjs": "4025916603bccd084dd1a65b9d76441683dd28ce50a9afa3a542312badd99f96"
+  },
+  "runtimeSourceSha256": "59992f041562f994559a088b2fe3981074a28af7da89af42d038b7947603ccde",
+  "workflow": "Same compiled list and click-to-paint trace calculation as prior owner-disposal workflow, with one stable effect registered on each row after every fill. 1000 unrelated effects remain. Each sample asserts zero rows, 1000 live effects, zero pending effects, 1000 unrelated executions, no render/page errors. Five warmups, 4x CPU, fresh page per sample.",
+  "fixture": "<component name=\"runtime-list\" shadow=\"none\"><var name=\"rows\" value=\"[]\" mutable=\"true\"></var><function name=\"clear\">rows = [];</function><button id=\"clear\" on:click=\"clear()\">Clear components</button><div id=\"rows\"><repeat variable=\"rows\" item=\"row\" key=\"row\"><runtime-row></runtime-row></repeat></div></component><component name=\"runtime-row\" shadow=\"none\"><span>row </span></component>",
+  "archive": "/Users/dwayne/.codex/visualizations/2026/10/23/01a1688c-0cc6-7841-b71b-d29879443103/htms-indexed-disposal",
+  "renderer": {
+    "baseline": {
+      "generatedSha256": "70e3206310d71e1ea3940310dfb2547d58e2cae61887b36450afbe635867629c",
+      "bundleSha256": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6",
+      "minifiedBytes": 13689,
+      "gzipBytes": 5013,
+      "brotliBytes": 4433
+    },
+    "candidate": {
+      "generatedSha256": "70e3206310d71e1ea3940310dfb2547d58e2cae61887b36450afbe635867629c",
+      "bundleSha256": "551d10d171b9ec71a505031615bb421a0d1618795eafcffed0ee8d7376b079b6",
+      "minifiedBytes": 13689,
+      "gzipBytes": 5013,
+      "brotliBytes": 4433
+    }
+  }
+}
