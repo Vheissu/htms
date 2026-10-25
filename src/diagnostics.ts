@@ -8,16 +8,8 @@ export interface SourceLocation {
 
 type Diagnostic = CompilerError | CompilerWarning;
 
-// Locations set explicitly, and those already read from a document.
+// Locations already read from a document.
 const nodeLocations = new WeakMap<SourceNode, SourceLocation>();
-
-export function registerNodeLocation(
-  node: SourceNode,
-  line: number,
-  column: number
-): void {
-  nodeLocations.set(node, { line, column });
-}
 
 export function addNodeLocation<T extends Diagnostic>(
   diagnostic: T,

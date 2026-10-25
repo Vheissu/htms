@@ -9,6 +9,7 @@ import {
 } from './component/template-utils';
 import { getNodeLocation } from './diagnostics';
 import { SourceElement } from './source-dom';
+import { handleElement } from './handlers';
 
 // Location-based names keep compiled output deterministic; the counter is a
 // fallback for elements parsed without node locations (tests, direct DOM).
@@ -213,11 +214,3 @@ export const handleHtmlElement: TagHandler = (
     return { code: '', errors: [runtimeError], warnings };
   }
 };
-
-// Import the main handleElement function to avoid circular imports
-import { handleElement } from './handlers';
-
-// Function to reset element counter (useful for testing)
-export function resetElementCounter(): void {
-  elementCounter.clear();
-}

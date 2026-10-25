@@ -1,15 +1,10 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { handlerDiagnostics } from './diagnostics';
 import { DirectiveNode, SwitchDirective, TemplateNode } from '../component/ir';
-import {
-  elementToTemplateNode,
-  isLowerCaseTag,
-  templateTextValue,
-} from '../component/template-utils';
+import { collectBranchContent } from './branch-content';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
-import { handleElement } from '../handlers';
 import { SourceElement } from '../source-dom';
 
 export const handleSwitchTag: TagHandler = (
@@ -115,63 +110,18 @@ export const handleSwitchTag: TagHandler = (
         }
 
         // Build case body from raw text (legacy) and child nodes
-        let innerCaseCode = '';
-        const caseTemplates: TemplateNode[] = [];
-        const caseDirectives: DirectiveNode[] = [];
-
-        for (const node of Array.from(child.childNodes)) {
-          if (node.nodeType === 3) {
-            const text = templateTextValue(node);
-            if (text === null) {
-              continue;
-            }
-            const textErrors = SecurityValidator.validateContent(text);
-            if (textErrors.length > 0) {
-              report(textErrors);
-              if (options.strictMode) {
-                continue;
-              }
-            }
-            innerCaseCode += `${text}\n`;
-            caseTemplates.push({
-              type: 'text',
-              textContent: text,
-            });
-            continue;
-          }
-
-          const grandChild = node as SourceElement;
-          const gcResult = handleElement(grandChild, options);
-          if (gcResult.errors.length > 0) {
-            errors.push(
-              ...gcResult.errors.map((error) => ({
-                ...error,
-                tag: 'SWITCH',
-              }))
-            );
-            if (options.strictMode) {
-              continue;
-            }
-          }
-          if (gcResult.warnings.length > 0) {
-            warnings.push(...gcResult.warnings);
-          }
-          if (gcResult.code) {
-            innerCaseCode += gcResult.code + '\n';
-          }
-
-          if (gcResult.component?.template) {
-            caseTemplates.push(...gcResult.component.template);
-          } else if (isLowerCaseTag(grandChild)) {
-            caseTemplates.push(elementToTemplateNode(grandChild));
-          }
-
-          if (gcResult.component?.directives) {
-            caseDirectives.push(...gcResult.component.directives);
-          } else if (gcResult.code && !isLowerCaseTag(grandChild)) {
-            caseDirectives.push({ kind: 'statement', code: gcResult.code });
-          }
-        }
+        const {
+          code: innerCaseCode,
+          templates: caseTemplates,
+          directives: caseDirectives,
+        } = collectBranchContent(
+          child,
+          options,
+          'SWITCH',
+          errors,
+          warnings,
+          true
+        );
 
         const caseCode = innerCaseCode.trim()
           ? `case ${processedValue}: {\n    try {\n${innerCaseCode
@@ -202,59 +152,18 @@ export const handleSwitchTag: TagHandler = (
         }
 
         hasDefault = true;
-        let defaultInner = '';
-        const templates: TemplateNode[] = [];
-        const directives: DirectiveNode[] = [];
-
-        for (const node of Array.from(child.childNodes)) {
-          if (node.nodeType === 3) {
-            const text = templateTextValue(node);
-            if (text === null) {
-              continue;
-            }
-            const textErrors = SecurityValidator.validateContent(text);
-            if (textErrors.length > 0) {
-              report(textErrors);
-              if (options.strictMode) {
-                continue;
-              }
-            }
-            defaultInner += `${text}\n`;
-            templates.push({
-              type: 'text',
-              textContent: text,
-            });
-            continue;
-          }
-
-          const gc = node as SourceElement;
-          const gcResult = handleElement(gc, options);
-          if (gcResult.errors.length > 0) {
-            errors.push(
-              ...gcResult.errors.map((error) => ({
-                ...error,
-                tag: 'SWITCH',
-              }))
-            );
-            if (options.strictMode) {
-              continue;
-            }
-          }
-          if (gcResult.warnings.length > 0) warnings.push(...gcResult.warnings);
-          if (gcResult.code) defaultInner += gcResult.code + '\n';
-
-          if (gcResult.component?.template) {
-            templates.push(...gcResult.component.template);
-          } else if (isLowerCaseTag(gc)) {
-            templates.push(elementToTemplateNode(gc));
-          }
-
-          if (gcResult.component?.directives) {
-            directives.push(...gcResult.component.directives);
-          } else if (gcResult.code && !isLowerCaseTag(gc)) {
-            directives.push({ kind: 'statement', code: gcResult.code });
-          }
-        }
+        const {
+          code: defaultInner,
+          templates,
+          directives,
+        } = collectBranchContent(
+          child,
+          options,
+          'SWITCH',
+          errors,
+          warnings,
+          true
+        );
 
         if (defaultInner.trim()) {
           defaultCase = `default: {\n    try {\n${defaultInner

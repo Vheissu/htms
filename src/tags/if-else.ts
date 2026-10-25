@@ -1,15 +1,10 @@
 import { TagHandler, HandlerResult, TagHandlerOptions } from '../types';
 import { handlerDiagnostics } from './diagnostics';
-import {
-  elementToTemplateNode,
-  isLowerCaseTag,
-  templateTextValue,
-} from '../component/template-utils';
+import { collectBranchContent } from './branch-content';
 import { DirectiveNode, TemplateNode } from '../component/ir';
 import { SecurityValidator } from '../utils/security';
 import { handlerScope } from '../component/scope';
 import { CompilerLogger } from '../utils/logger';
-import { handleElement } from '../handlers';
 import { SourceElement } from '../source-dom';
 
 type ConsumedElement = SourceElement & { __htmsConsumed?: boolean };
@@ -53,66 +48,6 @@ function validateCondition(
   }
 
   return handlerScope(options).expression(condition.trim());
-}
-
-function collectBranchContent(
-  element: SourceElement,
-  options: TagHandlerOptions,
-  tag: string,
-  errors: HandlerResult['errors'],
-  warnings: HandlerResult['warnings']
-): { code: string; templates: TemplateNode[]; directives: DirectiveNode[] } {
-  let innerCode = '';
-  const templates: TemplateNode[] = [];
-  const directives: DirectiveNode[] = [];
-
-  for (const childNode of Array.from(element.childNodes)) {
-    if (childNode.nodeType === 3) {
-      const text = templateTextValue(childNode);
-      if (text === null) {
-        continue;
-      }
-      const textErrors = SecurityValidator.validateContent(text);
-      if (textErrors.length > 0) {
-        errors.push(...textErrors.map((error) => ({ ...error, tag })));
-        if (options.strictMode) {
-          continue;
-        }
-      }
-      innerCode += `${text}\n`;
-      templates.push({ type: 'text', textContent: text });
-      continue;
-    }
-
-    const child = childNode as SourceElement;
-    const childResult = handleElement(child, options);
-    if (childResult.errors.length > 0) {
-      errors.push(...childResult.errors);
-      if (options.strictMode) {
-        continue;
-      }
-    }
-    if (childResult.warnings.length > 0) {
-      warnings.push(...childResult.warnings);
-    }
-    if (childResult.code) {
-      innerCode += childResult.code + '\n';
-    }
-
-    if (childResult.component?.template) {
-      templates.push(...childResult.component.template);
-    } else if (isLowerCaseTag(child)) {
-      templates.push(elementToTemplateNode(child as SourceElement));
-    }
-
-    if (childResult.component?.directives) {
-      directives.push(...childResult.component.directives);
-    } else if (childResult.code && !isLowerCaseTag(child)) {
-      directives.push({ kind: 'statement', code: childResult.code });
-    }
-  }
-
-  return { code: innerCode, templates, directives };
 }
 
 function formatBranchBody(code: string, label: string): string {

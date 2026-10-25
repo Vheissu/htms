@@ -7,10 +7,7 @@ import { valueAttributeToExpression } from '../utils/values';
 import { StateDirective } from '../component/ir';
 import { SourceElement } from '../source-dom';
 
-function buildValueExpr(
-  value: string,
-  options: TagHandlerOptions
-): string | null {
+function buildValueExpr(value: string, options: TagHandlerOptions): string {
   return valueAttributeToExpression(value, {
     isReference: handlerScope(options).isReference,
   });
@@ -39,9 +36,7 @@ export const handlePushTag: TagHandler = (
       }
     }
     const valExpr = handlerScope(options).expression(
-      (exprAttr && exprAttr.trim()
-        ? exprAttr
-        : buildValueExpr(value, options)) ?? 'undefined'
+      exprAttr && exprAttr.trim() ? exprAttr : buildValueExpr(value, options)
     );
     const isComponentContext = options.parentContext === 'component';
     const code = isComponentContext
@@ -57,7 +52,7 @@ export const handlePushTag: TagHandler = (
       kind: 'state',
       mode: 'push',
       path,
-      value: valExpr ?? 'undefined',
+      value: valExpr,
     };
 
     return {

@@ -9,7 +9,7 @@ import { SourceElement } from '../source-dom';
 
 const BLOCKED_PROPERTY_SINKS = new Set(['innerhtml', 'outerhtml', 'srcdoc']);
 
-function buildValueExpr(value: string): string | null {
+function buildValueExpr(value: string): string {
   return valueAttributeToExpression(value, { allowReferences: false });
 }
 
@@ -50,9 +50,6 @@ export const handleSetPropTag: TagHandler = (
       exprAttr && exprAttr.trim()
         ? handlerScope(options).expression(exprAttr.trim())
         : buildValueExpr(value);
-    if (valExpr == null) {
-      return fail('Invalid value');
-    }
 
     const sel = SecurityValidator.jsStringLiteral(selector);
     const parts = prop.split('.');

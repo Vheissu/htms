@@ -178,20 +178,19 @@ export function handleElement(
       hasChildren: element.children.length > 0,
     });
 
-    const hasHandler = HANDLERS_MAPPING.has(tagName);
+    const handler = HANDLERS_MAPPING.get(tagName);
+    // <style selector|prop|name> is the STYLE directive, not a stylesheet.
     const preferCustom =
       tagName === 'STYLE' &&
       (element.hasAttribute('selector') ||
         element.hasAttribute('prop') ||
         element.hasAttribute('name'));
 
-    // Check if it's a standard HTML element
-    if (isStandardHtmlElement(element) && !(hasHandler && preferCustom)) {
+    if (isStandardHtmlElement(element) && !preferCustom) {
       return handleHtmlElement(element, options);
     }
 
-    // Check if it's a supported custom tag
-    if (!hasHandler) {
+    if (!handler) {
       const suggestion = suggestTagName(tagName);
       const error: CompilerError = {
         type: 'validation',
@@ -244,12 +243,7 @@ export function handleElement(
       }
     }
 
-    // Execute the handler
-    const handlerFunction = HANDLERS_MAPPING.get(tagName);
-    if (!handlerFunction) {
-      throw new Error(`Handler missing for supported tag: ${tagName}`);
-    }
-    const result = handlerFunction(element, options);
+    const result = handler(element, options);
 
     // Note: Security is enforced on inputs and final AST (in parse phase).
     // Avoid content-based scanning of generated code to reduce false positives.
@@ -369,17 +363,9 @@ function validateElementSecurity(element: SourceElement): CompilerError[] {
   return errors;
 }
 
-export function getAllowedTags(): string[] {
+function getAllowedTags(): string[] {
   return [
     ...Array.from(HANDLERS_MAPPING.keys()),
     ...Array.from(ALLOWED_STANDARD_ELEMENTS),
   ];
-}
-
-export function isTagSupported(tagName: string): boolean {
-  const upperTagName = tagName.toUpperCase();
-  return (
-    HANDLERS_MAPPING.has(upperTagName) ||
-    ALLOWED_STANDARD_ELEMENTS.has(upperTagName)
-  );
 }

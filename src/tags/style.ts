@@ -7,7 +7,7 @@ import { CompilerLogger } from '../utils/logger';
 import { valueAttributeToExpression } from '../utils/values';
 import { SourceElement } from '../source-dom';
 
-function buildValueExpr(value: string): string | null {
+function buildValueExpr(value: string): string {
   return valueAttributeToExpression(value, { allowReferences: false });
 }
 
